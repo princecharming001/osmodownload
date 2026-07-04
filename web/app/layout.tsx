@@ -2,9 +2,9 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 export const metadata: Metadata = {
-  title: "Osmo — your relationship memory, on your Mac",
+  title: "Osmo — every conversation, remembered",
   description:
-    "Osmo reads your conversations locally, remembers every person across platforms, and drafts what to say to move each relationship toward a goal you set. Local-first. Your messages never leave your machine.",
+    "Osmo connects your messages across every platform, remembers every person, and drafts what to say — in your voice, toward what you want. Local-first, encrypted on your Mac.",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
@@ -14,9 +14,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         style={{
           margin: 0,
           fontFamily:
-            "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
-          background: "#f5f4ef",
-          color: "#1c1a17",
+            "-apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif",
+          background: "#fcfcfd",
+          color: "#08152e",
         }}
       >
         {children}
