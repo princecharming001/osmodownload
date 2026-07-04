@@ -1,33 +1,31 @@
 import Foundation
 import GRDB
 
-/// The database open-seam and schema. **All disk encryption plugs in here** and
-/// nowhere else: today `open` uses vanilla GRDB (system SQLite); the SQLCipher
-/// swap replaces the queue construction with a SQLCipher-backed configuration
-/// (passphrase from Keychain) — every caller above this line is unchanged.
-/// macOS `FileProtectionType` only reaches volume-level, so app-layer whole-DB
-/// encryption is required for the "encrypted on your Mac" guarantee; that swap
-/// is the next storage slice and is deliberately isolated to this file.
+/// The database open-seam and schema. **All disk encryption lives here** and
+/// nowhere else. `open` uses SQLCipher (GRDB is vendored with the codec enabled —
+/// see vendor/GRDB): pass a passphrase and the whole database file is AES-encrypted
+/// at rest — no SQLite header, no message text recoverable from the raw bytes
+/// (proved by EncryptionTests). The app supplies a Keychain-held key
+/// ([KeychainDBKey]); tests and dev pass nil for plain SQLite. macOS
+/// `FileProtectionType` only reaches volume-level, so this app-layer whole-DB
+/// encryption is what backs the "encrypted on your Mac" guarantee.
 public enum OsmoDatabase {
 
     /// Open (creating if needed) the Osmo store at `url`, running migrations.
-    /// - Parameter passphrase: the SQLCipher key. Ignored by the vanilla-GRDB
-    ///   build; wired when SQLCipher lands (the parameter exists now so call
-    ///   sites don't change at the swap).
-    ///
-    /// SQLCipher status (verified July 2026): whole-DB encryption plugs in *here*
-    /// via `config.prepareDatabase { try $0.usePassphrase(passphrase) }`. The
-    /// blocker is purely the build: GRDB must compile against SQLCipher's sqlite3,
-    /// which SPM CLI won't do cleanly — the DuckDuckGo GRDB fork (the usual SPM
-    /// path) needs its `GRDBSQLite` build shim that `swift build` can't resolve.
-    /// Ship-time fix: vendor the SQLCipher amalgamation as a C target in the Xcode
-    /// project (where the app target links it), then uncomment the line below. The
-    /// key management (Keychain passphrase) is the app's, already scoped.
+    /// - Parameter passphrase: the SQLCipher key. A non-empty value encrypts the
+    ///   whole database at rest; nil/empty opens plain SQLite (tests, dev). The key
+    ///   must be applied before any other statement, which `prepareDatabase` guarantees.
     public static func open(at url: URL, passphrase: String? = nil) throws -> DatabaseQueue {
         var config = Configuration()
         config.foreignKeysEnabled = true
-        // SQLCipher seam: when the SQLCipher GRDB flavor is in place,
-        //   config.prepareDatabase { db in try db.usePassphrase(passphrase!) }
+        // SQLCipher: encrypt the whole database at rest. GRDB is vendored with the
+        // codec enabled (vendor/GRDB), so `usePassphrase` is compiled in. Applied
+        // before any other statement runs, per SQLCipher's requirement. A nil/empty
+        // passphrase leaves the DB as plain SQLite (dev/tests); production passes a
+        // Keychain-held key so the file is opaque ciphertext on disk.
+        if let passphrase, !passphrase.isEmpty {
+            config.prepareDatabase { db in try db.usePassphrase(passphrase) }
+        }
         let queue = try DatabaseQueue(path: url.path, configuration: config)
         try migrator.migrate(queue)
         return queue

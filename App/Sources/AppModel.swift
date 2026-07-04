@@ -50,10 +50,14 @@ final class AppModel: ObservableObject {
     private let syncCoordinator: SyncCoordinator
 
     init() {
-        // Local store in Application Support; fall back to in-memory so the app is
-        // always constructible.
+        // Local encrypted store in Application Support (SQLCipher, key from the
+        // Keychain), falling back to in-memory so the app is always constructible.
+        // If a plaintext DB from a pre-encryption dev build is present, opening it
+        // with a key fails — retire it so the encrypted store can take over (safe:
+        // no shipped data yet; real data lands only after re-sync).
         let url = Self.storeURL()
-        let store = (try? OsmoStore(url: url)) ?? (try! OsmoStore.inMemory())
+        let key = try? KeychainDBKey.loadOrCreate()
+        let store = Self.openEncrypted(url: url, key: key)
         self.store = store
         let config = Self.loadConfig()
         self.config = config
@@ -71,6 +75,16 @@ final class AppModel: ObservableObject {
 
     static func storeURL() -> URL { supportDir().appendingPathComponent("osmo.db") }
     static func configURL() -> URL { supportDir().appendingPathComponent("config.json") }
+
+    /// Open the encrypted store; on failure (e.g. a leftover plaintext DB that the
+    /// key can't decrypt) retire the old file and retry, then fall back to in-memory.
+    private static func openEncrypted(url: URL, key: String?) -> OsmoStore {
+        if let s = try? OsmoStore(url: url, passphrase: key) { return s }
+        for ext in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(at: URL(fileURLWithPath: url.path + ext))
+        }
+        return (try? OsmoStore(url: url, passphrase: key)) ?? (try! OsmoStore.inMemory())
+    }
 
     private static func supportDir() -> URL {
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory,

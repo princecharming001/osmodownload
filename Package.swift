@@ -24,13 +24,16 @@ let package = Package(
         // chat.db access), and a real .app bundle.
     ],
     dependencies: [
-        .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0")
+        // Vendored GRDB 7.11.1 with SQLCipher enabled (see vendor/GRDB) — real
+        // whole-database encryption at rest. Same `import GRDB`; the passphrase is
+        // applied at OsmoDatabase.open. Local path so it can't drift or break the build.
+        .package(path: "vendor/GRDB")
     ],
     targets: [
         .target(
             name: "OsmoCore",
             dependencies: [
-                .product(name: "GRDB", package: "GRDB.swift")
+                .product(name: "GRDB", package: "GRDB")
             ],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
