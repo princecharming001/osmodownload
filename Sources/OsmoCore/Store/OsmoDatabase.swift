@@ -101,6 +101,51 @@ public enum OsmoDatabase {
             }
         }
 
+        // User-authored, synced entities: durable per-person memory + goal-directed
+        // projects (the wedge). Same sync columns; JSON columns for nested arrays.
+        migrator.registerMigration("v3-memory-projects") { db in
+            try db.create(table: "relationship_memory") { t in
+                t.primaryKey("id", .text)          // == personID
+                t.column("updatedAt", .datetime).notNull()
+                t.column("deviceSeq", .integer).notNull()
+                t.column("deletedAt", .datetime)
+                t.column("note", .text).notNull().defaults(to: "")
+                t.column("facts", .jsonText).notNull().defaults(to: "[]")
+                t.column("summary", .text)
+            }
+
+            try db.create(table: "project") { t in
+                t.primaryKey("id", .text)
+                t.column("updatedAt", .datetime).notNull()
+                t.column("deviceSeq", .integer).notNull()
+                t.column("deletedAt", .datetime)
+                t.column("personID", .text).notNull()
+                t.column("title", .text).notNull()
+                t.column("goalText", .text).notNull()
+                t.column("toneHint", .text)
+                t.column("boundaries", .jsonText).notNull().defaults(to: "[]")
+                t.column("selfContext", .text)
+                t.column("milestones", .jsonText).notNull().defaults(to: "[]")
+                t.column("status", .text).notNull().defaults(to: "active")
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.create(indexOn: "project", columns: ["personID"])
+        }
+
+        // Identity graph: the merged cross-platform person. `contact.personID`
+        // points here (already a column since v1).
+        migrator.registerMigration("v4-person") { db in
+            try db.create(table: "person") { t in
+                t.primaryKey("id", .text)
+                t.column("updatedAt", .datetime).notNull()
+                t.column("deviceSeq", .integer).notNull()
+                t.column("deletedAt", .datetime)
+                t.column("displayName", .text).notNull()
+                t.column("avatarData", .blob)
+                t.column("reviewed", .boolean).notNull().defaults(to: false)
+            }
+        }
+
         return migrator
     }
 }

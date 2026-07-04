@@ -35,6 +35,17 @@ public struct SyncMeta: Codable, Equatable, Sendable {
 /// migrations and the future sync oplog can rely on them across every table.
 public protocol SyncableRecord {
     var sync: SyncMeta { get set }
+
+    /// Carry forward store-owned "enrichment" fields when a platform reader
+    /// re-ingests a row it doesn't own. Default: no enrichment. Overridden by
+    /// `OsmoContact` to keep its identity-graph `personID` across re-imports (the
+    /// reader always produces `personID == nil`, so without this a re-ingest would
+    /// clobber the link).
+    func preservingEnrichment(from existing: Self) -> Self
+}
+
+public extension SyncableRecord {
+    func preservingEnrichment(from existing: Self) -> Self { self }
 }
 
 /// Deterministic UUID v5 (RFC 4122, SHA-1) derivation. Used to mint stable IDs

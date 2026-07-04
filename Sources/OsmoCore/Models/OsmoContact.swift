@@ -51,4 +51,12 @@ public struct OsmoContact: Codable, Equatable, Sendable, Identifiable, SyncableR
     public static func makeID(platform: Platform, handle: String) -> UUID {
         DeterministicID.forPlatform(platform, kind: "contact", key: handle)
     }
+
+    /// Keep the identity-graph link across reader re-ingests (the reader produces
+    /// `personID == nil`; the graph owns it).
+    public func preservingEnrichment(from existing: OsmoContact) -> OsmoContact {
+        var c = self
+        if c.personID == nil { c.personID = existing.personID }
+        return c
+    }
 }

@@ -55,18 +55,64 @@ public final class OsmoStore: @unchecked Sendable {
              & Identifiable & Equatable, R.ID == UUID {
         try dbQueue.write { db in
             let existing = try R.fetchOne(db, id: record.id)
+            // Carry forward store-owned enrichment (e.g. a contact's identity link)
+            // so a reader re-ingest never clobbers it.
+            let incoming = existing.map { record.preservingEnrichment(from: $0) } ?? record
             if let existing {
-                // Compare content by neutralizing sync metadata.
-                var candidate = record
-                candidate.sync = existing.sync
+                var candidate = incoming
+                candidate.sync = existing.sync              // neutralize sync meta for compare
                 if candidate == existing { return false }   // unchanged → skip
             }
-            var toSave = record
+            var toSave = incoming
             toSave.sync = SyncMeta(id: record.id, updatedAt: Date(),
                                    deviceSeq: try nextSeq(db), deletedAt: record.sync.deletedAt)
             try toSave.save(db)
             return true
         }
+    }
+
+    /// Write a user-authored record (memory, project), always stamping a fresh
+    /// sync clock. Unlike `ingest` (reader dedup), this is for deliberate user
+    /// edits, which should always advance the clock so they win LWW + sync out.
+    public func put<R>(_ record: R) throws
+    where R: SyncableRecord & PersistableRecord {
+        try dbQueue.write { db in
+            var r = record
+            r.sync = SyncMeta(id: record.sync.id, updatedAt: Date(),
+                              deviceSeq: try nextSeq(db), deletedAt: record.sync.deletedAt)
+            try r.save(db)
+        }
+    }
+
+    // MARK: Memory + Projects
+
+    /// Durable memory for a person (empty default when none saved).
+    public func memory(forPerson personID: UUID) throws -> RelationshipMemory {
+        try dbQueue.read { db in
+            try RelationshipMemory.fetchOne(db, id: personID)
+        } ?? RelationshipMemory(personID: personID)
+    }
+
+    public func projects(forPerson personID: UUID) throws -> [Project] {
+        try dbQueue.read { db in
+            try Project.filter(Column("personID") == personID)
+                .filter(Column("deletedAt") == nil)
+                .order(Column("createdAt").desc)
+                .fetchAll(db)
+        }
+    }
+
+    public func activeProjects() throws -> [Project] {
+        try dbQueue.read { db in
+            try Project.filter(Column("status") == ProjectStatus.active.rawValue)
+                .filter(Column("deletedAt") == nil)
+                .order(Column("updatedAt").desc)
+                .fetchAll(db)
+        }
+    }
+
+    public func project(id: UUID) throws -> Project? {
+        try dbQueue.read { db in try Project.fetchOne(db, id: id) }
     }
 
     /// Soft-delete (tombstone) by id — never a hard DELETE, so the removal can
@@ -107,6 +153,99 @@ public final class OsmoStore: @unchecked Sendable {
     public func threadCount() throws -> Int {
         try dbQueue.read { db in
             try OsmoThread.filter(Column("deletedAt") == nil).fetchCount(db)
+        }
+    }
+
+    // MARK: Identity graph
+
+    public func contacts() throws -> [OsmoContact] {
+        try dbQueue.read { db in
+            try OsmoContact.filter(Column("deletedAt") == nil).fetchAll(db)
+        }
+    }
+
+    public func people() throws -> [Person] {
+        try dbQueue.read { db in
+            try Person.filter(Column("deletedAt") == nil).fetchAll(db)
+        }
+    }
+
+    public func person(id: UUID) throws -> Person? {
+        try dbQueue.read { db in try Person.fetchOne(db, id: id) }
+    }
+
+    public func contacts(forPerson personID: UUID) throws -> [OsmoContact] {
+        try dbQueue.read { db in
+            try OsmoContact.filter(Column("personID") == personID)
+                .filter(Column("deletedAt") == nil).fetchAll(db)
+        }
+    }
+
+    /// Resolve the identity graph over all contacts: deterministic phone/email
+    /// clusters auto-merge into `Person` rows (reusing any existing person so
+    /// reviewed/manual state survives), contacts get linked, and probabilistic
+    /// name/avatar matches are returned as review suggestions (never auto-applied).
+    @discardableResult
+    public func rebuildIdentityGraph() throws -> [MergeSuggestion] {
+        let all = try contacts()
+        let byID = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
+        let result = IdentityResolver.resolve(all)
+
+        try dbQueue.write { db in
+            for cluster in result.clusters {
+                let members = cluster.compactMap { byID[$0] }
+                guard !members.isEmpty else { continue }
+                // Reuse an existing person if any member is already linked.
+                let existingPID = members.compactMap(\.personID).first
+                let person: Person
+                if let pid = existingPID, let p = try Person.fetchOne(db, id: pid) {
+                    person = p
+                } else {
+                    let name = members.map(\.displayName)
+                        .compactMap { $0 }.first(where: { !$0.isEmpty })
+                        ?? members[0].handle
+                    let avatar = members.compactMap(\.avatarData).first
+                    let pid = DeterministicID.v5(name: "person:\(cluster.min(by: { $0.uuidString < $1.uuidString })!.uuidString)")
+                    person = Person(id: pid, displayName: name, avatarData: avatar)
+                    var toSave = person
+                    toSave.sync = SyncMeta(id: pid, updatedAt: Date(), deviceSeq: try nextSeq(db))
+                    try toSave.save(db)
+                }
+                // Link every member contact to this person.
+                for var c in members where c.personID != person.id {
+                    c.personID = person.id
+                    c.sync = SyncMeta(id: c.id, updatedAt: Date(), deviceSeq: try nextSeq(db))
+                    try c.save(db)
+                }
+            }
+        }
+        return result.suggestions
+    }
+
+    /// Apply a confirmed merge: fold every contact of the listed people onto one
+    /// surviving person, tombstone the others. Marks the survivor reviewed.
+    @discardableResult
+    public func mergePeople(_ ids: [UUID]) throws -> Person? {
+        guard let survivorID = ids.first else { return nil }
+        return try dbQueue.write { db in
+            guard var survivor = try Person.fetchOne(db, id: survivorID) else { return nil }
+            for otherID in ids.dropFirst() {
+                let others = try OsmoContact.filter(Column("personID") == otherID).fetchAll(db)
+                for var c in others {
+                    c.personID = survivorID
+                    c.sync = SyncMeta(id: c.id, updatedAt: Date(), deviceSeq: try nextSeq(db))
+                    try c.save(db)
+                }
+                if var other = try Person.fetchOne(db, id: otherID) {
+                    other.sync = SyncMeta(id: otherID, updatedAt: Date(),
+                                          deviceSeq: try nextSeq(db), deletedAt: Date())
+                    try other.save(db)
+                }
+            }
+            survivor.reviewed = true
+            survivor.sync = SyncMeta(id: survivorID, updatedAt: Date(), deviceSeq: try nextSeq(db))
+            try survivor.save(db)
+            return survivor
         }
     }
 
