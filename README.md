@@ -30,7 +30,26 @@ Full build plan: `~/.claude/plans/write-a-ralph-loop-keen-quilt.md`.
   `ConvoScan`. The P0 gate test proves imported data → RegisterKit engine →
   grounded reply prompt.
 
-Run: `swift test` (15 tests).
+## Run the Mac app
+
+The app is an Xcode target (in `App/`) that links the `OsmoCore` + `OsmoBrain`
+Swift packages. Two ways to run it:
+
+```sh
+# One command — build + launch Osmo.app:
+./scripts/run.sh
+
+# …or open it in Xcode and press ⌘R:
+xcodegen generate && open Osmo.xcodeproj
+```
+
+It runs **keyless** today — the suggestion engine uses a deterministic mock until
+you add an Anthropic key to the proxy (`web/`), and platform bridges light up as
+you connect accounts. The app is ad-hoc signed for local running; App Sandbox is
+off (required to read `chat.db`). Grant Accessibility + Full Disk Access when it
+asks. Ship builds will be Developer ID + notarized.
+
+Run the tests: `swift test` (62 tests). Build the website: `cd web && npm i && npm run build`.
 
 ## Known follow-ups (tracked in the plan)
 - **SQLCipher swap** (P0.3b): replace vanilla GRDB with a SQLCipher-backed build

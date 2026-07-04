@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Sandbox is OFF: Osmo reads ~/Library/Messages/chat.db and other local
+	     stores that a sandbox would block even with Full Disk Access granted.
+	     This is why Osmo ships outside the Mac App Store (Developer ID + notarized). -->
+	<key>com.apple.security.app-sandbox</key>
+	<false/>
+	<!-- Apple Events so the app can drive Messages (insert/send) + read the active
+	     browser tab URL for the overlay. -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+</dict>
+</plist>

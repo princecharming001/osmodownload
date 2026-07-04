@@ -17,8 +17,11 @@ let package = Package(
     ],
     products: [
         .library(name: "OsmoCore", targets: ["OsmoCore"]),
-        .library(name: "OsmoBrain", targets: ["OsmoBrain"]),
-        .executable(name: "OsmoApp", targets: ["OsmoApp"])
+        .library(name: "OsmoBrain", targets: ["OsmoBrain"])
+        // The Mac app is an Xcode target (Osmo.xcodeproj) that links these two
+        // library products — see project.yml / App/. It's not an SPM executable
+        // so it can carry an Info.plist, entitlements (App Sandbox off for
+        // chat.db access), and a real .app bundle.
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0")
@@ -34,11 +37,6 @@ let package = Package(
         .target(
             name: "OsmoBrain",
             dependencies: ["OsmoCore"],
-            swiftSettings: [.swiftLanguageMode(.v6)]
-        ),
-        .executableTarget(
-            name: "OsmoApp",
-            dependencies: ["OsmoCore", "OsmoBrain"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(
