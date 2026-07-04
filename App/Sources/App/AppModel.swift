@@ -105,12 +105,19 @@ final class AppModel: ObservableObject {
 
     // MARK: - Realtime
 
+    /// Fractional import progress per platform (0…1). Present + < 1 = "Importing".
+    @Published var importProgress: [Platform: Double] = [:]
+    private var lastImportReload = Date.distantPast
+
     private func startRealtime() {
         Task { [weak self] in
             guard let self else { return }
             isMockMode = await backend.isMockMode()
             await realtime.setOnEvent { [weak self] event in
                 Task { @MainActor in self?.connections.handle(event) }
+            }
+            await realtime.setOnImportProgress { [weak self] platform, fraction in
+                Task { @MainActor in self?.handleImportProgress(platform, fraction) }
             }
             await realtime.start()
             await connections.reconcile()
@@ -123,6 +130,22 @@ final class AppModel: ObservableObject {
                 notifier.considerInbound(inbound, focusedThreadID: focusedThreadID,
                                          mutedThreadIDs: mutedThreadIDs(), store: store)
             }
+        }
+    }
+
+    /// Import progress from the sync engine: update the per-platform bar and
+    /// refresh the UI as messages stream in (throttled). At 100% we hold "Done"
+    /// briefly, then clear so the row reads a settled "Connected".
+    private func handleImportProgress(_ platform: Platform, _ fraction: Double) {
+        importProgress[platform] = min(fraction, 1.0)
+        // Refresh the thread list at most ~2×/sec while importing so it fills live.
+        if fraction >= 1.0 || Date().timeIntervalSince(lastImportReload) > 0.5 {
+            lastImportReload = Date()
+            reload()
+        }
+        if fraction >= 1.0 {
+            connections.probeLocal()   // flip iMessage to a real "Connected"
+            Task { try? await Task.sleep(for: .seconds(2)); importProgress[platform] = nil }
         }
     }
 
@@ -224,6 +247,11 @@ final class AppModel: ObservableObject {
         let snapshots = buildSnapshots()
         queue = MorningQueue.build(snapshots: snapshots, projects: projects)
         people = buildPeople(snapshots: snapshots)
+
+        // Dock badge = conversations that owe a reply (so the app is useful when
+        // its window is closed — table stakes for a Mac messenger).
+        let owed = queue.filter { $0.kind == .reply }.count
+        NSApplication.shared.dockTile.badgeLabel = owed > 0 ? "\(owed)" : nil
     }
 
     // MARK: - Send (dynamic routing)
@@ -249,8 +277,14 @@ final class AppModel: ObservableObject {
             // A successful live send is a good moment to flush anything queued.
             await drainSendQueue()
             return true
+        } catch let BackendClient.BackendError.badStatus(code) where code >= 400 && code < 500 {
+            // Provider REJECTED it (bad thread, outside session window, revoked
+            // token). Not a connectivity problem — don't queue-and-retry forever;
+            // surface it so the user can fix it.
+            toast = "Couldn't send to \(platform.displayName) — the conversation may not accept messages."
+            return false
         } catch {
-            // Offline → queue for later drain (onForeground / next sync / next send).
+            // Network/offline → queue for later drain (foreground / sync / next send).
             try? store.enqueueSend(QueuedSend(
                 id: nil, platform: platform, platformThreadID: target,
                 text: text, queuedAt: Date(), attempts: 0))

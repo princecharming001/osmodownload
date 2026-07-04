@@ -39,21 +39,49 @@ struct ConnectionRow: View {
 
     var body: some View {
         Card {
-            HStack(spacing: DS.Space.m) {
-                Image(systemName: platform.symbolName)
-                    .font(.system(size: 16)).foregroundStyle(platform.tint)
-                    .frame(width: 28)
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(platform.displayName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
-                    HStack(spacing: DS.Space.xs) {
-                        StatusDot(dotState)
-                        Text(statusLabel).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+            VStack(spacing: DS.Space.s) {
+                HStack(spacing: DS.Space.m) {
+                    Image(systemName: platform.symbolName)
+                        .font(.system(size: 16)).foregroundStyle(platform.tint)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(platform.displayName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
+                        HStack(spacing: DS.Space.xs) {
+                            StatusDot(importFraction != nil ? .active : dotState)
+                            Text(subtitle).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                        }
                     }
+                    Spacer()
+                    if importFraction == nil { actions }
                 }
-                Spacer()
-                actions
+                if let fraction = importFraction {
+                    ProgressView(value: fraction)
+                        .tint(DS.Colors.accent)
+                        .transition(.opacity)
+                }
             }
         }
+        .animation(DS.Motion.standard, value: importFraction)
+    }
+
+    /// Import fraction while a first-time backfill is running (nil = not importing).
+    private var importFraction: Double? {
+        guard let f = model.importProgress[platform], f < 1.0 else { return nil }
+        return max(f, 0.02)   // always show a sliver so it reads as "started"
+    }
+
+    private var subtitle: String {
+        if let f = importFraction {
+            return "Importing your messages… \(Int(f * 100))%"
+        }
+        if case .live = phase, messageCount > 0 {
+            return "Connected · \(messageCount.formatted()) messages"
+        }
+        return statusLabel
+    }
+
+    private var messageCount: Int {
+        (try? model.store.messageCount(platform: platform)) ?? 0
     }
 
     private var phase: ConnectionPhase { model.connections.phases[platform] ?? .notConnected }

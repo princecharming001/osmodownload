@@ -96,6 +96,13 @@ public actor RealtimeSyncEngine {
         onEvent = handler
     }
 
+    /// Fractional import progress for a platform (0…1). Drives the "Importing X%"
+    /// UI so a big first-time backfill reads as progress, not a frozen "Connected".
+    public var onImportProgress: (@Sendable (Platform, Double) -> Void)?
+    public func setOnImportProgress(_ handler: @escaping @Sendable (Platform, Double) -> Void) {
+        onImportProgress = handler
+    }
+
     public init(store: OsmoStore,
                 client: BackendClient,
                 cursorStore: CursorStoring,
@@ -298,26 +305,54 @@ public actor RealtimeSyncEngine {
         return result
     }
 
-    private func pollChatDB() {
+    private func pollChatDB() async {
         if chatReader == nil {
-            // Reader opens lazily; FDA may be granted mid-session.
-            guard FileManager.default.isReadableFile(atPath: iMessageDBPath.path),
-                  let reader = try? ChatDBReader(path: iMessageDBPath) else { return }
+            // Reader opens lazily; FDA may be granted mid-session. Rely on the real
+            // open (not isReadableFile, which TCC fools on the world-readable file).
+            guard let reader = try? ChatDBReader(path: iMessageDBPath) else { return }
             chatReader = reader
         }
         guard let reader = chatReader else { return }
 
-        // Watermark 0 = first launch → readSince(0) imports the FULL history in
-        // this pass (the store dedups), then advances the ROWID so later polls
-        // only deliver new rows. Fresh-inbound notifications are gated on recency
-        // in ingest(), so a first-run bulk import doesn't spam notifications.
         let watermark = cursorStore.loadChatDBRowID()
-        guard let (rows, maxRowID) = try? reader.readSince(rowID: watermark), !rows.isEmpty else { return }
+        guard let (rows, maxRowID) = try? reader.readSince(rowID: watermark), !rows.isEmpty else {
+            // Nothing new; if we'd been importing, mark it done.
+            if watermark != 0 { onImportProgress?(.imessage, 1.0) }
+            return
+        }
 
-        let batch = enrichWithContacts(IMessageNormalizer.normalize(rows))
-        let fresh = ingest(batch)
-        cursorStore.saveChatDBRowID(maxRowID)   // AFTER ingest — crash-safe order
-        for inbound in fresh { inboundContinuation?.yield(inbound) }
-        if !fresh.isEmpty { scheduleIdentityRebuild() }
+        // First launch (watermark 0) can be tens of thousands of messages. Ingest
+        // in chunks — reporting progress + yielding between them — so the UI fills
+        // progressively and shows a real "importing X%" instead of freezing then
+        // dumping everything at once. Later polls are tiny and ingest in one shot.
+        if watermark == 0, rows.count > 1500 {
+            await importInChunks(rows, maxRowID: maxRowID)
+        } else {
+            let batch = enrichWithContacts(IMessageNormalizer.normalize(rows))
+            let fresh = ingest(batch)
+            cursorStore.saveChatDBRowID(maxRowID)
+            for inbound in fresh { inboundContinuation?.yield(inbound) }
+            if !fresh.isEmpty { scheduleIdentityRebuild() }
+            onImportProgress?(.imessage, 1.0)
+        }
+    }
+
+    /// Ingest a large first-import in slices, reporting fractional progress and
+    /// yielding so the app stays responsive and the thread list fills as it goes.
+    private func importInChunks(_ rows: [RawIMessage], maxRowID: Int64) async {
+        let chunk = 2000
+        var i = 0
+        onImportProgress?(.imessage, 0.001)   // flip the UI into "importing" immediately
+        while i < rows.count {
+            let end = min(i + chunk, rows.count)
+            let batch = enrichWithContacts(IMessageNormalizer.normalize(Array(rows[i..<end])))
+            _ = ingest(batch)
+            i = end
+            onImportProgress?(.imessage, Double(i) / Double(rows.count))
+            await Task.yield()
+        }
+        cursorStore.saveChatDBRowID(maxRowID)   // AFTER all chunks — crash-safe
+        scheduleIdentityRebuild()
+        onImportProgress?(.imessage, 1.0)
     }
 }

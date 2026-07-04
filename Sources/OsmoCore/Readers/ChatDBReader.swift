@@ -45,6 +45,11 @@ public struct ChatDBReader: Sendable {
         }) != nil
     }
 
+    /// Total messages in chat.db — the denominator for import progress.
+    public func totalMessageCount() throws -> Int {
+        try dbQueue.read { db in try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM message") ?? 0 }
+    }
+
     /// All text messages across all chats, oldest first. Messages whose body
     /// lives only in the `attributedBody` typedstream blob (rich content) are
     /// skipped for now — the plain-`text` column covers the vast majority and is

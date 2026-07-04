@@ -7,6 +7,8 @@ import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
 import { getUnipile } from "@/lib/unipile/client";
+import { sendGmail, sendSlack } from "@/lib/oauth/send";
+import { isLiveOAuth } from "@/lib/oauth/providers";
 import type { SendRequest, SendResponse, WireMessage } from "@/lib/connections/types";
 
 export async function POST(req: Request): Promise<Response> {
@@ -25,9 +27,23 @@ export async function POST(req: Request): Promise<Response> {
       return Response.json({ error: `no live ${platform} connection` }, { status: 409 });
     }
 
-    // Provider send (mock mints a deterministic-enough id; live returns the real one).
-    const unipile = getUnipile();
-    const sent = await unipile.sendMessage(connection.id, platformThreadID, text);
+    // Route to the right provider. Gmail/Slack use their own APIs with the stored
+    // OAuth token (Unipile only covers LinkedIn/WhatsApp/Instagram). In keyless
+    // mock mode every platform falls through to the mock sender.
+    let sent: { messageId: string };
+    try {
+      if (platform === "gmail" && isLiveOAuth("gmail")) {
+        sent = await sendGmail(store.oauthTokens(device.id, "gmail"), platformThreadID, text);
+      } else if (platform === "slack" && isLiveOAuth("slack")) {
+        sent = await sendSlack(store.oauthTokens(device.id, "slack"), platformThreadID, text);
+      } else {
+        sent = await getUnipile().sendMessage(connection.id, platformThreadID, text);
+      }
+    } catch (err) {
+      // Provider rejected (bad thread, outside session window, revoked token) —
+      // a real error the client should surface, NOT queue-and-retry forever.
+      return Response.json({ error: `send rejected: ${(err as Error).message}` }, { status: 422 });
+    }
 
     const message: WireMessage = {
       platform,

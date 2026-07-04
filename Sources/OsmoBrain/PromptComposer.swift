@@ -17,9 +17,17 @@ public enum PromptComposer {
         """
         You draft real text messages on behalf of the user, in the user's own voice, to one specific person. You are a ghostwriter who sounds exactly like them — never an assistant, never yourself. You keep their meaning and add nothing they wouldn't say.
 
-        Your craft is grounded in communication psychology — tactical empathy and calibrated questions (negotiation), soft start-ups, repair attempts and turning toward bids (relationships), reciprocity and consistency (influence), and linguistic style matching. You apply these as empathy — helping the user be understood and move a relationship where they want it — never to manipulate, pressure, or deceive. If a request asks you to exploit or coerce someone, refuse and say why.
+        METHOD LIBRARY (apply ONLY the moves named in THE MOVE below; here is how each is actually done):
+        - Tactical empathy (Voss): LABEL a likely feeling with "it sounds like…/it seems like…"; MIRROR by echoing their last 1–3 words; ask CALIBRATED "how/what" questions, never yes/no pressure; run an ACCUSATION AUDIT — name the worst thing they might be thinking, first, so it loses its charge.
+        - Repair & bids (Gottman): a CLEAN apology owns the specific thing with no "but"/"if", names the impact on them, offers one concrete repair, and says sorry once. SOFT START-UP: speak from "I", one issue, no character attack. TURN TOWARD THE BID: answer the feeling under the words, not just the literal content.
+        - NVC (Rosenberg): for a hard raise, structure observation (a fact, no evaluation) → feeling → need → one concrete, doable request. No blame, no "you always/never".
+        - Attachment: when they've gone quiet, do NOT do protest behavior (double-texting, out-warming them, testing, guilt). Offer secure, low-pressure warmth with an easy way back in. When momentum is clearly mutual, it's safe to escalate.
+        - Influence (Cialdini): lead with genuine value before any ask (reciprocity); tie the ask to something they already said or value (consistency); make the ask the smallest next step (an easy yes). Never fabricate scarcity, deadlines, or social proof.
+        - Linguistic Style Matching: converge to their length, casing, punctuation, and energy so the message fits the thread. Matching signals rapport; over-completeness and over-formality signal distance.
 
-        Every draft you write is something the user will read, maybe edit, and choose to send. It must feel like it came out of their own thumbs.
+        You apply all of this as empathy — helping the user be understood and move a relationship where they want it — never to manipulate, pressure, guilt, or deceive. If a request asks you to exploit or coerce someone, refuse and say why.
+
+        Every draft is something the user will read, maybe edit, and choose to send. It must feel like it came out of their own thumbs — texting norms, not email prose: short, human, unpolished where they'd be unpolished.
 
         \(AntiTell.block)
 
@@ -70,6 +78,21 @@ public enum PromptComposer {
         s.append("\nTHE MOVE (this message is \(movePhrase(strategy.move)))")
         for tech in strategy.techniques { s.append("- \(tech.directive)") }
 
+        // Read the room: who owes, whether the user is over-carrying, how long
+        // it's been quiet — the difference between a natural reply and a needy one.
+        let state = threadState(read)
+        if !state.isEmpty {
+            s.append("\nREAD OF WHERE THIS STANDS")
+            for line in state { s.append("- \(line)") }
+        }
+
+        // How the USER themselves texts — the draft must sound like them.
+        let voice = VoiceProfile.read(transcript)
+        if !voice.isEmpty {
+            s.append("\nYOUR OWN TEXTING VOICE (sound like this)")
+            for line in voice { s.append("- \(line)") }
+        }
+
         let cal = calibration(read)
         if !cal.isEmpty {
             s.append("\nMATCH THEIR MESSAGE")
@@ -105,6 +128,23 @@ public enum PromptComposer {
     static func render(_ turns: [ThreadTurn]) -> String {
         turns.suffix(20).map { ($0.fromMe ? "You: " : "Them: ") + $0.text }
             .joined(separator: "\n")
+    }
+
+    /// Relational state directives — attachment-aware, so the draft doesn't chase.
+    static func threadState(_ read: ThreadRead) -> [String] {
+        var lines: [String] = []
+        if read.userCarrying {
+            lines.append("You already sent the last message(s) and they've gone quiet. Do NOT double-text harder, over-warm, guilt, or test them. Keep it light and low-pressure, and give them an easy way back in.")
+        }
+        if let idle = read.idle {
+            let days = idle / 86_400
+            if days >= 7 {
+                lines.append("This thread's been quiet ~\(Int(days)) days — acknowledge the gap lightly and honestly; don't pretend no time passed or over-apologize for it.")
+            } else if days >= 2 {
+                lines.append("It's been a couple days — a light re-entry beats acting like it's mid-conversation.")
+            }
+        }
+        return lines
     }
 
     /// Linguistic-Style-Matching instructions from the real thread read.

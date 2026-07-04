@@ -150,6 +150,14 @@ public final class OsmoStore: @unchecked Sendable {
         }
     }
 
+    /// Message count for a single platform — the "Connected · N messages" figure.
+    public func messageCount(platform: Platform) throws -> Int {
+        try dbQueue.read { db in
+            try OsmoMessage.filter(Column("deletedAt") == nil)
+                .filter(Column("platform") == platform.rawValue).fetchCount(db)
+        }
+    }
+
     public func threadCount() throws -> Int {
         try dbQueue.read { db in
             try OsmoThread.filter(Column("deletedAt") == nil).fetchCount(db)
