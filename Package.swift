@@ -17,7 +17,8 @@ let package = Package(
     ],
     products: [
         .library(name: "OsmoCore", targets: ["OsmoCore"]),
-        .library(name: "OsmoBrain", targets: ["OsmoBrain"])
+        .library(name: "OsmoBrain", targets: ["OsmoBrain"]),
+        .executable(name: "OsmoApp", targets: ["OsmoApp"])
     ],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", from: "7.0.0")
@@ -33,6 +34,11 @@ let package = Package(
         .target(
             name: "OsmoBrain",
             dependencies: ["OsmoCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .executableTarget(
+            name: "OsmoApp",
+            dependencies: ["OsmoCore", "OsmoBrain"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
         .testTarget(

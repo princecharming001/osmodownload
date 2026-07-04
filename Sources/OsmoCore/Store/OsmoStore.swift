@@ -156,6 +156,26 @@ public final class OsmoStore: @unchecked Sendable {
         }
     }
 
+    /// All live threads, most-recent first.
+    public func threads(limit: Int = 500) throws -> [OsmoThread] {
+        try dbQueue.read { db in
+            try OsmoThread.filter(Column("deletedAt") == nil)
+                .order(Column("lastMessageAt").desc)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
+    /// The most recent message in a thread (for inbox previews + snapshots).
+    public func lastMessage(inThread threadID: UUID) throws -> OsmoMessage? {
+        try dbQueue.read { db in
+            try OsmoMessage.filter(Column("threadID") == threadID)
+                .filter(Column("deletedAt") == nil)
+                .order(Column("sentAt").desc)
+                .fetchOne(db)
+        }
+    }
+
     // MARK: Identity graph
 
     public func contacts() throws -> [OsmoContact] {
@@ -178,6 +198,17 @@ public final class OsmoStore: @unchecked Sendable {
         try dbQueue.read { db in
             try OsmoContact.filter(Column("personID") == personID)
                 .filter(Column("deletedAt") == nil).fetchAll(db)
+        }
+    }
+
+    /// The distinct sender contacts seen in a thread (the people it's with).
+    public func contacts(inThread threadID: UUID) throws -> [OsmoContact] {
+        try dbQueue.read { db in
+            try OsmoContact.fetchAll(db, sql: """
+                SELECT DISTINCT contact.* FROM contact
+                JOIN message ON message.senderContactID = contact.id
+                WHERE message.threadID = ? AND contact.deletedAt IS NULL
+                """, arguments: [threadID])
         }
     }
 
