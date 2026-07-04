@@ -24,7 +24,9 @@ struct OsmoApp: App {
                     OnboardingFlow()
                         .environmentObject(model)
                         .frame(minWidth: 640, minHeight: 560)
-                        .onAppear { appDelegate.model = model }
+                        // Attach the pill during onboarding too so the practice
+                        // step can summon the REAL pill (the aha moment).
+                        .onAppear { appDelegate.model = model; appDelegate.activatePill() }
                 }
             }
             .preferredColorScheme(.light)

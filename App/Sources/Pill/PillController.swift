@@ -81,12 +81,21 @@ final class PillController: ObservableObject {
             panel.orderOut(nil)
         case .idle, .ready:
             panel.wantsKey = false
+            repositionIfOffscreen()
             panel.present()
         case .expanded, .generating:
             panel.wantsKey = true
+            repositionIfOffscreen()
             panel.present()
             // The text field becomes key on click without activating Osmo.
         }
+    }
+
+    /// Re-run positioning if the panel isn't fully on the active screen (handles
+    /// early-launch geometry, display changes, and a stale saved position).
+    private func repositionIfOffscreen() {
+        guard let panel, let screen = NSScreen.main else { return }
+        if !screen.visibleFrame.contains(panel.frame) { positionPanel() }
     }
 
     // MARK: - Position (persisted, clamped)
