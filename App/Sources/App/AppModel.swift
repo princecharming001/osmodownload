@@ -215,7 +215,10 @@ final class AppModel: ObservableObject {
 
     func reload() {
         let snoozed = (try? store.snoozedThreadIDs()) ?? []
-        threads = ((try? store.threads()) ?? []).filter { !snoozed.contains($0.id) }
+        // Load ALL threads (the default 500 cap silently dropped older threads —
+        // e.g. Gmail behind hundreds of iMessage threads — so their platform chip
+        // never appeared and the inbox filter looked broken).
+        threads = ((try? store.threads(limit: 20000)) ?? []).filter { !snoozed.contains($0.id) }
         projects = (try? store.activeProjects()) ?? []
         mergeSuggestions = (try? store.rebuildIdentityGraph()) ?? []
         let snapshots = buildSnapshots()

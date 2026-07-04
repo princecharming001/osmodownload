@@ -1,6 +1,7 @@
 import SwiftUI
 import OsmoCore
 import OsmoBrain
+import OsmoShell
 
 /// Unified cross-platform inbox: a thread list + a detail with transcript,
 /// compose bar, and the "Draft with Osmo" strip. A chip row filters the list
@@ -49,58 +50,31 @@ struct InboxView: View {
     // MARK: - Platform filter
 
     /// Platforms that actually have threads, in a stable order.
-    private var presentPlatforms: [Platform] {
-        let present = Set(model.threads.map(\.platform))
-        return Platform.allCases.filter { present.contains($0) }
-    }
+    private var presentPlatforms: [Platform] { InboxFilter.present(in: model.threads) }
 
     private var filteredThreads: [OsmoThread] {
-        guard let platformFilter else { return model.threads }
-        return model.threads.filter { $0.platform == platformFilter }
+        InboxFilter.apply(model.inboxPlatformFilter, to: model.threads)
     }
 
+    /// Native segmented picker bound straight to the model — no custom click
+    /// handling to fail. "All" + one segment per present platform.
     private var filterBar: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: DS.Space.s) {
-                filterChip(label: "All", symbol: nil, tint: DS.Colors.ink, selected: platformFilter == nil) {
-                    model.inboxPlatformFilter = nil
-                }
+        HStack(spacing: DS.Space.s) {
+            Picker("Filter", selection: $model.inboxPlatformFilter) {
+                Text("All").tag(Optional<Platform>.none)
                 ForEach(presentPlatforms, id: \.self) { platform in
-                    filterChip(label: platform.displayName,
-                               symbol: platform.symbolName,
-                               tint: platform.tint,
-                               selected: platformFilter == platform) {
-                        model.inboxPlatformFilter = (platformFilter == platform) ? nil : platform
-                    }
+                    Text(platform.displayName).tag(Optional.some(platform))
                 }
             }
-            .padding(.horizontal, DS.Space.m)
-            .padding(.vertical, DS.Space.s)
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            Spacer(minLength: 0)
+            Text("\(filteredThreads.count)")
+                .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                .monospacedDigit()
         }
-        .frame(height: 34)
-    }
-
-    private func filterChip(label: String, symbol: String?, tint: Color,
-                            selected: Bool, action: @escaping () -> Void) -> some View {
-        HStack(spacing: 4) {
-            if let symbol {
-                Image(systemName: symbol).font(.system(size: 9))
-                    .foregroundStyle(selected ? .white : tint)
-            }
-            Text(label).font(DS.Typography.eyebrow)
-        }
-        .padding(.horizontal, DS.Space.s)
-        .padding(.vertical, 4)
-        .foregroundStyle(selected ? .white : DS.Colors.ink)
-        .background(selected ? DS.Colors.ink : DS.Colors.chip, in: Capsule())
-        .overlay(Capsule().stroke(DS.Colors.hairline, lineWidth: selected ? 0 : 1))
-        // The known SwiftUI dead-tap: without an explicit contentShape the padded
-        // capsule doesn't hit-test reliably (worse inside a horizontal ScrollView).
-        // A plain tap gesture on the whole shape beats a .plain Button here.
-        .contentShape(Capsule())
-        .onTapGesture(perform: action)
-        .accessibilityLabel("\(label) conversations")
-        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
+        .padding(.horizontal, DS.Space.m)
+        .padding(.vertical, DS.Space.s)
     }
 
     @ViewBuilder private var detail: some View {
