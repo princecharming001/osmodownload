@@ -21,7 +21,10 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const link = getStore().createPendingLink(deviceId, platform);
-  const origin = new URL(req.url).origin;
+  // Callbacks (Unipile server-to-server notify; OAuth redirect) must hit a
+  // publicly-reachable origin, not the localhost the app calls us on. Prefer
+  // PUBLIC_URL (the tunnel/deploy) when set; fall back to the request origin.
+  const origin = process.env.PUBLIC_URL ?? new URL(req.url).origin;
 
   let url: string;
   let mode: ConnectLinkResponse["mode"];

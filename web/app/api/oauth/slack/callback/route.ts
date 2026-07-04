@@ -4,6 +4,7 @@
 import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
 import { exchangeSlackCode, isLiveOAuth } from "@/lib/oauth/providers";
+import { backfillSlack } from "@/lib/oauth/slackBackfill";
 import type { Connection } from "@/lib/connections/types";
 
 export async function GET(req: Request): Promise<Response> {
@@ -21,22 +22,30 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   try {
-    const tokens = await exchangeSlackCode(code, url.origin);
+    const tokens = await exchangeSlackCode(code, url.origin) as {
+      authed_user?: { access_token?: string; id?: string };
+    };
     store.setOAuthTokens(link.deviceId, "slack", tokens);
     const connection: Connection = {
       id: `slack-${link.deviceId.slice(-8)}`,
       deviceId: link.deviceId,
       platform: "slack",
-      status: "connected",
+      status: "backfilling",
       displayName: "Slack",
-      backfillProgress: 1,
+      backfillProgress: 0,
       createdAt: new Date().toISOString(),
     };
     store.addConnection(connection);
     publish(link.deviceId, {
       type: "connection.status", platform: "slack",
-      status: "connected", connectionId: connection.id,
+      status: "backfilling", connectionId: connection.id,
     });
+    // Import the user's DMs into the oplog (fire-and-forget).
+    const userToken = tokens.authed_user?.access_token;
+    const userId = tokens.authed_user?.id;
+    if (userToken && userId) {
+      void backfillSlack(link.deviceId, connection.id, userToken, userId);
+    }
     return Response.redirect(new URL("/connect/done", url.origin));
   } catch {
     return Response.redirect(new URL("/connect/done?failed=1", url.origin));

@@ -5,6 +5,7 @@
 import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
 import { exchangeGoogleCode, isLiveOAuth } from "@/lib/oauth/providers";
+import { backfillGmail } from "@/lib/oauth/gmailBackfill";
 import type { Connection } from "@/lib/connections/types";
 
 export async function GET(req: Request): Promise<Response> {
@@ -22,22 +23,26 @@ export async function GET(req: Request): Promise<Response> {
   }
 
   try {
-    const tokens = await exchangeGoogleCode(code, url.origin);
+    const tokens = await exchangeGoogleCode(code, url.origin) as { access_token?: string };
     store.setOAuthTokens(link.deviceId, "gmail", tokens);
     const connection: Connection = {
       id: `gmail-${link.deviceId.slice(-8)}`,
       deviceId: link.deviceId,
       platform: "gmail",
-      status: "connected",
+      status: "backfilling",
       displayName: "Gmail",
-      backfillProgress: 1,
+      backfillProgress: 0,
       createdAt: new Date().toISOString(),
     };
     store.addConnection(connection);
     publish(link.deviceId, {
       type: "connection.status", platform: "gmail",
-      status: "connected", connectionId: connection.id,
+      status: "backfilling", connectionId: connection.id,
     });
+    // Import recent mail into the oplog (fire-and-forget; the app pulls it in).
+    if (tokens.access_token) {
+      void backfillGmail(link.deviceId, connection.id, tokens.access_token);
+    }
     return Response.redirect(new URL("/connect/done", url.origin));
   } catch {
     return Response.redirect(new URL("/connect/done?failed=1", url.origin));
