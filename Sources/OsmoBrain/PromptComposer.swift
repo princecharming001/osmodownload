@@ -1,4 +1,5 @@
 import Foundation
+import OsmoCore
 
 /// A composed prompt split into a **stable, cacheable core** (the role + method +
 /// anti-tell ruleset — byte-identical across every request, so it's sent as a

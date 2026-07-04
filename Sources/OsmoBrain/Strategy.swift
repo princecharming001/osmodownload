@@ -1,4 +1,5 @@
 import Foundation
+import OsmoCore
 
 /// The selected plan for one message: which techniques apply, in priority order.
 public struct StrategyPlan: Equatable, Sendable {

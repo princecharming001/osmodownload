@@ -39,7 +39,7 @@ public enum GoalKind: String, Codable, Sendable, CaseIterable {
     public static func classify(_ text: String?) -> GoalKind {
         guard let lower = text?.lowercased(), !lower.isEmpty else { return .freeform }
         for (kind, keys) in table {
-            for k in keys where RelationshipRegister.wordMatch(lower, k) { return kind }
+            for k in keys where TextMatch.word(lower, k) { return kind }
         }
         return .freeform
     }

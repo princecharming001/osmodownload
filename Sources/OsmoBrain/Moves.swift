@@ -1,4 +1,5 @@
 import Foundation
+import OsmoCore
 
 /// The job-to-be-done for *this specific message* — richer than a keyboard app's
 /// archetypes because Osmo reasons over full threads and goals (adds negotiate,
@@ -26,7 +27,7 @@ public enum Move: String, Codable, Sendable, CaseIterable {
     public static func classify(_ text: String?) -> Move {
         guard let lower = text?.lowercased(), !lower.isEmpty else { return .plain }
         for (move, keys) in table {
-            for k in keys where RelationshipRegister.wordMatch(lower, k) { return move }
+            for k in keys where TextMatch.word(lower, k) { return move }
         }
         return .plain
     }
