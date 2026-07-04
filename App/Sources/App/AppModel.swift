@@ -60,7 +60,19 @@ final class AppModel: ObservableObject {
     /// Thread currently open in the detail pane (suppresses its notifications).
     @Published var focusedThreadID: UUID?
     /// Inbox selection (also set by Today's "Draft" to deep-link a thread).
-    @Published var selectedThreadID: UUID?
+    @Published var selectedThreadID: UUID? {
+        didSet {
+            // A deep-link must never land on a filtered-out thread — clear the
+            // platform filter if it would hide the selection.
+            if let id = selectedThreadID, let filter = inboxPlatformFilter,
+               let thread = threads.first(where: { $0.id == id }), thread.platform != filter {
+                inboxPlatformFilter = nil
+            }
+        }
+    }
+    /// Inbox platform filter (nil = all). Lives here, not in view @State, so it
+    /// survives section switches and view identity churn.
+    @Published var inboxPlatformFilter: Platform?
     /// Person detail selection.
     @Published var selectedPersonID: UUID?
     /// A transient toast surfaced by any surface.

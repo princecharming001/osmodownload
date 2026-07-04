@@ -7,7 +7,7 @@ import OsmoBrain
 /// to one platform (only platforms that actually have threads are offered).
 struct InboxView: View {
     @EnvironmentObject var model: AppModel
-    @State private var platformFilter: Platform?
+    private var platformFilter: Platform? { model.inboxPlatformFilter }
 
     var body: some View {
         HSplitView {
@@ -63,41 +63,44 @@ struct InboxView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: DS.Space.s) {
                 filterChip(label: "All", symbol: nil, tint: DS.Colors.ink, selected: platformFilter == nil) {
-                    platformFilter = nil
+                    model.inboxPlatformFilter = nil
                 }
                 ForEach(presentPlatforms, id: \.self) { platform in
                     filterChip(label: platform.displayName,
                                symbol: platform.symbolName,
                                tint: platform.tint,
                                selected: platformFilter == platform) {
-                        platformFilter = platformFilter == platform ? nil : platform
+                        model.inboxPlatformFilter = (platformFilter == platform) ? nil : platform
                     }
                 }
             }
             .padding(.horizontal, DS.Space.m)
             .padding(.vertical, DS.Space.s)
         }
+        .frame(height: 34)
     }
 
     private func filterChip(label: String, symbol: String?, tint: Color,
                             selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                if let symbol {
-                    Image(systemName: symbol).font(.system(size: 9))
-                        .foregroundStyle(selected ? .white : tint)
-                }
-                Text(label).font(DS.Typography.eyebrow)
+        HStack(spacing: 4) {
+            if let symbol {
+                Image(systemName: symbol).font(.system(size: 9))
+                    .foregroundStyle(selected ? .white : tint)
             }
-            .padding(.horizontal, DS.Space.s)
-            .padding(.vertical, 4)
-            .foregroundStyle(selected ? .white : DS.Colors.ink)
-            .background(selected ? DS.Colors.ink : DS.Colors.chip, in: Capsule())
-            .overlay(Capsule().stroke(DS.Colors.hairline, lineWidth: selected ? 0 : 1))
+            Text(label).font(DS.Typography.eyebrow)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, DS.Space.s)
+        .padding(.vertical, 4)
+        .foregroundStyle(selected ? .white : DS.Colors.ink)
+        .background(selected ? DS.Colors.ink : DS.Colors.chip, in: Capsule())
+        .overlay(Capsule().stroke(DS.Colors.hairline, lineWidth: selected ? 0 : 1))
+        // The known SwiftUI dead-tap: without an explicit contentShape the padded
+        // capsule doesn't hit-test reliably (worse inside a horizontal ScrollView).
+        // A plain tap gesture on the whole shape beats a .plain Button here.
+        .contentShape(Capsule())
+        .onTapGesture(perform: action)
         .accessibilityLabel("\(label) conversations")
-        .accessibilityAddTraits(selected ? .isSelected : [])
+        .accessibilityAddTraits(selected ? [.isButton, .isSelected] : .isButton)
     }
 
     @ViewBuilder private var detail: some View {
