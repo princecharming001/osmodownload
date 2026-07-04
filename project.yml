@@ -41,11 +41,17 @@ targets:
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: App/Info.plist
         CODE_SIGN_ENTITLEMENTS: App/Osmo.entitlements
-        # Local run: ad-hoc signing, no team required (like "Sign to Run Locally").
+        # Sign with a STABLE self-signed identity ("Osmo Dev Signing") instead of
+        # ad-hoc "-". Ad-hoc's code hash changes every build, so macOS resets every
+        # TCC grant (Full Disk Access, Accessibility) and Keychain ACL on each
+        # rebuild — forcing the user to re-approve constantly. A stable identity
+        # keeps those grants across rebuilds. Create the identity once with
+        # scripts/setup-signing.sh; builds fall back to ad-hoc if it's absent.
         CODE_SIGN_STYLE: Manual
-        CODE_SIGN_IDENTITY: "-"
+        CODE_SIGN_IDENTITY: "Osmo Dev Signing"
         DEVELOPMENT_TEAM: ""
         ENABLE_HARDENED_RUNTIME: NO
+        OTHER_CODE_SIGN_FLAGS: "--deep"
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         COMBINE_HIDPI_IMAGES: YES
 
