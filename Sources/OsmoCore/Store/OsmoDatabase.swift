@@ -14,6 +14,15 @@ public enum OsmoDatabase {
     /// - Parameter passphrase: the SQLCipher key. Ignored by the vanilla-GRDB
     ///   build; wired when SQLCipher lands (the parameter exists now so call
     ///   sites don't change at the swap).
+    ///
+    /// SQLCipher status (verified July 2026): whole-DB encryption plugs in *here*
+    /// via `config.prepareDatabase { try $0.usePassphrase(passphrase) }`. The
+    /// blocker is purely the build: GRDB must compile against SQLCipher's sqlite3,
+    /// which SPM CLI won't do cleanly — the DuckDuckGo GRDB fork (the usual SPM
+    /// path) needs its `GRDBSQLite` build shim that `swift build` can't resolve.
+    /// Ship-time fix: vendor the SQLCipher amalgamation as a C target in the Xcode
+    /// project (where the app target links it), then uncomment the line below. The
+    /// key management (Keychain passphrase) is the app's, already scoped.
     public static func open(at url: URL, passphrase: String? = nil) throws -> DatabaseQueue {
         var config = Configuration()
         config.foreignKeysEnabled = true
