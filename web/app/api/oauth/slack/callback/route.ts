@@ -9,20 +9,24 @@ import type { Connection } from "@/lib/connections/types";
 
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  if (!isLiveOAuth("slack")) return Response.redirect(new URL("/connect/done?failed=1", url.origin));
+  // Behind the tunnel, url.origin mis-resolves to https://localhost (forwarded
+  // proto + localhost host). Pin to PUBLIC_URL so the token-exchange redirect_uri
+  // matches the authorize step and the browser is sent to a real https origin.
+  const publicOrigin = process.env.PUBLIC_URL ?? url.origin;
+  if (!isLiveOAuth("slack")) return Response.redirect(new URL("/connect/done?failed=1", publicOrigin));
 
   const code = url.searchParams.get("code");
   const linkId = url.searchParams.get("state");
-  if (!code || !linkId) return Response.redirect(new URL("/connect/done?failed=1", url.origin));
+  if (!code || !linkId) return Response.redirect(new URL("/connect/done?failed=1", publicOrigin));
 
   const store = getStore();
   const link = store.resolvePendingLink(linkId);
   if (!link || link.platform !== "slack") {
-    return Response.redirect(new URL("/connect/done?failed=1", url.origin));
+    return Response.redirect(new URL("/connect/done?failed=1", publicOrigin));
   }
 
   try {
-    const tokens = await exchangeSlackCode(code, url.origin) as {
+    const tokens = await exchangeSlackCode(code, publicOrigin) as {
       authed_user?: { access_token?: string; id?: string };
     };
     store.setOAuthTokens(link.deviceId, "slack", tokens);
@@ -46,8 +50,8 @@ export async function GET(req: Request): Promise<Response> {
     if (userToken && userId) {
       void backfillSlack(link.deviceId, connection.id, userToken, userId);
     }
-    return Response.redirect(new URL("/connect/done", url.origin));
+    return Response.redirect(new URL("/connect/done", publicOrigin));
   } catch {
-    return Response.redirect(new URL("/connect/done?failed=1", url.origin));
+    return Response.redirect(new URL("/connect/done?failed=1", publicOrigin));
   }
 }

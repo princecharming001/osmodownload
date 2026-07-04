@@ -10,20 +10,24 @@ import type { Connection } from "@/lib/connections/types";
 
 export async function GET(req: Request): Promise<Response> {
   const url = new URL(req.url);
-  if (!isLiveOAuth("gmail")) return Response.redirect(new URL("/connect/done?failed=1", url.origin));
+  // Behind the tunnel, url.origin mis-resolves to https://localhost (forwarded
+  // proto + localhost host). Pin to PUBLIC_URL so the token-exchange redirect_uri
+  // matches the authorize step and the browser is sent to a real https origin.
+  const publicOrigin = process.env.PUBLIC_URL ?? url.origin;
+  if (!isLiveOAuth("gmail")) return Response.redirect(new URL("/connect/done?failed=1", publicOrigin));
 
   const code = url.searchParams.get("code");
   const linkId = url.searchParams.get("state");
-  if (!code || !linkId) return Response.redirect(new URL("/connect/done?failed=1", url.origin));
+  if (!code || !linkId) return Response.redirect(new URL("/connect/done?failed=1", publicOrigin));
 
   const store = getStore();
   const link = store.resolvePendingLink(linkId);
   if (!link || link.platform !== "gmail") {
-    return Response.redirect(new URL("/connect/done?failed=1", url.origin));
+    return Response.redirect(new URL("/connect/done?failed=1", publicOrigin));
   }
 
   try {
-    const tokens = await exchangeGoogleCode(code, url.origin) as { access_token?: string };
+    const tokens = await exchangeGoogleCode(code, publicOrigin) as { access_token?: string };
     store.setOAuthTokens(link.deviceId, "gmail", tokens);
     const connection: Connection = {
       id: `gmail-${link.deviceId.slice(-8)}`,
@@ -43,8 +47,8 @@ export async function GET(req: Request): Promise<Response> {
     if (tokens.access_token) {
       void backfillGmail(link.deviceId, connection.id, tokens.access_token);
     }
-    return Response.redirect(new URL("/connect/done", url.origin));
+    return Response.redirect(new URL("/connect/done", publicOrigin));
   } catch {
-    return Response.redirect(new URL("/connect/done?failed=1", url.origin));
+    return Response.redirect(new URL("/connect/done?failed=1", publicOrigin));
   }
 }
