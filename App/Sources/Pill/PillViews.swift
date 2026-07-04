@@ -109,20 +109,27 @@ struct ExpandedPanel: View {
     let generating: Bool
 
     @State private var intent: String = ""
+    // Bumped only when the user SUBMITS the intent — so the strip re-drafts once
+    // per intent, not once per keystroke. Also carries the submitted intent so
+    // the strip's context is stable between renders.
+    @State private var submittedIntent: String = ""
+    @State private var draftVersion = 0
+    // Resolved once (store queries are synchronous) instead of on every render.
+    @State private var resolved: (context: SuggestionContext, target: String)?
 
     var body: some View {
         GlassCard(cornerRadius: DS.Radius.xxl) {
             VStack(alignment: .leading, spacing: DS.Space.m) {
                 header
-                if let ctx = suggestionContext {
+                if let resolved {
                     SuggestionStrip(
-                        context: ctx,
+                        context: resolved.context,
                         platform: context.platform ?? .imessage,
-                        sendTarget: sendTarget,
+                        sendTarget: resolved.target,
                         onPick: { text in insert(text) },
                         onSent: { PillController.shared.escape() })
                         .environmentObject(model)
-                        .id(intentKey)   // re-draft when intent changes
+                        .id(draftVersion)   // re-draft only when the version bumps
                 }
                 intentField
             }
@@ -130,6 +137,7 @@ struct ExpandedPanel: View {
             .frame(width: 420)
         }
         .onExitCommand { PillController.shared.escape() }
+        .onAppear { resolve() }
     }
 
     private var header: some View {
@@ -155,7 +163,12 @@ struct ExpandedPanel: View {
             TextField("Tell Osmo what you want to say…", text: $intent)
                 .textFieldStyle(.plain)
                 .font(DS.Typography.body)
-                .onSubmit { /* intentKey change re-drafts the strip */ }
+                .onSubmit { applyIntent() }
+            if intent != submittedIntent && !intent.isEmpty {
+                Button { applyIntent() } label: {
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 15))
+                }.buttonStyle(.plain).foregroundStyle(DS.Colors.accent)
+            }
         }
         .padding(.horizontal, DS.Space.m)
         .padding(.vertical, DS.Space.s)
@@ -163,22 +176,22 @@ struct ExpandedPanel: View {
         .overlay(Capsule().stroke(DS.Colors.hairline, lineWidth: 1))
     }
 
-    private var intentKey: String { intent }
-
-    private var suggestionContext: SuggestionContext? {
+    /// Resolve the suggestion context + send target ONCE (synchronous store reads).
+    private func resolve() {
         let assembler = ContextAssembler(store: model.store, projects: model.projects)
         var ctx = assembler.context(pill: context)
-        if !intent.isEmpty { ctx.userIntent = intent }
-        return ctx
+        if !submittedIntent.isEmpty { ctx.userIntent = submittedIntent }
+        let threadID = context.matchedThreadID
+            ?? assembler.matchThread(name: context.partnerName, platform: context.platform ?? .imessage)
+        let target = threadID.map { assembler.sendTarget(threadID: $0, platform: context.platform ?? .imessage) } ?? ""
+        resolved = (ctx, target)
     }
 
-    private var sendTarget: String {
-        guard let threadID = context.matchedThreadID
-                ?? ContextAssembler(store: model.store, projects: model.projects)
-                    .matchThread(name: context.partnerName, platform: context.platform ?? .imessage)
-        else { return "" }
-        return ContextAssembler(store: model.store, projects: model.projects)
-            .sendTarget(threadID: threadID, platform: context.platform ?? .imessage)
+    private func applyIntent() {
+        guard intent != submittedIntent else { return }
+        submittedIntent = intent
+        resolve()
+        draftVersion += 1
     }
 
     private func insert(_ text: String) {

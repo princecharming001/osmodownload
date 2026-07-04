@@ -7,6 +7,14 @@ import { publish } from "@/lib/connections/events";
 import type { Connection } from "@/lib/connections/types";
 
 export async function POST(req: Request): Promise<Response> {
+  // Shared-secret gate (same as /api/webhooks/unipile): when configured, an
+  // unauthenticated caller can't bind an arbitrary account_id to a victim's
+  // pending link. Skipped in keyless/mock mode where no secret is set.
+  const secret = process.env.OSMO_WEBHOOK_SECRET;
+  if (secret && req.headers.get("x-osmo-webhook-secret") !== secret) {
+    return Response.json({ error: "bad secret" }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => ({}));
   const linkId = (body.name ?? body.linkId) as string | undefined;
   const accountId = body.account_id as string | undefined;

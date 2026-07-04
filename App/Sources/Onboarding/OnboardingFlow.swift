@@ -145,6 +145,8 @@ struct OnboardingFlow: View {
     // MARK: - Helpers
 
     private func advance(skip: Bool) {
+        permissionTimer?.invalidate()   // stop the AX poll when leaving any step
+        permissionTimer = nil
         withAnimation(DS.Motion.expoOut) {
             if skip { flow.skip() } else { flow.advance() }
             step = flow.step

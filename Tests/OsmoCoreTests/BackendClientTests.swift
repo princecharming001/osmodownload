@@ -58,6 +58,21 @@ struct BackendClientTests {
         #expect(pullReq?.value(forHTTPHeaderField: "Authorization") == "Bearer tok-1")
     }
 
+    @Test("A first-ever device mint fires onReRegistered (covers the SSE-reconnect cursor reset)")
+    func freshRegisterFiresReRegistered() async throws {
+        // The SSE reconnect path re-registers via registerIfNeeded()→register(),
+        // NOT via authed(). This proves that path resets the sync cursor too — the
+        // keyless backend-restart self-heal depends on it.
+        let transport = FakeTransport()
+        transport.script = [("device/register", 200, Self.creds)]
+        let client = BackendClient(baseURL: URL(string: "http://test")!,
+                                   tokenStore: MemoryDeviceToken(), transport: transport.handler())
+        let flagged = FlagBox()
+        await client.setOnReRegistered { flagged.set() }
+        _ = try await client.registerIfNeeded()
+        #expect(flagged.isSet)
+    }
+
     @Test("401 → re-register once → retry succeeds with the fresh token")
     func reauthOn401() async throws {
         let transport = FakeTransport()

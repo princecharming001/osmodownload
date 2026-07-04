@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getStore } from "@/lib/connections/memoryStore";
 
 // The thin AI proxy. Holds the Anthropic key server-side (never in the Mac app —
 // a shipped binary's key is trivially extractable), marks the psychology core as
@@ -19,11 +20,16 @@ type Body = {
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 export async function POST(req: NextRequest) {
-  // Auth: the Mac app sends the user's Osmo session token. In keyless/dev mode we
-  // accept any bearer so the flow is exercisable; production verifies it here.
+  // Auth: the Mac app sends its device token. In keyless/dev mode we accept any
+  // bearer so the flow is exercisable; in production (OSMO_REQUIRE_AUTH=1) the
+  // token is validated against a registered device — a raw "Bearer " prefix is
+  // NOT enough, or anyone could burn the server-side Anthropic key.
   const auth = req.headers.get("authorization") ?? "";
-  if (process.env.OSMO_REQUIRE_AUTH === "1" && !auth.startsWith("Bearer ")) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  if (process.env.OSMO_REQUIRE_AUTH === "1") {
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    if (!token || !getStore().deviceByToken(token)) {
+      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+    }
   }
 
   let body: Body;

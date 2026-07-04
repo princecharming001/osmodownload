@@ -64,6 +64,11 @@ public actor BackendClient {
         let creds = try JSONDecoder.osmoWire.decode(DeviceCredentials.self, from: data)
         credentials = creds
         try? tokenStore.store(creds)
+        // A fresh device identity means any prior sync cursor is meaningless —
+        // notify so the caller resets it (idempotent full re-pull). Firing this
+        // from register() covers BOTH the SSE-reconnect and authed-401 paths; the
+        // first-launch call is harmless (cursor is already empty).
+        onReRegistered?()
         return creds
     }
 
@@ -201,8 +206,7 @@ public actor BackendClient {
             let (data, response) = try await transport(req)
             if response.statusCode == 401 && attempt == 0 {
                 dropCredentials()
-                creds = try await register()
-                onReRegistered?()
+                creds = try await register()   // register() fires onReRegistered
                 continue
             }
             guard (200..<300).contains(response.statusCode) else {

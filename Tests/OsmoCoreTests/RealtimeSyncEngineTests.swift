@@ -111,6 +111,30 @@ struct RealtimeSyncEngineTests {
         // Reaching here without a yield = pass (cancel unblocks the loop).
     }
 
+    @Test("A recent-but-already-read inbound ingests without re-notifying")
+    func readNotFresh() async throws {
+        // A backend re-emit that merely adds a read receipt (readAt populated)
+        // must not re-fire a notification, even though sentAt is recent.
+        let store = try OsmoStore.inMemory()
+        let iso = ISO8601DateFormatter().string(from: Date())
+        let read = Self.batchJSON
+            .replacingOccurrences(of: "__SENT_AT__", with: iso)
+            .replacingOccurrences(of: #""readAt":null"#, with: #""readAt":"\#(iso)""#)
+        let client = makeClient(pullBodies: [read])
+        let engine = RealtimeSyncEngine(store: store, client: client,
+                                        cursorStore: MemoryCursorStore(),
+                                        iMessageDBPath: URL(fileURLWithPath: "/nonexistent"))
+        await engine.pullNow()
+        #expect(try store.messageCount() == 1)   // ingested…
+
+        let quiet = Task { () -> Bool in
+            for await _ in engine.inbound { return false }
+            return true
+        }
+        try? await Task.sleep(for: .milliseconds(200))
+        quiet.cancel()   // …but no inbound yield (would fail the `return false` above)
+    }
+
     @Test("hasMore pages until drained")
     func paging() async throws {
         let store = try OsmoStore.inMemory()

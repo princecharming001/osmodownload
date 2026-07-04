@@ -52,6 +52,7 @@ final class TypingDetector {
 
     private func frontmostChanged(_ app: NSRunningApplication) {
         observer?.stop(); observer = nil
+        debounceWork?.cancel()   // drop any pending emit from the previous app
         guard let bundleID = app.bundleIdentifier, allowlist.isObservable(bundleID: bundleID) else {
             onContext?(nil)
             return

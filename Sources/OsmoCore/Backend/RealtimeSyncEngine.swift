@@ -155,6 +155,7 @@ public actor RealtimeSyncEngine {
         loops.removeAll()
         pullDebounce?.cancel()
         identityDebounce?.cancel()
+        inboundContinuation?.finish()   // let the app's `for await` consumer exit
         started = false
     }
 
@@ -210,21 +211,31 @@ public actor RealtimeSyncEngine {
         for thread in batch.threads { _ = try? store.ingest(thread) }
         for message in batch.messages {
             let isNew = (try? store.ingest(message)) ?? false
-            if isNew && !message.isFromMe && message.sentAt > Date().addingTimeInterval(-freshWindow) {
+            // Notify only for genuinely-fresh inbound: new to us, from them, recent,
+            // and NOT already read (a re-emit that merely adds a read receipt must
+            // not re-notify — gate on readAt too).
+            if isNew && !message.isFromMe && message.readAt == nil
+                && message.sentAt > Date().addingTimeInterval(-freshWindow) {
                 fresh.append(NewInbound(message: message, threadID: message.threadID))
             }
         }
         return fresh
     }
 
+    /// Trailing debounce with a leading anchor: if a rebuild is already pending we
+    /// leave it, so it still fires ~5s after the FIRST trigger even during an
+    /// active conversation (a 3s poll cadence would otherwise starve a pure
+    /// trailing debounce forever).
     private func scheduleIdentityRebuild() {
-        identityDebounce?.cancel()
+        if let identityDebounce, !identityDebounce.isCancelled { return }
         identityDebounce = Task { [weak self] in
             try? await Task.sleep(for: .seconds(5))
             guard !Task.isCancelled, let self else { return }
             _ = try? await self.storeRebuild()
+            await self.clearIdentityDebounce()
         }
     }
+    private func clearIdentityDebounce() { identityDebounce = nil }
     private func storeRebuild() throws -> [MergeSuggestion] {
         try store.rebuildIdentityGraph()
     }
@@ -237,20 +248,19 @@ public actor RealtimeSyncEngine {
             guard FileManager.default.isReadableFile(atPath: iMessageDBPath.path),
                   let reader = try? ChatDBReader(path: iMessageDBPath) else { return }
             chatReader = reader
-            // First open: if we've never watermarked, adopt the current max so
-            // the poll only delivers NEW rows (SyncCoordinator owns history).
-            if cursorStore.loadChatDBRowID() == 0 {
-                cursorStore.saveChatDBRowID((try? reader.currentMaxRowID()) ?? 0)
-            }
         }
         guard let reader = chatReader else { return }
 
+        // Watermark 0 = first launch → readSince(0) imports the FULL history in
+        // this pass (the store dedups), then advances the ROWID so later polls
+        // only deliver new rows. Fresh-inbound notifications are gated on recency
+        // in ingest(), so a first-run bulk import doesn't spam notifications.
         let watermark = cursorStore.loadChatDBRowID()
         guard let (rows, maxRowID) = try? reader.readSince(rowID: watermark), !rows.isEmpty else { return }
 
         let batch = IMessageNormalizer.normalize(rows)
         let fresh = ingest(batch)
-        cursorStore.saveChatDBRowID(maxRowID)
+        cursorStore.saveChatDBRowID(maxRowID)   // AFTER ingest — crash-safe order
         for inbound in fresh { inboundContinuation?.yield(inbound) }
         if !fresh.isEmpty { scheduleIdentityRebuild() }
     }

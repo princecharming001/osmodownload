@@ -12,6 +12,7 @@ final class AXFocusObserver {
     private let appElement: AXUIElement
     private var observer: AXObserver?
     private var pollTimer: Timer?
+    private var stopped = false   // guards against callbacks that fire after stop()
 
     var onFocusedTextField: ((AXUIElement?, String?) -> Void)?
     var onFocusLeft: (() -> Void)?
@@ -37,6 +38,7 @@ final class AXFocusObserver {
     }
 
     func stop() {
+        stopped = true
         pollTimer?.invalidate(); pollTimer = nil
         if let observer {
             CFRunLoopRemoveSource(CFRunLoopGetCurrent(),
@@ -62,6 +64,7 @@ final class AXFocusObserver {
     }
 
     private func evaluateFocus() {
+        guard !stopped else { return }   // a queued callback fired after stop()
         var focused: AnyObject?
         let result = AXUIElementCopyAttributeValue(
             appElement, kAXFocusedUIElementAttribute as CFString, &focused)

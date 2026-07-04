@@ -94,7 +94,8 @@ final class AppModel: ObservableObject {
     // MARK: - Realtime
 
     private func startRealtime() {
-        Task {
+        Task { [weak self] in
+            guard let self else { return }
             isMockMode = await backend.isMockMode()
             await realtime.setOnEvent { [weak self] event in
                 Task { @MainActor in self?.connections.handle(event) }
@@ -102,14 +103,13 @@ final class AppModel: ObservableObject {
             await realtime.start()
             await connections.reconcile()
 
-            // Fresh inbound → notify (rules) + refresh UI.
+            // Fresh inbound → notify (rules) + refresh UI. Ends when the engine
+            // finishes the stream (stop()), releasing this task. AppModel is a
+            // root object (app lifetime), so the loop's strong hold is fine.
             for await inbound in realtime.inbound {
-                await MainActor.run {
-                    self.reload()
-                    self.notifier.considerInbound(inbound, focusedThreadID: self.focusedThreadID,
-                                                  mutedThreadIDs: self.mutedThreadIDs(),
-                                                  store: self.store)
-                }
+                reload()
+                notifier.considerInbound(inbound, focusedThreadID: focusedThreadID,
+                                         mutedThreadIDs: mutedThreadIDs(), store: store)
             }
         }
     }
@@ -117,7 +117,37 @@ final class AppModel: ObservableObject {
     /// Called on foreground/wake to catch up + re-probe local access.
     func onForeground() {
         connections.probeLocal()
-        Task { await connections.reconcile(); await realtime.pullNow() }
+        Task {
+            await connections.reconcile()
+            await realtime.pullNow()
+            await drainSendQueue()
+        }
+    }
+
+    /// Retry any sends queued while offline. Called on foreground, after a sync,
+    /// and after a successful live send. Dequeues on success; drops after too
+    /// many attempts so a permanently-failing send can't wedge the queue.
+    func drainSendQueue() async {
+        let pending = (try? store.queuedSends()) ?? []
+        guard !pending.isEmpty else { return }
+        var sent = 0
+        for item in pending {
+            guard let id = item.id else { continue }
+            guard connections.canDirectSend(item.platform) else { continue }
+            do {
+                let message = try await backend.send(
+                    platform: item.platform, platformThreadID: item.platformThreadID, text: item.text)
+                let normalized = BackendBatchNormalizer.normalize(
+                    WireBatch(contacts: [], threads: [], messages: [message], cursor: "", hasMore: false))
+                for m in normalized.batch.messages { _ = try? store.ingest(m) }
+                try? store.dequeueSend(id: id)
+                sent += 1
+            } catch {
+                try? store.bumpSendAttempt(id: id)
+                if item.attempts + 1 >= 5 { try? store.dequeueSend(id: id) }  // give up, don't wedge
+            }
+        }
+        if sent > 0 { reload(); toast = "Sent \(sent) queued message\(sent == 1 ? "" : "s")." }
     }
 
     private func mutedThreadIDs() -> Set<UUID> {
@@ -201,10 +231,14 @@ final class AppModel: ObservableObject {
                 WireBatch(contacts: [], threads: [], messages: [message], cursor: "", hasMore: false))
             for m in normalized.batch.messages { _ = try? store.ingest(m) }
             reload()
+            // A successful live send is a good moment to flush anything queued.
+            await drainSendQueue()
             return true
         } catch {
-            // Offline → queue for later drain.
-            try? store.enqueueSend(QueuedSend(platform: platform, platformThreadID: target, text: text))
+            // Offline → queue for later drain (onForeground / next sync / next send).
+            try? store.enqueueSend(QueuedSend(
+                id: nil, platform: platform, platformThreadID: target,
+                text: text, queuedAt: Date(), attempts: 0))
             toast = "Offline — queued to send when you're back."
             return false
         }
