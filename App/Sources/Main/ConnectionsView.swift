@@ -63,7 +63,15 @@ struct ConnectionRow: View {
         case .notConnected:
             PillButton(platform == .imessage ? "Enable" : "Connect") { model.connect(platform) }
         case .linking:
-            ProgressView().controlSize(.small)
+            HStack(spacing: DS.Space.s) {
+                ProgressView().controlSize(.small)
+                Button("Cancel") { Task { await model.connections.cancelConnect(platform) } }
+                    .font(DS.Typography.captionEm).buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
+                Button("Retry") {
+                    Task { await model.connections.cancelConnect(platform); model.connect(platform) }
+                }
+                .font(DS.Typography.captionEm).buttonStyle(.plain).foregroundStyle(DS.Colors.accent)
+            }
         case .backfilling(let progress):
             HStack(spacing: DS.Space.s) {
                 ProgressView(value: progress).frame(width: 60)

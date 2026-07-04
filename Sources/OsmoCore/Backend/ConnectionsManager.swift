@@ -55,6 +55,16 @@ public final class ConnectionsManager: ObservableObject {
         apply(platform, .statusEvent("disconnected"))
     }
 
+    /// User bailed out of a stuck "waiting for authorization" — reset to
+    /// notConnected so the Connect button comes back. Best-effort tells the
+    /// backend to drop any half-open connection it may have recorded.
+    public func cancelConnect(_ platform: Platform) async {
+        if let id = connectionIDs[platform] { try? await client.disconnect(id: id) }
+        connectionIDs[platform] = nil
+        phases[platform] = .notConnected
+        persist()
+    }
+
     // MARK: - Event + reconciliation inputs
 
     public func handle(_ event: BackendEvent) {
