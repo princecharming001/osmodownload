@@ -10,6 +10,10 @@ public struct WireContact: Codable, Equatable, Sendable {
     public var handle: String
     public var displayName: String?
     public var isMe: Bool
+    public init(platform: String, handle: String, displayName: String?, isMe: Bool) {
+        self.platform = platform; self.handle = handle
+        self.displayName = displayName; self.isMe = isMe
+    }
 }
 
 public struct WireThread: Codable, Equatable, Sendable {
@@ -18,6 +22,11 @@ public struct WireThread: Codable, Equatable, Sendable {
     public var title: String?
     public var isGroup: Bool
     public var lastMessageAt: Date?
+    public init(platform: String, platformThreadID: String, title: String?,
+                isGroup: Bool, lastMessageAt: Date?) {
+        self.platform = platform; self.platformThreadID = platformThreadID
+        self.title = title; self.isGroup = isGroup; self.lastMessageAt = lastMessageAt
+    }
 }
 
 public struct WireMessage: Codable, Equatable, Sendable {
@@ -29,6 +38,12 @@ public struct WireMessage: Codable, Equatable, Sendable {
     public var text: String
     public var sentAt: Date
     public var readAt: Date?
+    public init(platform: String, platformMessageID: String, platformThreadID: String,
+                senderHandle: String?, isFromMe: Bool, text: String, sentAt: Date, readAt: Date?) {
+        self.platform = platform; self.platformMessageID = platformMessageID
+        self.platformThreadID = platformThreadID; self.senderHandle = senderHandle
+        self.isFromMe = isFromMe; self.text = text; self.sentAt = sentAt; self.readAt = readAt
+    }
 }
 
 public struct WireBatch: Codable, Equatable, Sendable {
@@ -37,6 +52,11 @@ public struct WireBatch: Codable, Equatable, Sendable {
     public var messages: [WireMessage]
     public var cursor: String
     public var hasMore: Bool
+    public init(contacts: [WireContact], threads: [WireThread], messages: [WireMessage],
+                cursor: String, hasMore: Bool) {
+        self.contacts = contacts; self.threads = threads; self.messages = messages
+        self.cursor = cursor; self.hasMore = hasMore
+    }
 }
 
 public struct DeviceCredentials: Codable, Equatable, Sendable {

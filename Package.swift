@@ -17,8 +17,12 @@ let package = Package(
     ],
     products: [
         .library(name: "OsmoCore", targets: ["OsmoCore"]),
-        .library(name: "OsmoBrain", targets: ["OsmoBrain"])
-        // The Mac app is an Xcode target (Osmo.xcodeproj) that links these two
+        .library(name: "OsmoBrain", targets: ["OsmoBrain"]),
+        // Pure app-shell logic (pill state machine, typing-detection rules,
+        // onboarding model, notification rules) — SPM so `swift test` covers
+        // it; the Xcode app target is a thin AppKit/SwiftUI shell over it.
+        .library(name: "OsmoShell", targets: ["OsmoShell"])
+        // The Mac app is an Xcode target (Osmo.xcodeproj) that links these
         // library products — see project.yml / App/. It's not an SPM executable
         // so it can carry an Info.plist, entitlements (App Sandbox off for
         // chat.db access), and a real .app bundle.
@@ -42,6 +46,11 @@ let package = Package(
             dependencies: ["OsmoCore"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         ),
+        .target(
+            name: "OsmoShell",
+            dependencies: ["OsmoCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
         .testTarget(
             name: "OsmoCoreTests",
             dependencies: ["OsmoCore"],
@@ -50,6 +59,11 @@ let package = Package(
         .testTarget(
             name: "OsmoBrainTests",
             dependencies: ["OsmoBrain", "OsmoCore"],
+            swiftSettings: [.swiftLanguageMode(.v6)]
+        ),
+        .testTarget(
+            name: "OsmoShellTests",
+            dependencies: ["OsmoShell", "OsmoCore"],
             swiftSettings: [.swiftLanguageMode(.v6)]
         )
     ]

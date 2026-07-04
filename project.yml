@@ -11,6 +11,9 @@ options:
 packages:
   Osmo:
     path: .
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 2.0.0
 
 targets:
   Osmo:
@@ -23,12 +26,16 @@ targets:
         product: OsmoCore
       - package: Osmo
         product: OsmoBrain
+      - package: Osmo
+        product: OsmoShell
+      - package: KeyboardShortcuts
+        product: KeyboardShortcuts
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.osmo.app
         PRODUCT_NAME: Osmo
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: "2"
         MACOSX_DEPLOYMENT_TARGET: "14.0"
         SWIFT_VERSION: "6.0"
         GENERATE_INFOPLIST_FILE: NO

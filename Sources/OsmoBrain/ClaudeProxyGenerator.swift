@@ -94,13 +94,23 @@ public struct RuntimeConfig: Codable, Sendable, Equatable {
     public var proxyURL: String
     public var authToken: String
     public var model: String
+    /// The connections backend origin (device auth, sync, realtime). Optional so
+    /// old persisted configs still decode; defaults to the local dev server.
+    public var backendURL: String?
 
     public init(proxyURL: String = "http://localhost:3000/api/suggest",
                 authToken: String = "local-dev",
-                model: String = "claude-sonnet-5") {
+                model: String = "claude-sonnet-5",
+                backendURL: String? = "http://localhost:3000") {
         self.proxyURL = proxyURL
         self.authToken = authToken
         self.model = model
+        self.backendURL = backendURL
+    }
+
+    /// Resolved backend origin (falls back to the local dev server).
+    public var backendOrigin: URL {
+        URL(string: backendURL ?? "http://localhost:3000") ?? URL(string: "http://localhost:3000")!
     }
 
     public var liveGenerator: Generator? {
