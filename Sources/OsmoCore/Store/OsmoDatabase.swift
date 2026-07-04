@@ -153,6 +153,31 @@ public enum OsmoDatabase {
             }
         }
 
+        // Consumer-shell state: per-thread compose drafts, snoozes, and the
+        // offline send queue. Device-local UX state, not synced entities — so
+        // plain tables without the SyncMeta columns.
+        migrator.registerMigration("v5-drafts-snooze-sendqueue") { db in
+            try db.create(table: "thread_draft") { t in
+                t.primaryKey("threadID", .text)
+                    .references("thread", onDelete: .cascade)
+                t.column("text", .text).notNull()
+                t.column("updatedAt", .datetime).notNull()
+            }
+            try db.create(table: "thread_snooze") { t in
+                t.primaryKey("threadID", .text)
+                    .references("thread", onDelete: .cascade)
+                t.column("until", .datetime).notNull()
+            }
+            try db.create(table: "send_queue") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("platform", .text).notNull()
+                t.column("platformThreadID", .text).notNull()
+                t.column("text", .text).notNull()
+                t.column("queuedAt", .datetime).notNull()
+                t.column("attempts", .integer).notNull().defaults(to: 0)
+            }
+        }
+
         return migrator
     }
 }

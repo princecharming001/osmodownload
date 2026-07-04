@@ -56,8 +56,43 @@ public struct ChatDBReader: Sendable {
         }
     }
 
-    static let query = """
+    /// Incremental read for the realtime poll loop: only messages with
+    /// `ROWID > rowID` (ROWID is monotonic in chat.db — cheaper and safer than
+    /// date math), plus the new high-water mark. Each call runs in a fresh read
+    /// transaction, so WAL content committed by Messages since the last poll is
+    /// visible without reopening the file.
+    public func readSince(rowID: Int64) throws -> (rows: [RawIMessage], maxRowID: Int64) {
+        try dbQueue.read { db in
+            var maxRowID = rowID
+            let rows = try Row.fetchAll(db, sql: Self.sinceQuery, arguments: [rowID]).map { row in
+                maxRowID = Swift.max(maxRowID, row["rowid"] as Int64)
+                return RawIMessage(
+                    guid: row["guid"],
+                    text: row["text"],
+                    isFromMe: (row["is_from_me"] as Int64) != 0,
+                    dateRaw: row["date"],
+                    dateReadRaw: row["date_read"] ?? 0,
+                    handle: row["handle"],
+                    chatGUID: row["chat_guid"],
+                    chatIdentifier: row["chat_identifier"],
+                    chatDisplayName: row["chat_display_name"],
+                    chatStyle: Int(row["chat_style"] as Int64? ?? 45))
+            }
+            return (rows, maxRowID)
+        }
+    }
+
+    /// Current max message ROWID — the starting watermark so the realtime loop
+    /// doesn't re-deliver history the initial import already ingested.
+    public func currentMaxRowID() throws -> Int64 {
+        try dbQueue.read { db in
+            try Int64.fetchOne(db, sql: "SELECT COALESCE(MAX(ROWID), 0) FROM message") ?? 0
+        }
+    }
+
+    static let baseSelect = """
         SELECT
+            m.ROWID             AS rowid,
             m.guid              AS guid,
             m.text              AS text,
             m.is_from_me        AS is_from_me,
@@ -73,6 +108,8 @@ public struct ChatDBReader: Sendable {
         JOIN chat c                ON c.ROWID = cmj.chat_id
         LEFT JOIN handle h         ON h.ROWID = m.handle_id
         WHERE m.text IS NOT NULL AND m.text <> ''
-        ORDER BY m.date ASC
         """
+
+    static let query = baseSelect + " ORDER BY m.date ASC"
+    static let sinceQuery = baseSelect + " AND m.ROWID > ? ORDER BY m.ROWID ASC"
 }
