@@ -3,7 +3,7 @@
 // is tenant-wide (it can read every user's accounts), so every read a route
 // makes is scoped to the caller's stored connection ids.
 
-import type { HostedAuthOptions, UnipileAccount, UnipileClient } from "./client";
+import type { HostedAuthOptions, UnipileAccount, UnipileChat, UnipileClient, UnipileMessage } from "./client";
 
 const PROVIDER_BY_PLATFORM: Record<string, string> = {
   linkedin: "LINKEDIN",
@@ -43,9 +43,13 @@ class RealUnipileClient implements UnipileClient {
       api_url: this.dsn,
       expiresOn: new Date(Date.now() + 30 * 60_000).toISOString(),
       // linkId rides in `name` — Unipile echoes it in the notify callback, which
-      // is how we map account_id → device without trusting the redirect.
+      // is how we map account_id → device without trusting the redirect. The
+      // shared secret rides in the notify_url query (Unipile can't send our
+      // header) so the callback can be authenticated.
       name: opts.linkId,
-      notify_url: `${opts.origin}/api/connect/notify`,
+      notify_url: process.env.OSMO_WEBHOOK_SECRET
+        ? `${opts.origin}/api/connect/notify?secret=${encodeURIComponent(process.env.OSMO_WEBHOOK_SECRET)}`
+        : `${opts.origin}/api/connect/notify`,
       success_redirect_url: `${opts.origin}/connect/done`,
       failure_redirect_url: `${opts.origin}/connect/done?failed=1`,
       ...(opts.reconnectAccountId ? { reconnect_account: opts.reconnectAccountId } : {}),
@@ -60,6 +64,20 @@ class RealUnipileClient implements UnipileClient {
   async listAccounts(): Promise<UnipileAccount[]> {
     const out = await this.call<{ items?: UnipileAccount[] }>(`/api/v1/accounts`);
     return out.items ?? [];
+  }
+
+  async listChats(accountId: string, cursor?: string): Promise<{ chats: UnipileChat[]; cursor: string | null }> {
+    const q = new URLSearchParams({ account_id: accountId, limit: "50" });
+    if (cursor) q.set("cursor", cursor);
+    const out = await this.call<{ items?: UnipileChat[]; cursor?: string | null }>(`/api/v1/chats?${q}`);
+    return { chats: out.items ?? [], cursor: out.cursor ?? null };
+  }
+
+  async listMessages(accountId: string, cursor?: string): Promise<{ messages: UnipileMessage[]; cursor: string | null }> {
+    const q = new URLSearchParams({ account_id: accountId, limit: "100" });
+    if (cursor) q.set("cursor", cursor);
+    const out = await this.call<{ items?: UnipileMessage[]; cursor?: string | null }>(`/api/v1/messages?${q}`);
+    return { messages: out.items ?? [], cursor: out.cursor ?? null };
   }
 
   async sendMessage(accountId: string, chatId: string, text: string): Promise<{ messageId: string }> {

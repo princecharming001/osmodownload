@@ -4,15 +4,19 @@
 
 import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
+import { backfillConnection } from "@/lib/connections/backfill";
 import type { Connection } from "@/lib/connections/types";
 
 export async function POST(req: Request): Promise<Response> {
-  // Shared-secret gate (same as /api/webhooks/unipile): when configured, an
-  // unauthenticated caller can't bind an arbitrary account_id to a victim's
-  // pending link. Skipped in keyless/mock mode where no secret is set.
+  // Shared-secret gate: when configured, an unauthenticated caller can't bind an
+  // arbitrary account_id to a victim's pending link. Unipile calls this URL and
+  // can't send our header, so the secret rides in the query string we set on
+  // notify_url; we also accept the header for symmetry. Skipped in mock mode.
   const secret = process.env.OSMO_WEBHOOK_SECRET;
-  if (secret && req.headers.get("x-osmo-webhook-secret") !== secret) {
-    return Response.json({ error: "bad secret" }, { status: 401 });
+  if (secret) {
+    const provided = new URL(req.url).searchParams.get("secret")
+      ?? req.headers.get("x-osmo-webhook-secret");
+    if (provided !== secret) return Response.json({ error: "bad secret" }, { status: 401 });
   }
 
   const body = await req.json().catch(() => ({}));
@@ -38,7 +42,8 @@ export async function POST(req: Request): Promise<Response> {
     type: "connection.status", platform: link.platform,
     status: "backfilling", connectionId: accountId,
   });
-  // Live backfill job kicks off from here (paged history import). The
-  // reconciliation poller self-heals if this instance dies mid-backfill.
+  // Kick off the paged history import (fire-and-forget; the app's cursor-pull
+  // drains it as rows land). Don't await — Unipile wants a fast 200.
+  void backfillConnection({ deviceId: link.deviceId, accountId, platform: link.platform });
   return Response.json({ ok: true });
 }

@@ -102,6 +102,11 @@ class MockUnipileClient implements UnipileClient {
     return [];
   }
 
+  // Mock backfill seeds wire rows directly (see connectMock), so these are
+  // interface-compliance stubs — never exercised in the mock flow.
+  async listChats(): Promise<{ chats: never[]; cursor: null }> { return { chats: [], cursor: null }; }
+  async listMessages(): Promise<{ messages: never[]; cursor: null }> { return { messages: [], cursor: null }; }
+
   async sendMessage(_accountId: string, chatId: string, _text: string): Promise<{ messageId: string }> {
     return { messageId: `mock-sent-${chatId}-${crypto.randomUUID().slice(0, 8)}` };
   }
