@@ -6,8 +6,10 @@ import { getStore } from "../connections/memoryStore";
 import { publish } from "../connections/events";
 import type { WireContact, WireMessage, WireThread } from "../connections/types";
 
-const MAX_DMS = 20;
-const MAX_PER_DM = 30;
+const MAX_DMS = 25;
+const PER_PAGE = 100;
+const MAX_PER_DM = 300;                       // ~2 months of an active DM
+const OLDEST_TS = () => String(Math.floor(Date.now() / 1000) - 60 * 24 * 3600);  // 60 days ago
 
 async function slack<T = Record<string, unknown>>(method: string, token: string, params: Record<string, string> = {}): Promise<T> {
   const q = new URLSearchParams(params);
@@ -22,12 +24,19 @@ export async function backfillSlack(
 ): Promise<void> {
   const store = getStore();
   try {
-    // Name map (best-effort; DMs still import without it).
+    // Name + avatar map (best-effort; DMs still import without it).
     const names = new Map<string, string>();
+    const avatars = new Map<string, string>();
     try {
-      const users = await slack<{ members?: { id: string; real_name?: string; name?: string }[] }>(
-        "users.list", userToken, { limit: "200" });
-      for (const u of users.members ?? []) names.set(u.id, u.real_name || u.name || u.id);
+      const users = await slack<{
+        members?: { id: string; real_name?: string; name?: string;
+                    profile?: { image_192?: string; image_512?: string } }[];
+      }>("users.list", userToken, { limit: "200" });
+      for (const u of users.members ?? []) {
+        names.set(u.id, u.real_name || u.name || u.id);
+        const img = u.profile?.image_512 || u.profile?.image_192;
+        if (img) avatars.set(u.id, img);
+      }
     } catch { /* names optional */ }
 
     const ims = await slack<{ channels?: { id: string; user?: string }[] }>(
@@ -37,21 +46,38 @@ export async function backfillSlack(
     const threads = new Map<string, WireThread>();
     const messages: WireMessage[] = [];
 
+    const oldest = OLDEST_TS();
     for (const im of ims.channels ?? []) {
       const partnerId = im.user;
       const partnerName = partnerId ? (names.get(partnerId) ?? null) : null;
-      const history = await slack<{ messages?: { user?: string; text?: string; ts?: string }[] }>(
-        "conversations.history", userToken, { channel: im.id, limit: String(MAX_PER_DM) });
+
+      // Page this DM's history back ~2 months (bounded by MAX_PER_DM).
+      const dmMessages: { user?: string; text?: string; ts?: string }[] = [];
+      let cursor: string | undefined;
+      while (dmMessages.length < MAX_PER_DM) {
+        const params: Record<string, string> = { channel: im.id, limit: String(PER_PAGE), oldest };
+        if (cursor) params.cursor = cursor;
+        const page = await slack<{
+          messages?: { user?: string; text?: string; ts?: string }[];
+          response_metadata?: { next_cursor?: string };
+        }>("conversations.history", userToken, params);
+        dmMessages.push(...(page.messages ?? []));
+        cursor = page.response_metadata?.next_cursor;
+        if (!cursor) break;
+      }
 
       if (partnerId) {
-        contacts.set(partnerId, { platform: "slack", handle: partnerId, displayName: partnerName, isMe: false });
+        contacts.set(partnerId, {
+          platform: "slack", handle: partnerId, displayName: partnerName,
+          avatarUrl: avatars.get(partnerId) ?? null, isMe: false,
+        });
       }
       threads.set(im.id, {
         platform: "slack", platformThreadID: im.id,
         title: partnerName, isGroup: false,
-        lastMessageAt: tsToISO(history.messages?.[0]?.ts),
+        lastMessageAt: tsToISO(dmMessages[0]?.ts),
       });
-      for (const m of history.messages ?? []) {
+      for (const m of dmMessages) {
         if (!m.ts) continue;
         const isFromMe = m.user === myUserId;
         messages.push({

@@ -57,6 +57,11 @@ public struct OsmoContact: Codable, Equatable, Sendable, Identifiable, SyncableR
     public func preservingEnrichment(from existing: OsmoContact) -> OsmoContact {
         var c = self
         if c.personID == nil { c.personID = existing.personID }
+        // Keep a previously-resolved name/photo when a re-import arrives bare
+        // (an iMessage re-poll before Contacts enrichment ran) so a real name
+        // never regresses to a phone number.
+        if c.displayName == nil { c.displayName = existing.displayName }
+        if c.avatarData == nil { c.avatarData = existing.avatarData }
         return c
     }
 }

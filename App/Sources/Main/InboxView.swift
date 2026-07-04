@@ -52,7 +52,7 @@ struct ThreadRow: View {
 
     var body: some View {
         HStack(spacing: DS.Space.m) {
-            AvatarView(name: title, size: 36)
+            AvatarView(name: title, data: avatar, size: 36)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: DS.Space.xs) {
                     Text(title).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink).lineLimit(1)
@@ -66,9 +66,14 @@ struct ThreadRow: View {
         .padding(.vertical, 2)
     }
 
-    private var title: String {
-        thread.title ?? (try? model.store.contacts(inThread: thread.id))?.first?.displayName ?? "Unknown"
+    private var firstContact: OsmoContact? {
+        (try? model.store.contacts(inThread: thread.id))?.first
     }
+    private var title: String {
+        if let t = thread.title, !t.isEmpty { return t }
+        return firstContact?.displayLabel ?? "New conversation"
+    }
+    private var avatar: Data? { firstContact?.avatarData }
     private var preview: String {
         (try? model.store.lastMessage(inThread: thread.id))?.text ?? ""
     }
@@ -176,7 +181,8 @@ struct ThreadDetailView: View {
     }
 
     private var partnerName: String {
-        thread?.title ?? (try? model.store.contacts(inThread: threadID))?.first?.displayName ?? "Conversation"
+        if let t = thread?.title, !t.isEmpty { return t }
+        return (try? model.store.contacts(inThread: threadID))?.first?.displayLabel ?? "Conversation"
     }
     private var sendTarget: String {
         ContextAssembler(store: model.store, projects: model.projects)

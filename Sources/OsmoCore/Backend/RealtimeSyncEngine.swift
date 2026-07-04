@@ -79,6 +79,12 @@ public actor RealtimeSyncEngine {
     private var identityDebounce: Task<Void, Never>?
     private var chatReader: ChatDBReader?
     private var started = false
+    /// macOS Contacts index (handle → name + photo), built once per session so
+    /// iMessage threads show real names/avatars, not raw phone numbers.
+    private var contactsIndex: [String: ResolvedContact] = [:]
+    private var contactsIndexBuilt = false
+    /// url → downloaded avatar bytes, so a profile picture is fetched once.
+    private var avatarCache: [String: Data] = [:]
 
     private var inboundContinuation: AsyncStream<NewInbound>.Continuation?
     public private(set) nonisolated(unsafe) var inbound: AsyncStream<NewInbound>!
@@ -190,7 +196,8 @@ public actor RealtimeSyncEngine {
 
         while true {
             guard let wire = try? await client.pull(since: cursor) else { return }
-            let result = BackendBatchNormalizer.normalize(wire)
+            var result = BackendBatchNormalizer.normalize(wire)
+            result.batch.contacts = await fetchAvatars(for: result.batch.contacts, wire: wire.contacts)
             let fresh = ingest(result.batch)
             wroteAny = wroteAny || !fresh.isEmpty
             for inbound in fresh { inboundContinuation?.yield(inbound) }
@@ -242,6 +249,55 @@ public actor RealtimeSyncEngine {
 
     // MARK: - Local iMessage poll path
 
+    /// Download profile pictures for API contacts (Slack/LinkedIn/etc.) and set
+    /// them on the matching normalized contacts. Cached by URL; bounded so a bad
+    /// image can't stall the pull. Names already arrive from the provider.
+    private func fetchAvatars(for contacts: [OsmoContact], wire: [WireContact]) async -> [OsmoContact] {
+        // handle key → avatar URL from the wire.
+        var urlByKey: [String: String] = [:]
+        for w in wire {
+            if let url = w.avatarUrl, !url.isEmpty { urlByKey["\(w.platform):\(w.handle)"] = url }
+        }
+        guard !urlByKey.isEmpty else { return contacts }
+
+        var out = contacts
+        for i in out.indices where out[i].avatarData == nil {
+            guard let url = urlByKey["\(out[i].platform.rawValue):\(out[i].handle)"] else { continue }
+            if let cached = avatarCache[url] { out[i].avatarData = cached; continue }
+            guard let u = URL(string: url) else { continue }
+            var req = URLRequest(url: u); req.timeoutInterval = 8
+            if let (data, resp) = try? await URLSession.shared.data(for: req),
+               (resp as? HTTPURLResponse)?.statusCode == 200, data.count < 2_000_000 {
+                avatarCache[url] = data
+                out[i].avatarData = data
+            }
+        }
+        return out
+    }
+
+    /// Enrich iMessage contacts (and 1:1 thread titles) with names + photos from
+    /// the macOS address book. Handles that aren't in Contacts keep their raw
+    /// value; the UI prettifies those (never "Unknown").
+    private func enrichWithContacts(_ batch: NormalizedBatch) -> NormalizedBatch {
+        if !contactsIndexBuilt {
+            contactsIndex = ContactsResolver.buildIndex()
+            contactsIndexBuilt = true
+        }
+        guard !contactsIndex.isEmpty else { return batch }
+
+        var enrichedContacts = batch.contacts
+        for i in enrichedContacts.indices {
+            let key = HandleNormalizer.normalize(enrichedContacts[i].handle).value
+            guard let resolved = contactsIndex[key] else { continue }
+            enrichedContacts[i].displayName = resolved.name
+            if enrichedContacts[i].avatarData == nil { enrichedContacts[i].avatarData = resolved.imageData }
+        }
+
+        var result = batch
+        result.contacts = enrichedContacts
+        return result
+    }
+
     private func pollChatDB() {
         if chatReader == nil {
             // Reader opens lazily; FDA may be granted mid-session.
@@ -258,7 +314,7 @@ public actor RealtimeSyncEngine {
         let watermark = cursorStore.loadChatDBRowID()
         guard let (rows, maxRowID) = try? reader.readSince(rowID: watermark), !rows.isEmpty else { return }
 
-        let batch = IMessageNormalizer.normalize(rows)
+        let batch = enrichWithContacts(IMessageNormalizer.normalize(rows))
         let fresh = ingest(batch)
         cursorStore.saveChatDBRowID(maxRowID)   // AFTER ingest — crash-safe order
         for inbound in fresh { inboundContinuation?.yield(inbound) }

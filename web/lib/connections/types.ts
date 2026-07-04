@@ -24,6 +24,7 @@ export interface WireContact {
   platform: Platform;
   handle: string;            // platform-native identity (phone, email, urn, id)
   displayName: string | null;
+  avatarUrl?: string | null; // profile picture URL; the app fetches + caches it
   isMe: boolean;
 }
 

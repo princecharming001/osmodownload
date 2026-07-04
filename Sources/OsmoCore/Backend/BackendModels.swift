@@ -9,10 +9,11 @@ public struct WireContact: Codable, Equatable, Sendable {
     public var platform: String
     public var handle: String
     public var displayName: String?
+    public var avatarUrl: String?
     public var isMe: Bool
-    public init(platform: String, handle: String, displayName: String?, isMe: Bool) {
+    public init(platform: String, handle: String, displayName: String?, avatarUrl: String? = nil, isMe: Bool) {
         self.platform = platform; self.handle = handle
-        self.displayName = displayName; self.isMe = isMe
+        self.displayName = displayName; self.avatarUrl = avatarUrl; self.isMe = isMe
     }
 }
 

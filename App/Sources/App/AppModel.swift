@@ -250,12 +250,21 @@ final class AppModel: ObservableObject {
 
     // MARK: - Snapshots
 
+    /// Avatar for a person/thread row, from the first contact that has a photo.
+    private var avatarByKey: [UUID: Data] = [:]
+
     private func buildSnapshots() -> [ThreadSnapshot] {
-        threads.compactMap { thread in
+        avatarByKey = [:]
+        return threads.compactMap { thread in
             guard let last = try? store.lastMessage(inThread: thread.id) else { return nil }
             let contacts = (try? store.contacts(inThread: thread.id)) ?? []
             let personID = contacts.first?.personID
-            let name = thread.title ?? contacts.first?.displayName ?? contacts.first?.handle ?? "Unknown"
+            let name = (thread.title?.isEmpty == false ? thread.title : nil)
+                ?? contacts.first?.displayLabel ?? "New conversation"
+            // Cache an avatar under the person/thread key for buildPeople.
+            if let avatar = contacts.first(where: { $0.avatarData != nil })?.avatarData {
+                avatarByKey[personID ?? thread.id] = avatar
+            }
             return ThreadSnapshot(
                 threadID: thread.id, personID: personID, personName: name,
                 platform: thread.platform, isEmpty: false,
@@ -275,7 +284,7 @@ final class AppModel: ObservableObject {
                 if !existing.platforms.contains(s.platform) { existing.platforms.append(s.platform) }
                 rows[key] = existing
             } else {
-                rows[key] = PersonRow(id: key, name: s.personName, avatar: nil,
+                rows[key] = PersonRow(id: key, name: s.personName, avatar: avatarByKey[key],
                                       status: status, platforms: [s.platform])
             }
         }

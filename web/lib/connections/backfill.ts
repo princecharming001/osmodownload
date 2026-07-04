@@ -11,7 +11,7 @@ import { getUnipile } from "../unipile/client";
 import { chatIndex, normalizeUnipileMessage } from "../unipile/normalize";
 import type { RowBundle } from "./memoryStore";
 
-const MAX_MESSAGE_PAGES = 10;   // ~1000 messages — enough for a first import
+const MAX_MESSAGE_PAGES = 20;   // ~2000 messages — well over 2 months for DMs
 
 /** Import an account's recent history into the device oplog. Fire-and-forget
     from the notify callback; failures leave the connection `backfilling` and the

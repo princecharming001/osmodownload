@@ -7,7 +7,9 @@ import { getStore } from "../connections/memoryStore";
 import { publish } from "../connections/events";
 import type { WireContact, WireMessage, WireThread } from "../connections/types";
 
-const MAX_MESSAGES = 40;
+const PAGE_SIZE = 100;
+const MAX_MESSAGES = 300;   // ~2 months of a normal inbox, bounded for speed
+const HISTORY_QUERY = "newer_than:2m";   // Gmail search: last 2 months
 
 /** Parse `Name <email@x>` → {name, email}. */
 function parseAddress(v: string | undefined): { name: string | null; email: string | null } {
@@ -26,9 +28,17 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
     const profile = await fetch(`${api}/profile`, { headers: auth }).then((r) => r.json());
     const myEmail = String(profile.emailAddress ?? "").toLowerCase();
 
-    const list = await fetch(`${api}/messages?maxResults=${MAX_MESSAGES}`, { headers: auth })
-      .then((r) => r.json());
-    const ids: string[] = (list.messages ?? []).map((m: { id: string }) => m.id);
+    // Page the message IDs over the last 2 months (bounded by MAX_MESSAGES).
+    const ids: string[] = [];
+    let pageToken: string | undefined;
+    while (ids.length < MAX_MESSAGES) {
+      const q = new URLSearchParams({ maxResults: String(PAGE_SIZE), q: HISTORY_QUERY });
+      if (pageToken) q.set("pageToken", pageToken);
+      const list = await fetch(`${api}/messages?${q}`, { headers: auth }).then((r) => r.json());
+      for (const m of (list.messages ?? []) as { id: string }[]) ids.push(m.id);
+      pageToken = list.nextPageToken;
+      if (!pageToken) break;
+    }
     if (ids.length === 0) { finish(deviceId, connectionId); return; }
 
     const contacts = new Map<string, WireContact>();

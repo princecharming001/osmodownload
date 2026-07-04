@@ -28,5 +28,7 @@
 	<string>© 2026 Osmo</string>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>Osmo inserts your approved reply into Messages and reads which conversation is open.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Osmo uses your contacts to show real names and photos on your message threads instead of raw phone numbers.</string>
 </dict>
 </plist>

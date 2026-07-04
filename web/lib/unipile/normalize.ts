@@ -41,10 +41,13 @@ export function normalizeUnipileMessage(
   const sentAt = String(pick(msg, "timestamp", "date", "created_at") ?? new Date().toISOString());
   const senderHandle = pick(msg, "sender_attendee_id", "sender_id", "attendee_provider_id", "from") as string | undefined;
   const senderName = pick(msg, "sender_name", "attendee_name") as string | undefined;
+  const senderAvatar = pick(msg, "sender_profile_picture", "sender_attendee_picture",
+                            "profile_picture", "attendee_picture_url", "picture_url") as string | undefined;
   const chat = chats.get(chatId);
 
   const contacts: WireContact[] = (!isFromMe && senderHandle) ? [{
-    platform, handle: senderHandle, displayName: senderName ?? chat?.title ?? null, isMe: false,
+    platform, handle: senderHandle, displayName: senderName ?? chat?.title ?? null,
+    avatarUrl: senderAvatar ?? null, isMe: false,
   }] : [];
   const threads: WireThread[] = [{
     platform, platformThreadID: chatId,
