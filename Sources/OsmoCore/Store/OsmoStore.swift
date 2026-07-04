@@ -6,7 +6,7 @@ import GRDB
 /// `deviceSeq`, so re-ingesting a thread doesn't churn the future sync oplog),
 /// plus unified FTS search across every platform's messages.
 public final class OsmoStore: @unchecked Sendable {
-    private let dbQueue: DatabaseQueue
+    let dbQueue: DatabaseQueue   // internal: the sync extension reads/writes it
     /// This Mac's stable identity (persisted once), stamped into future sync ops.
     public let deviceID: UUID
 
