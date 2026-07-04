@@ -34,7 +34,8 @@ final class AppModel: ObservableObject {
     }
 
     let store: OsmoStore
-    let service: SuggestionService
+    @Published private(set) var service: SuggestionService
+    @Published var config: RuntimeConfig
 
     @Published var section: Section = .queue
     @Published var people: [PersonRow] = []
@@ -43,24 +44,62 @@ final class AppModel: ObservableObject {
     @Published var threads: [OsmoThread] = []
     @Published var searchText: String = ""
     @Published var searchResults: [OsmoMessage] = []
+    @Published var syncing = false
+    @Published var lastSyncSummary: String?
+
+    private let syncCoordinator: SyncCoordinator
 
     init() {
-        // Local encrypted store in Application Support; fall back to in-memory so
-        // the app is always constructible (e.g. sandboxed first run before the
-        // container exists).
+        // Local store in Application Support; fall back to in-memory so the app is
+        // always constructible.
         let url = Self.storeURL()
-        self.store = (try? OsmoStore(url: url)) ?? (try! OsmoStore.inMemory())
-        self.service = SuggestionService(generator: GeneratorRouter(live: nil))
+        let store = (try? OsmoStore(url: url)) ?? (try! OsmoStore.inMemory())
+        self.store = store
+        let config = Self.loadConfig()
+        self.config = config
+        self.service = config.makeService()   // live proxy when reachable, mock otherwise
+        self.syncCoordinator = SyncCoordinator(store: store)
         reload()
     }
 
-    static func storeURL() -> URL {
+    /// Persist a new runtime config and rebuild the suggestion service.
+    func updateConfig(_ new: RuntimeConfig) {
+        config = new
+        Self.saveConfig(new)
+        service = new.makeService()
+    }
+
+    static func storeURL() -> URL { supportDir().appendingPathComponent("osmo.db") }
+    static func configURL() -> URL { supportDir().appendingPathComponent("config.json") }
+
+    private static func supportDir() -> URL {
         let base = (try? FileManager.default.url(for: .applicationSupportDirectory,
                                                  in: .userDomainMask, appropriateFor: nil, create: true))
             ?? FileManager.default.temporaryDirectory
         let dir = base.appendingPathComponent("Osmo", isDirectory: true)
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
-        return dir.appendingPathComponent("osmo.db")
+        return dir
+    }
+
+    static func loadConfig() -> RuntimeConfig {
+        guard let data = try? Data(contentsOf: configURL()),
+              let cfg = try? JSONDecoder().decode(RuntimeConfig.self, from: data) else {
+            return RuntimeConfig()   // defaults → local dev proxy
+        }
+        return cfg
+    }
+
+    static func saveConfig(_ config: RuntimeConfig) {
+        if let data = try? JSONEncoder().encode(config) { try? data.write(to: configURL()) }
+    }
+
+    /// Pull the latest from every connected reader into the store, rebuild the
+    /// identity graph, and refresh the UI.
+    func sync() async {
+        syncing = true; defer { syncing = false }
+        let summary = await syncCoordinator.syncAll()
+        lastSyncSummary = summary
+        reload()
     }
 
     func reload() {
@@ -69,6 +108,24 @@ final class AppModel: ObservableObject {
         let snapshots = buildSnapshots()
         queue = MorningQueue.build(snapshots: snapshots, projects: (try? store.activeProjects()) ?? [])
         people = buildPeople(snapshots: snapshots)
+    }
+
+    /// Send an approved message. iMessage sends directly via AppleScript on this
+    /// Mac (the user granted Automation). Other platforms need their own token
+    /// (from OAuth) or are draft-insert only — those return false so the caller
+    /// falls back to putting the text on the pasteboard / into the compose box.
+    func send(_ text: String, platform: Platform, target: String) async -> Bool {
+        do {
+            switch platform {
+            case .imessage:
+                try await IMessageSender().send(text, to: target)
+                return true
+            default:
+                return false   // needs OAuth token or is insert-only → caller copies
+            }
+        } catch {
+            return false
+        }
     }
 
     func runSearch() {

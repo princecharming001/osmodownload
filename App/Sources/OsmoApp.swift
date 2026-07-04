@@ -20,6 +20,10 @@ struct OsmoApp: App {
             MenuBarView().environmentObject(model)
         }
         .menuBarExtraStyle(.window)
+
+        Settings {
+            SettingsView().environmentObject(model)
+        }
     }
 }
 

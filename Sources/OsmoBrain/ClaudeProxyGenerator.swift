@@ -79,8 +79,36 @@ public struct GeneratorRouter: Generator {
     public func generate(systemCore: String, userTurn: String, count: Int) async throws -> String {
         if let live {
             do { return try await live.generate(systemCore: systemCore, userTurn: userTurn, count: count) }
-            catch GenerationError.notConfigured { /* fall through to mock */ }
+            catch GenerationError.notConfigured { /* not set up → mock */ }
+            catch is URLError { /* proxy unreachable (e.g. dev server down) → mock */ }
         }
         return try await mock.generate(systemCore: systemCore, userTurn: userTurn, count: count)
+    }
+}
+
+/// The app's runtime configuration — where the AI proxy lives + which model. Read
+/// from disk (see the app's config loader); defaults point at a local dev proxy
+/// so `npm run dev` in `web/` makes the app fully live. When the proxy is
+/// unreachable or unset, the router falls back to the keyless mock.
+public struct RuntimeConfig: Codable, Sendable, Equatable {
+    public var proxyURL: String
+    public var authToken: String
+    public var model: String
+
+    public init(proxyURL: String = "http://localhost:3000/api/suggest",
+                authToken: String = "local-dev",
+                model: String = "claude-sonnet-5") {
+        self.proxyURL = proxyURL
+        self.authToken = authToken
+        self.model = model
+    }
+
+    public var liveGenerator: Generator? {
+        guard let url = URL(string: proxyURL), !authToken.isEmpty else { return nil }
+        return ClaudeProxyGenerator(config: .init(proxyURL: url, authToken: authToken, model: model))
+    }
+
+    public func makeService() -> SuggestionService {
+        SuggestionService(generator: GeneratorRouter(live: liveGenerator))
     }
 }

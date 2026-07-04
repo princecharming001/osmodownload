@@ -10,10 +10,14 @@ struct SuggestionPanel: View {
     let context: SuggestionContext
     let personName: String
     let platform: Platform
+    /// Where a direct send goes (iMessage handle, Slack channel, email). Empty
+    /// when unknown → the button copies instead.
+    var sendTarget: String = ""
 
     @State private var takes: [SuggestionTake] = []
     @State private var loading = true
     @State private var error: String?
+    @State private var sentSlant: SuggestionTake.Slant?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -52,8 +56,10 @@ struct SuggestionPanel: View {
                 Text(why).font(.osmoCaption).foregroundStyle(Theme.muted).lineLimit(2)
             }
             HStack {
-                if platform.supportsDirectSend {
-                    Button("Send") { send(take.text) }.buttonStyle(PillButton())
+                if sentSlant == take.slant {
+                    Text("Sent ✓").font(.osmoCaption.weight(.semibold)).foregroundStyle(Theme.gold)
+                } else if platform.supportsDirectSend {
+                    Button("Send") { send(take) }.buttonStyle(PillButton())
                 } else {
                     Button("Insert & review") { insert(take.text) }.buttonStyle(PillButton())
                 }
@@ -79,11 +85,22 @@ struct SuggestionPanel: View {
         }
     }
 
-    // Send/insert/copy: on green/amber platforms Send would route to the platform
-    // sender (AppleScript/Gmail/Slack — wired with the bridges); for now these
-    // copy to the pasteboard so the flow is exercisable keyless.
-    private func send(_ text: String) { copy(text) }
+    /// Direct send (iMessage lands via AppleScript on this Mac). If the platform
+    /// can't send yet (no token, or a red platform), we copy so the user can paste.
+    private func send(_ take: SuggestionTake) {
+        Task {
+            let ok = sendTarget.isEmpty ? false
+                : await model.send(take.text, platform: platform, target: sendTarget)
+            await MainActor.run {
+                if ok { sentSlant = take.slant } else { copy(take.text) }
+            }
+        }
+    }
+
+    /// Red platforms: put the draft on the pasteboard so the user pastes it into
+    /// the real compose box and hits Return (one keystroke from sent).
     private func insert(_ text: String) { copy(text) }
+
     private func copy(_ text: String) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(text, forType: .string)

@@ -21,7 +21,9 @@ struct MorningQueueView: View {
             .padding(24)
         }
         .sheet(item: $active) { card in
-            SuggestionPanel(context: cardContext(card), personName: card.personName, platform: card.platform)
+            SuggestionPanel(context: cardContext(card), personName: card.personName,
+                            platform: card.platform,
+                            sendTarget: model.threads.first { $0.id == card.threadID }?.platformThreadID ?? "")
                 .environmentObject(model)
                 .frame(width: 460)
         }

@@ -20,6 +20,20 @@ struct MainWindow: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 16).padding(.top, 12)
             }
+            .safeAreaInset(edge: .bottom) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Button { Task { await model.sync() } } label: {
+                        Label(model.syncing ? "Syncing…" : "Sync now",
+                              systemImage: "arrow.triangle.2.circlepath").font(.osmoCaption)
+                    }
+                    .disabled(model.syncing)
+                    if let summary = model.lastSyncSummary {
+                        Text(summary).font(.osmoCaption).foregroundStyle(Theme.muted).lineLimit(2)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16).padding(.bottom, 12)
+            }
         } detail: {
             Group {
                 switch model.section {
@@ -32,7 +46,10 @@ struct MainWindow: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Theme.canvas)
         }
-        .onAppear { model.reload() }
+        .onAppear {
+            model.reload()
+            OverlayController.shared.attach(model: model)
+        }
     }
 }
 
