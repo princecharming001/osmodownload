@@ -34,6 +34,17 @@ public struct ChatDBReader: Sendable {
         self.dbQueue = try DatabaseQueue(path: path.path, configuration: config)
     }
 
+    /// True iff the app can ACTUALLY read chat.db right now — opens it and runs a
+    /// trivial query. This is the real Full-Disk-Access test: TCC denies the read
+    /// even though the file is world-readable at the POSIX layer, so a plain
+    /// `isReadableFile` check reports a false positive.
+    public static func canRead(path: URL) -> Bool {
+        guard let reader = try? ChatDBReader(path: path) else { return false }
+        return (try? reader.dbQueue.read { db in
+            try Int.fetchOne(db, sql: "SELECT 1 FROM message LIMIT 1")
+        }) != nil
+    }
+
     /// All text messages across all chats, oldest first. Messages whose body
     /// lives only in the `attributedBody` typedstream blob (rich content) are
     /// skipped for now — the plain-`text` column covers the vast majority and is

@@ -100,10 +100,12 @@ public final class ConnectionsManager: ObservableObject {
         persist()
     }
 
-    /// Local probes (iMessage FDA). Cheap; run on init, reconcile, foreground.
+    /// Local probes (iMessage FDA). Uses a REAL open+query, not `isReadableFile`
+    /// — chat.db is world-readable at the POSIX layer, so isReadableFile can
+    /// mislead; only actually opening it proves Full Disk Access is effective.
     public func probeLocal() {
-        let readable = FileManager.default.isReadableFile(atPath: chatDBPath.path)
-        phases[.imessage] = readable ? .live : .notConnected
+        let ok = ChatDBReader.canRead(path: chatDBPath)
+        phases[.imessage] = ok ? .live : .notConnected
     }
 
     /// The platform's backend connection id (send routing needs it).
