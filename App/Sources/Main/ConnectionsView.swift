@@ -59,6 +59,14 @@ struct ConnectionRow: View {
     private var phase: ConnectionPhase { model.connections.phases[platform] ?? .notConnected }
 
     @ViewBuilder private var actions: some View {
+        if platform.comingSoon {
+            Text("Coming soon").font(DS.Typography.captionEm).foregroundStyle(DS.Colors.muted)
+        } else {
+            connectActions
+        }
+    }
+
+    @ViewBuilder private var connectActions: some View {
         switch phase {
         case .notConnected:
             PillButton(platform == .imessage ? "Enable" : "Connect") { model.connect(platform) }
@@ -102,6 +110,7 @@ struct ConnectionRow: View {
     }
 
     private var statusLabel: String {
+        if platform.comingSoon { return "Support in progress — not connectable yet" }
         switch phase {
         case .notConnected:
             return platform.access == .overlayOnly ? "Works through the pill — connect for full history" : "Not connected"

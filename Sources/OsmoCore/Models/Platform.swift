@@ -31,6 +31,16 @@ public enum Platform: String, Codable, Sendable, CaseIterable, Hashable {
         }
     }
 
+    /// Platforms Osmo lists but can't reliably connect yet — X's Unipile provider
+    /// is mid-refactor ("no longer maintained") and the official X API is paid with
+    /// no free tier. Shown as "Coming soon" rather than a connect flow that fails.
+    public var comingSoon: Bool {
+        switch self {
+        case .x: return true
+        default: return false
+        }
+    }
+
     /// Whether Osmo can send directly (true one-click) vs. draft-and-insert.
     /// The red platforms permanently ban auto-send, so there the app inserts the
     /// draft into the real compose box and the user presses Return.
