@@ -3,9 +3,11 @@ import OsmoCore
 import OsmoBrain
 
 /// Unified cross-platform inbox: a thread list + a detail with transcript,
-/// compose bar, and the "Draft with Osmo" strip.
+/// compose bar, and the "Draft with Osmo" strip. A chip row filters the list
+/// to one platform (only platforms that actually have threads are offered).
 struct InboxView: View {
     @EnvironmentObject var model: AppModel
+    @State private var platformFilter: Platform?
 
     var body: some View {
         HSplitView {
@@ -17,21 +19,85 @@ struct InboxView: View {
     }
 
     private var threadList: some View {
-        Group {
-            if model.threads.isEmpty {
-                EmptyStateView(icon: "tray", title: "No conversations yet",
-                               message: "Connect a platform and Osmo pulls your threads here.",
-                               cta: ("Connect", { model.section = .connections }))
-            } else {
-                List(selection: $model.selectedThreadID) {
-                    ForEach(model.threads) { thread in
-                        ThreadRow(thread: thread).tag(thread.id)
+        VStack(spacing: 0) {
+            if !presentPlatforms.isEmpty {
+                filterBar
+                HairlineDivider()
+            }
+            Group {
+                if model.threads.isEmpty {
+                    EmptyStateView(icon: "tray", title: "No conversations yet",
+                                   message: "Connect a platform and Osmo pulls your threads here.",
+                                   cta: ("Connect", { model.section = .connections }))
+                } else if filteredThreads.isEmpty {
+                    EmptyStateView(icon: "line.3.horizontal.decrease.circle",
+                                   title: "Nothing here",
+                                   message: "No \(platformFilter?.displayName ?? "") conversations yet.")
+                } else {
+                    List(selection: $model.selectedThreadID) {
+                        ForEach(filteredThreads) { thread in
+                            ThreadRow(thread: thread).tag(thread.id)
+                        }
                     }
+                    .listStyle(.inset)
                 }
-                .listStyle(.inset)
             }
         }
         .background(DS.Colors.card)
+    }
+
+    // MARK: - Platform filter
+
+    /// Platforms that actually have threads, in a stable order.
+    private var presentPlatforms: [Platform] {
+        let present = Set(model.threads.map(\.platform))
+        return Platform.allCases.filter { present.contains($0) }
+    }
+
+    private var filteredThreads: [OsmoThread] {
+        guard let platformFilter else { return model.threads }
+        return model.threads.filter { $0.platform == platformFilter }
+    }
+
+    private var filterBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: DS.Space.s) {
+                filterChip(label: "All", symbol: nil, tint: DS.Colors.ink, selected: platformFilter == nil) {
+                    platformFilter = nil
+                }
+                ForEach(presentPlatforms, id: \.self) { platform in
+                    filterChip(label: platform.displayName,
+                               symbol: platform.symbolName,
+                               tint: platform.tint,
+                               selected: platformFilter == platform) {
+                        platformFilter = platformFilter == platform ? nil : platform
+                    }
+                }
+            }
+            .padding(.horizontal, DS.Space.m)
+            .padding(.vertical, DS.Space.s)
+        }
+    }
+
+    private func filterChip(label: String, symbol: String?, tint: Color,
+                            selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 4) {
+                if let symbol {
+                    Image(systemName: symbol).font(.system(size: 9))
+                        .foregroundStyle(selected ? .white : tint)
+                }
+                Text(label).font(DS.Typography.eyebrow)
+            }
+            .padding(.horizontal, DS.Space.s)
+            .padding(.vertical, 4)
+            .foregroundStyle(selected ? .white : DS.Colors.ink)
+            .background(selected ? DS.Colors.ink : DS.Colors.chip, in: Capsule())
+            .overlay(Capsule().stroke(DS.Colors.hairline, lineWidth: selected ? 0 : 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(label) conversations")
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     @ViewBuilder private var detail: some View {
