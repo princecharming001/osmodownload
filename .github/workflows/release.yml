@@ -84,7 +84,8 @@ jobs:
           SPARKLE_PRIVATE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
         run: |
           mkdir -p "$HOME/.appstoreconnect/private_keys"
-          printf '%s' "$NOTARY_KEY_P8" > "$HOME/.appstoreconnect/private_keys/AuthKey.p8"
+          # NOTARY_KEY_P8 is base64 (raw multi-line PEM gets mangled pasting into a secret).
+          printf '%s' "$NOTARY_KEY_P8" | base64 --decode > "$HOME/.appstoreconnect/private_keys/AuthKey.p8"
           printf '%s' "$SPARKLE_PRIVATE_KEY" > /tmp/sparkle_ed_key
           # Export the ABSOLUTE key path for later steps ($HOME resolves here; the
           # ${{ env.HOME }} expression context is empty, which broke notarytool).
