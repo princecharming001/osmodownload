@@ -32,10 +32,16 @@ on:
 
 jobs:
   release:
-    runs-on: macos-14
+    runs-on: macos-15          # newer default Xcode (16.x) — reads xcodegen's project format 77
     environment: osmosecrets   # secrets + vars live in this GitHub Environment
     steps:
       - uses: actions/checkout@v4
+
+      - name: Use latest installed Xcode
+        run: |
+          LATEST=$(ls -d /Applications/Xcode_*.app 2>/dev/null | sort -V | tail -1)
+          [ -n "$LATEST" ] && sudo xcode-select -s "$LATEST" || true
+          xcodebuild -version
 
       - name: Derive version
         id: ver
