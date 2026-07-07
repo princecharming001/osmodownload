@@ -33,6 +33,7 @@ on:
 jobs:
   release:
     runs-on: macos-14
+    environment: osmosecrets   # secrets + vars live in this GitHub Environment
     steps:
       - uses: actions/checkout@v4
 
