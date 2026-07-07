@@ -12,7 +12,7 @@ services:
     rootDir: web
     plan: starter            # bump to standard for real traffic
     region: oregon
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build   # --include=dev: NODE_ENV=production would else skip typescript/@types → next build fails
     startCommand: npm run start
     autoDeploy: true         # push to osmodownload main → Render redeploys the backend automatically
     envVars:
