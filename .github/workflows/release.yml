@@ -50,8 +50,11 @@ jobs:
       - name: Bump version in project.yml
         run: |
           V="${{ steps.ver.outputs.version }}"
+          # Build number MUST monotonically exceed the installed build (0.2.1 = build 3)
+          # or Sparkle won't offer the update. Epoch seconds is always-increasing + >> 3.
+          BUILD=$(date +%s)
           /usr/bin/sed -i '' -E "s/MARKETING_VERSION: \"[^\"]*\"/MARKETING_VERSION: \"$V\"/" project.yml
-          /usr/bin/sed -i '' -E "s/CURRENT_PROJECT_VERSION: \"[^\"]*\"/CURRENT_PROJECT_VERSION: \"${GITHUB_RUN_NUMBER}\"/" project.yml
+          /usr/bin/sed -i '' -E "s/CURRENT_PROJECT_VERSION: \"[^\"]*\"/CURRENT_PROJECT_VERSION: \"$BUILD\"/" project.yml
           grep -E "MARKETING_VERSION|CURRENT_PROJECT_VERSION" project.yml
 
       - name: Import Developer ID certificate
