@@ -86,6 +86,9 @@ jobs:
           mkdir -p "$HOME/.appstoreconnect/private_keys"
           printf '%s' "$NOTARY_KEY_P8" > "$HOME/.appstoreconnect/private_keys/AuthKey.p8"
           printf '%s' "$SPARKLE_PRIVATE_KEY" > /tmp/sparkle_ed_key
+          # Export the ABSOLUTE key path for later steps ($HOME resolves here; the
+          # ${{ env.HOME }} expression context is empty, which broke notarytool).
+          echo "OSMO_NOTARY_KEY_PATH=$HOME/.appstoreconnect/private_keys/AuthKey.p8" >> "$GITHUB_ENV"
 
       - name: Build + notarize + staple
         env:
@@ -93,7 +96,7 @@ jobs:
           OSMO_SIGN_IDENTITY: ${{ vars.OSMO_SIGN_IDENTITY }}
           OSMO_NOTARY_KEY_ID: ${{ secrets.NOTARY_KEY_ID }}
           OSMO_NOTARY_ISSUER: ${{ secrets.NOTARY_ISSUER }}
-          OSMO_NOTARY_KEY_PATH: ${{ env.HOME }}/.appstoreconnect/private_keys/AuthKey.p8
+          # OSMO_NOTARY_KEY_PATH comes from $GITHUB_ENV (absolute path with real $HOME)
           OSMO_VERSION: ${{ steps.ver.outputs.version }}
         run: ./scripts/release.sh
 
