@@ -1,0 +1,30 @@
+{
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Core/DatabaseSchemaCache.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaCache.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaCache.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaCache.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaCache.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaCache.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Core/DatabaseSchemaSource.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaSource.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaSource.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaSource.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaSource.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSchemaSource.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Core/DatabaseSnapshot.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshot.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshot.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshot.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshot.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshot.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Core/DatabaseSnapshotPool.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshotPool.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshotPool.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshotPool.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshotPool.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/DatabaseSnapshotPool.swiftdeps"
+  }
+}

@@ -28,6 +28,7 @@ export async function GET(req: Request): Promise<Response> {
   try {
     const tokens = await exchangeSlackCode(code, publicOrigin) as {
       authed_user?: { access_token?: string; id?: string };
+      team?: { id?: string };
     };
     store.setOAuthTokens(link.deviceId, "slack", tokens);
     const connection: Connection = {
@@ -47,8 +48,9 @@ export async function GET(req: Request): Promise<Response> {
     // Import the user's DMs into the oplog (fire-and-forget).
     const userToken = tokens.authed_user?.access_token;
     const userId = tokens.authed_user?.id;
+    const teamId = tokens.team?.id;
     if (userToken && userId) {
-      void backfillSlack(link.deviceId, connection.id, userToken, userId);
+      void backfillSlack(link.deviceId, connection.id, userToken, userId, teamId);
     }
     return Response.redirect(new URL("/connect/done", publicOrigin));
   } catch {

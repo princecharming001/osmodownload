@@ -134,6 +134,35 @@ public final class OsmoStore: @unchecked Sendable {
         try dbQueue.read { db in try OsmoThread.fetchOne(db, id: id) }
     }
 
+    public func message(id: UUID) throws -> OsmoMessage? {
+        try dbQueue.read { db in try OsmoMessage.fetchOne(db, id: id) }
+    }
+
+    // MARK: Reactions (tapbacks)
+
+    /// Add/replace a tapback (idempotent — the deterministic id folds re-adds).
+    public func upsertReaction(_ reaction: MessageReaction) throws {
+        try dbQueue.write { db in try reaction.save(db) }
+    }
+
+    /// Remove a tapback by its deterministic id (a chat.db 3000-series row).
+    public func removeReaction(id: UUID) throws {
+        _ = try dbQueue.write { db in try MessageReaction.deleteOne(db, id: id) }
+    }
+
+    /// Every reaction on messages in a thread, keyed by target message id — one
+    /// query for the whole transcript (no per-bubble store hit).
+    public func reactions(inThread threadID: UUID) throws -> [UUID: [MessageReaction]] {
+        try dbQueue.read { db in
+            let rows = try MessageReaction.fetchAll(db, sql: """
+                SELECT r.* FROM message_reaction r
+                JOIN message m ON m.id = r.targetMessageID
+                WHERE m.threadID = ? AND m.deletedAt IS NULL
+                """, arguments: [threadID])
+            return Dictionary(grouping: rows, by: { $0.targetMessageID })
+        }
+    }
+
     public func messages(inThread threadID: UUID) throws -> [OsmoMessage] {
         try dbQueue.read { db in
             try OsmoMessage
@@ -144,9 +173,78 @@ public final class OsmoStore: @unchecked Sendable {
         }
     }
 
+    /// The most recent `limit` messages in a thread, newest first — a bounded
+    /// sample for the human/automated classifier (avoids loading full history per
+    /// thread on every reload).
+    public func recentMessages(inThread threadID: UUID, limit: Int = 30) throws -> [OsmoMessage] {
+        try dbQueue.read { db in
+            try OsmoMessage
+                .filter(Column("threadID") == threadID)
+                .filter(Column("deletedAt") == nil)
+                .order(Column("sentAt").desc)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
+    /// Inbound messages since a date — the "N new" figure on Today.
+    public func inboundMessageCount(since: Date) throws -> Int {
+        try dbQueue.read { db in
+            try OsmoMessage.filter(Column("isFromMe") == false)
+                .filter(Column("deletedAt") == nil)
+                .filter(Column("sentAt") >= since)
+                .fetchCount(db)
+        }
+    }
+
     public func messageCount() throws -> Int {
         try dbQueue.read { db in
             try OsmoMessage.filter(Column("deletedAt") == nil).fetchCount(db)
+        }
+    }
+
+    /// The user's own sent messages, newest first — the "You" voice-profile
+    /// section's raw material. One indexed query; the app buckets by
+    /// `.platform` (present on every row) rather than needing a per-thread scan.
+    public func outboundMessages(limit: Int = 2000) throws -> [OsmoMessage] {
+        try dbQueue.read { db in
+            try OsmoMessage.filter(Column("isFromMe") == true)
+                .filter(Column("deletedAt") == nil)
+                .order(Column("sentAt").desc)
+                .limit(limit)
+                .fetchAll(db)
+        }
+    }
+
+    // MARK: Attachments
+
+    /// Every attachment on messages in a thread, keyed by message id — one
+    /// query for the whole transcript (same shape as `reactions(inThread:)`).
+    public func attachments(inThread threadID: UUID) throws -> [UUID: [OsmoAttachment]] {
+        try dbQueue.read { db in
+            let rows = try OsmoAttachment.fetchAll(db, sql: """
+                SELECT a.* FROM message_attachment a
+                JOIN message m ON m.id = a.messageID
+                WHERE m.threadID = ? AND m.deletedAt IS NULL AND a.deletedAt IS NULL
+                """, arguments: [threadID])
+            return Dictionary(grouping: rows, by: { $0.messageID })
+        }
+    }
+
+    /// Record that an attachment's bytes have been fetched (or its inline
+    /// thumbnail generated) — a device-local cache fill, NOT a content change,
+    /// so it deliberately does NOT advance the sync clock (a file path on this
+    /// Mac means nothing on another one).
+    public func cacheAttachmentMedia(id: UUID, localPath: String? = nil, thumbnailData: Data? = nil) throws {
+        try dbQueue.write { db in
+            if let localPath {
+                try db.execute(sql: "UPDATE message_attachment SET localPath = ? WHERE id = ?",
+                               arguments: [localPath, id])
+            }
+            if let thumbnailData {
+                try db.execute(sql: "UPDATE message_attachment SET thumbnailData = ? WHERE id = ?",
+                               arguments: [thumbnailData, id])
+            }
         }
     }
 
@@ -192,6 +290,14 @@ public final class OsmoStore: @unchecked Sendable {
         }
     }
 
+    /// Cheap live-contact count — a change signal for "should I rebuild the
+    /// identity graph?" (the O(n) resolve is too expensive to run every reload).
+    public func contactCount() throws -> Int {
+        try dbQueue.read { db in
+            try OsmoContact.filter(Column("deletedAt") == nil).fetchCount(db)
+        }
+    }
+
     public func people() throws -> [Person] {
         try dbQueue.read { db in
             try Person.filter(Column("deletedAt") == nil).fetchAll(db)
@@ -206,6 +312,71 @@ public final class OsmoStore: @unchecked Sendable {
         try dbQueue.read { db in
             try OsmoContact.filter(Column("personID") == personID)
                 .filter(Column("deletedAt") == nil).fetchAll(db)
+        }
+    }
+
+    /// One `searchPeople` result: the person, their resolved contacts, and the
+    /// distinct platforms they're reachable on.
+    public struct PersonHit: Equatable, Sendable, Identifiable {
+        public var person: Person
+        public var contacts: [OsmoContact]
+        public var platforms: [Platform]
+        public var id: UUID { person.id }
+        public init(person: Person, contacts: [OsmoContact], platforms: [Platform]) {
+            self.person = person; self.contacts = contacts; self.platforms = platforms
+        }
+    }
+
+    /// Cross-platform person search — the pill's "who am I sending this to"
+    /// picker. Matches the person's own display name, any of their contacts'
+    /// display names, a raw handle substring, OR (when the query looks
+    /// numeric) a phone number via `HandleNormalizer` so "415" finds someone
+    /// by digits regardless of how the platform formatted the number. Contacts
+    /// with no resolved personID are excluded — the pill's fuzzy thread-name
+    /// match already covers unresolved names as a fallback.
+    public func searchPeople(_ query: String, limit: Int = 8) throws -> [PersonHit] {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard !q.isEmpty else { return [] }
+        let queryDigits = q.filter(\.isNumber)
+
+        return try dbQueue.read { db in
+            let people = try Person.filter(Column("deletedAt") == nil).fetchAll(db)
+            let contacts = try OsmoContact.filter(Column("deletedAt") == nil).fetchAll(db)
+            let contactsByPerson = Dictionary(grouping: contacts.filter { $0.personID != nil }) { $0.personID! }
+
+            var scored: [(person: Person, contacts: [OsmoContact], score: Int)] = []
+            for person in people {
+                let personContacts = contactsByPerson[person.id] ?? []
+                var matched = false
+                var score = 0
+                let nameLower = person.displayName.lowercased()
+                if nameLower.contains(q) {
+                    matched = true
+                    score = max(score, nameLower.hasPrefix(q) ? 2 : 1)
+                }
+                for c in personContacts {
+                    if let name = c.displayName?.lowercased(), name.contains(q) {
+                        matched = true; score = max(score, name.hasPrefix(q) ? 2 : 1)
+                    }
+                    if c.handle.lowercased().contains(q) {
+                        matched = true; score = max(score, 1)
+                    }
+                    if !queryDigits.isEmpty {
+                        let normalized = HandleNormalizer.normalize(c.handle)
+                        if normalized.kind == .phone, normalized.value.contains(queryDigits) {
+                            matched = true; score = max(score, 1)
+                        }
+                    }
+                }
+                if matched { scored.append((person, personContacts, score)) }
+            }
+            return scored
+                .sorted { $0.score != $1.score ? $0.score > $1.score : $0.person.displayName < $1.person.displayName }
+                .prefix(limit)
+                .map { entry in
+                    PersonHit(person: entry.person, contacts: entry.contacts,
+                             platforms: Array(Set(entry.contacts.map(\.platform))).sorted { $0.rawValue < $1.rawValue })
+                }
         }
     }
 
@@ -228,7 +399,8 @@ public final class OsmoStore: @unchecked Sendable {
     public func rebuildIdentityGraph() throws -> [MergeSuggestion] {
         let all = try contacts()
         let byID = Dictionary(uniqueKeysWithValues: all.map { ($0.id, $0) })
-        let result = IdentityResolver.resolve(all)
+        let result = IdentityResolver.resolve(all, rejectedPairKeys: try rejectedMergePairKeys(),
+                                              excludedNames: try groupThreadTitles())
 
         try dbQueue.write { db in
             for cluster in result.clusters {
@@ -285,6 +457,45 @@ public final class OsmoStore: @unchecked Sendable {
             survivor.sync = SyncMeta(id: survivorID, updatedAt: Date(), deviceSeq: try nextSeq(db))
             try survivor.save(db)
             return survivor
+        }
+    }
+
+    // MARK: Merge decisions (rejected pairs)
+
+    /// Record that the user reviewed two suggested clusters and said they are NOT
+    /// the same person. Keyed by the identity graph's stable pair key so the
+    /// suggestion never comes back. Idempotent.
+    public func rejectMergePair(contactIDsA: [UUID], contactIDsB: [UUID]) throws {
+        let key = IdentityResolver.pairKey(contactIDsA, contactIDsB)
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                INSERT INTO merge_decision (pairKey, decision, at) VALUES (?, 'rejected', ?)
+                ON CONFLICT(pairKey) DO UPDATE SET decision = 'rejected', at = excluded.at
+                """, arguments: [key, Date()])
+        }
+    }
+
+    /// Every pair the user has explicitly rejected — filtered out of suggestions.
+    public func rejectedMergePairKeys() throws -> Set<String> {
+        try dbQueue.read { db in
+            let keys = try String.fetchAll(db, sql:
+                "SELECT pairKey FROM merge_decision WHERE decision = 'rejected'")
+            return Set(keys)
+        }
+    }
+
+    /// Every group thread's title, lowercased — fed to the identity resolver
+    /// as `excludedNames` so a contact whose displayName ended up being a
+    /// group's title (a null-title group falling back to it, or a sender-
+    /// attribution bug upstream) never spams merge suggestions against every
+    /// other contact that inherited the same generic label.
+    private func groupThreadTitles() throws -> Set<String> {
+        try dbQueue.read { db in
+            let titles = try String.fetchAll(db, sql: """
+                SELECT DISTINCT title FROM thread
+                WHERE isGroup = 1 AND title IS NOT NULL AND title <> '' AND deletedAt IS NULL
+                """)
+            return Set(titles.map { $0.lowercased() })
         }
     }
 

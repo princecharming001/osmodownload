@@ -1,0 +1,469 @@
+{
+  "" : {
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoCore-primary.dia",
+    "emit-module-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoCore-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoCore-primary-emit-module.dia",
+    "pch" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoCore-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoCore-primary.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Backend/BackendBatchNormalizer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendBatchNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendBatchNormalizer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendBatchNormalizer.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendBatchNormalizer.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendBatchNormalizer.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendBatchNormalizer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendBatchNormalizer.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendBatchNormalizer~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Backend/BackendClient.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendClient.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendClient.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendClient.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendClient.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendClient.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendClient.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendClient.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendClient~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Backend/BackendModels.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendModels.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendModels.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendModels.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendModels.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendModels.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendModels.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendModels.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BackendModels~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Backend/ConnectionState.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionState.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionState.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionState.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionState.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionState.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionState.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionState.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionState~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Backend/ConnectionsManager.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionsManager.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionsManager.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionsManager.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionsManager.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionsManager.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionsManager.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionsManager.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ConnectionsManager~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Backend/KeychainDeviceToken.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDeviceToken.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDeviceToken.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDeviceToken.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDeviceToken.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDeviceToken.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDeviceToken.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDeviceToken.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDeviceToken~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Backend/RealtimeSyncEngine.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RealtimeSyncEngine.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RealtimeSyncEngine.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RealtimeSyncEngine.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RealtimeSyncEngine.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RealtimeSyncEngine.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RealtimeSyncEngine.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RealtimeSyncEngine.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RealtimeSyncEngine~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Backend/SSEParser.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SSEParser.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SSEParser.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SSEParser.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SSEParser.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SSEParser.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SSEParser.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SSEParser.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SSEParser~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Identity/HandleNormalizer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/HandleNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/HandleNormalizer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/HandleNormalizer.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/HandleNormalizer.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/HandleNormalizer.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/HandleNormalizer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/HandleNormalizer.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/HandleNormalizer~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Identity/IdentityResolver.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IdentityResolver.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IdentityResolver.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IdentityResolver.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IdentityResolver.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IdentityResolver.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IdentityResolver.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IdentityResolver.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IdentityResolver~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/GoalKind.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/MessageReaction.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/OsmoContact.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/OsmoMessage.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/OsmoThread.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/Person.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/PersonEnrichment.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/Platform.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/Project.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/RelationshipMemory.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/SyncMeta.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Normalizer/IMessageNormalizer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Queue/MorningQueue.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Queue/TextingStatus.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Queue/ThreadIntelKinds.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/APIClients.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/APIClients.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/APIClients.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/APIClients.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/APIClients.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/APIClients.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/APIClients.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/APIClients.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/APIClients~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/AppleTime.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/AppleTime.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/AppleTime.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/AppleTime.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/AppleTime.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/AppleTime.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/AppleTime.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/AppleTime.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/AppleTime~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/ChatDBReader.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ChatDBReader.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ChatDBReader.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ChatDBReader.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ChatDBReader.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ChatDBReader.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ChatDBReader.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ChatDBReader.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ChatDBReader~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/ContactsResolver.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ContactsResolver.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ContactsResolver.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ContactsResolver.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ContactsResolver.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ContactsResolver.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ContactsResolver.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ContactsResolver.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ContactsResolver~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/EmailAddress.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/EmailAddress.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/EmailAddress.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/EmailAddress.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/EmailAddress.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/EmailAddress.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/EmailAddress.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/EmailAddress.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/EmailAddress~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/Gmail/GmailNormalizer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GmailNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GmailNormalizer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GmailNormalizer.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GmailNormalizer.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GmailNormalizer.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GmailNormalizer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GmailNormalizer.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GmailNormalizer~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/Slack/SlackNormalizer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SlackNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SlackNormalizer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SlackNormalizer.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SlackNormalizer.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SlackNormalizer.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SlackNormalizer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SlackNormalizer.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SlackNormalizer~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/SyncCoordinator.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncCoordinator.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncCoordinator.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncCoordinator.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncCoordinator.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncCoordinator.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncCoordinator.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncCoordinator.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncCoordinator~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/WhatsApp/WhatsAppReader.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/WhatsAppReader.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/WhatsAppReader.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/WhatsAppReader.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/WhatsAppReader.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/WhatsAppReader.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/WhatsAppReader.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/WhatsAppReader.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/WhatsAppReader~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Senders/PlatformSenders.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PlatformSenders.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PlatformSenders.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PlatformSenders.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PlatformSenders.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PlatformSenders.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PlatformSenders.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PlatformSenders.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PlatformSenders~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Store/KeychainDBKey.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDBKey.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDBKey.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDBKey.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDBKey.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDBKey.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDBKey.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDBKey.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/KeychainDBKey~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Store/LocalSecretStore.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/LocalSecretStore.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/LocalSecretStore.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/LocalSecretStore.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/LocalSecretStore.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/LocalSecretStore.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/LocalSecretStore.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/LocalSecretStore.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/LocalSecretStore~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Store/OsmoDatabase.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoDatabase.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoDatabase.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoDatabase.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoDatabase.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoDatabase.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoDatabase.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoDatabase.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoDatabase~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Store/OsmoStore+Shell.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Shell.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Shell.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Shell.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Shell.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Shell.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Shell.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Shell.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Shell~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Store/OsmoStore.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Sync/BlobStore.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BlobStore.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BlobStore.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BlobStore.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BlobStore.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BlobStore.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BlobStore.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BlobStore.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/BlobStore~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Sync/CryptoBox.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/CryptoBox.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/CryptoBox.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/CryptoBox.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/CryptoBox.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/CryptoBox.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/CryptoBox.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/CryptoBox.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/CryptoBox~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Sync/OsmoStore+Sync.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Sync.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Sync.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Sync.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Sync.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Sync.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Sync.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Sync.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoStore+Sync~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Sync/SyncChange.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncChange.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncChange.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncChange.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncChange.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncChange.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncChange.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncChange.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncChange~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Sync/SyncEngine.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncEngine.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncEngine.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncEngine.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncEngine.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncEngine.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncEngine.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncEngine.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncEngine~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Text/TextMatch.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextMatch.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextMatch.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextMatch.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextMatch.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextMatch.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextMatch.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextMatch.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextMatch~partial.swiftmodule"
+  }
+}

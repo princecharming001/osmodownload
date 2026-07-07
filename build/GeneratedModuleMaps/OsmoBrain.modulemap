@@ -1,0 +1,4 @@
+module OsmoBrain {
+header "OsmoBrain-Swift.h"
+export *
+}

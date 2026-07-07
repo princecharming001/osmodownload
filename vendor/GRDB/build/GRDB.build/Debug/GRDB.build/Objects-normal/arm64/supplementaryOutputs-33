@@ -1,0 +1,23 @@
+{
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQL/SQLRelation.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLRelation.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLRelation.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLRelation.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLRelation.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLRelation.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQL/SQLSelection.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSelection.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSelection.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSelection.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSelection.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSelection.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQL/SQLSubquery.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSubquery.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSubquery.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSubquery.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSubquery.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLSubquery.swiftdeps"
+  }
+}

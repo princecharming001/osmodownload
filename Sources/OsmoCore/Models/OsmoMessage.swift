@@ -24,6 +24,9 @@ public struct OsmoMessage: Codable, Equatable, Sendable, Identifiable, SyncableR
     /// Real read-receipt time where the platform exposes it (iMessage `date_read`).
     /// This is what upgrades texting-status from inference to fact.
     public var readAt: Date?
+    /// The message this one is a reply to (iMessage `thread_originator_guid`),
+    /// resolved to the target Osmo message id; nil for non-replies.
+    public var inReplyToMessageID: UUID?
 
     public static let databaseTableName = "message"
 
@@ -36,7 +39,7 @@ public struct OsmoMessage: Codable, Equatable, Sendable, Identifiable, SyncableR
     public init(id: UUID, updatedAt: Date, deviceSeq: Int64, deletedAt: Date? = nil,
                 platform: Platform, platformMessageID: String, threadID: UUID,
                 senderContactID: UUID? = nil, isFromMe: Bool, text: String,
-                sentAt: Date, readAt: Date? = nil) {
+                sentAt: Date, readAt: Date? = nil, inReplyToMessageID: UUID? = nil) {
         self.id = id
         self.updatedAt = updatedAt
         self.deviceSeq = deviceSeq
@@ -49,6 +52,7 @@ public struct OsmoMessage: Codable, Equatable, Sendable, Identifiable, SyncableR
         self.text = text
         self.sentAt = sentAt
         self.readAt = readAt
+        self.inReplyToMessageID = inReplyToMessageID
     }
 
     public static func makeID(platform: Platform, platformMessageID: String) -> UUID {

@@ -16,7 +16,7 @@ struct SyncCoordinatorTests {
         try db.write { db in
             try db.execute(sql: "CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id TEXT)")
             try db.execute(sql: "CREATE TABLE chat (ROWID INTEGER PRIMARY KEY, guid TEXT, chat_identifier TEXT, display_name TEXT, style INTEGER)")
-            try db.execute(sql: "CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, handle_id INTEGER, is_from_me INTEGER, date INTEGER, date_read INTEGER)")
+            try db.execute(sql: "CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT, handle_id INTEGER, is_from_me INTEGER, date INTEGER, date_read INTEGER, associated_message_type INTEGER DEFAULT 0, associated_message_guid TEXT, associated_message_emoji TEXT, thread_originator_guid TEXT)")
             try db.execute(sql: "CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER)")
             try db.execute(sql: "INSERT INTO handle (ROWID, id) VALUES (1, '+15551234567')")
             try db.execute(sql: "INSERT INTO chat (ROWID, guid, chat_identifier, display_name, style) VALUES (1, 'iMessage;-;+15551234567', '+15551234567', NULL, 45)")

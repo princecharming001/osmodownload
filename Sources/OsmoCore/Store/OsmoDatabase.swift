@@ -178,6 +178,118 @@ public enum OsmoDatabase {
             }
         }
 
+        // A record of the user's explicit "not the same person" decisions, keyed
+        // by the identity graph's stable pair key, so a rejected merge suggestion
+        // never reappears. Device-local UX state (not a synced entity).
+        migrator.registerMigration("v6-merge-decisions") { db in
+            try db.create(table: "merge_decision") { t in
+                t.primaryKey("pairKey", .text)
+                t.column("decision", .text).notNull()   // "rejected"
+                t.column("at", .datetime).notNull()
+            }
+        }
+
+        // iMessage fidelity: tapback reactions (their own table so a reaction is
+        // never a message bubble) + a reply-parent pointer on messages. Additive
+        // (ALTER + CREATE only) — migration-safe, no data rewrite. No FK on
+        // targetMessageID on purpose: a reaction can point at a message outside
+        // the pulled window (or a media message we skip), and a hard FK would fail
+        // the insert; display JOINs simply drop reactions with no visible target.
+        migrator.registerMigration("v7-reactions-replies") { db in
+            try db.alter(table: "message") { t in
+                t.add(column: "inReplyToMessageID", .text)
+            }
+            try db.create(table: "message_reaction") { t in
+                t.primaryKey("id", .text)
+                t.column("targetMessageID", .text).notNull()
+                t.column("reactorContactID", .text)
+                t.column("reactionType", .text).notNull()
+                t.column("emoji", .text).notNull()
+                t.column("isFromMe", .boolean).notNull().defaults(to: false)
+                t.column("reactedAt", .datetime).notNull()
+            }
+            try db.create(index: "idx_reaction_target",
+                          on: "message_reaction", columns: ["targetMessageID"])
+        }
+
+        // Follow-up reminders: "nudge me if no reply" per thread. Device-local
+        // UX state (like drafts/snoozes) — additive, migration-safe.
+        migrator.registerMigration("v8-followups") { db in
+            try db.create(table: "thread_followup") { t in
+                t.primaryKey("threadID", .text)
+                    .references("thread", onDelete: .cascade)
+                t.column("due", .datetime).notNull()
+                t.column("setAt", .datetime).notNull()
+            }
+        }
+
+        // Public-profile enrichment (LinkedIn + web) per person. Device-local
+        // cache — re-fetchable from the backend, so no sync columns; cascades
+        // away when its person is deleted or merged.
+        migrator.registerMigration("v9-person-enrichment") { db in
+            try db.create(table: "person_enrichment") { t in
+                t.primaryKey("personID", .text)
+                    .references("person", onDelete: .cascade)
+                t.column("headline", .text)
+                t.column("company", .text)
+                t.column("title", .text)
+                t.column("location", .text)
+                t.column("summary", .text)
+                t.column("linkedinURL", .text)
+                t.column("positions", .text).notNull().defaults(to: "[]")
+                t.column("education", .text).notNull().defaults(to: "[]")
+                t.column("webFacts", .text).notNull().defaults(to: "[]")
+                t.column("source", .text).notNull()
+                t.column("fetchedAt", .datetime).notNull()
+            }
+        }
+
+        // Server-side automated-sender signal (Gmail List-Unsubscribe/Precedence/
+        // sender-shape) + the provider's OWN thread id (distinct from Unipile's
+        // internal chat id — what a working deep link into the real conversation
+        // actually needs). Both land on `thread` together since they're trivial
+        // nullable/defaulted columns on the same table.
+        migrator.registerMigration("v10-thread-hints") { db in
+            try db.alter(table: "thread") { t in
+                t.add(column: "automatedHint", .boolean).notNull().defaults(to: false)
+                t.add(column: "providerThreadID", .text)
+            }
+        }
+
+        // Marks a draft as Osmo's own (autodraft-on-arrival) vs. user-typed —
+        // the never-overwrite-user-text rule reads this flag.
+        migrator.registerMigration("v11-autodraft-flag") { db in
+            try db.alter(table: "thread_draft") { t in
+                t.add(column: "isAuto", .boolean).notNull().defaults(to: false)
+            }
+        }
+
+        // Media attachments (image/video/audio/file/link) on a message. Cascades
+        // away with its message; `localPath`/`thumbnailData` are device-local
+        // cache fields the reader never writes (see `preservingEnrichment`).
+        migrator.registerMigration("v12-message-attachment") { db in
+            try db.create(table: "message_attachment") { t in
+                t.primaryKey("id", .text)
+                t.column("updatedAt", .datetime).notNull()
+                t.column("deviceSeq", .integer).notNull()
+                t.column("deletedAt", .datetime)
+                t.column("messageID", .text).notNull().references("message", onDelete: .cascade)
+                t.column("kind", .text).notNull()
+                t.column("mimeType", .text)
+                t.column("filename", .text)
+                t.column("sizeBytes", .integer)
+                t.column("width", .integer)
+                t.column("height", .integer)
+                t.column("remoteRef", .text)
+                t.column("linkURL", .text)
+                t.column("title", .text)
+                t.column("localPath", .text)
+                t.column("thumbnailData", .blob)
+            }
+            try db.create(index: "idx_attachment_message",
+                          on: "message_attachment", columns: ["messageID"])
+        }
+
         return migrator
     }
 }

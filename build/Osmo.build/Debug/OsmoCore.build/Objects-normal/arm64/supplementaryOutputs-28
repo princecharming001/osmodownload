@@ -1,0 +1,30 @@
+{
+  "/Users/home/Osmo/Sources/OsmoCore/Senders/PlatformSenders.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/PlatformSenders.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/PlatformSenders.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/PlatformSenders.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/PlatformSenders.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/PlatformSenders.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Store/KeychainDBKey.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/KeychainDBKey.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/KeychainDBKey.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/KeychainDBKey.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/KeychainDBKey.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/KeychainDBKey.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Store/LocalSecretStore.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/LocalSecretStore.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/LocalSecretStore.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/LocalSecretStore.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/LocalSecretStore.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/LocalSecretStore.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Store/OsmoDatabase.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/OsmoDatabase.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/OsmoDatabase.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/OsmoDatabase.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/OsmoDatabase.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/OsmoDatabase.swiftdeps"
+  }
+}

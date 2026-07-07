@@ -135,3 +135,38 @@ struct BackendClientTests {
         var isSet: Bool { lock.lock(); defer { lock.unlock() }; return flag }
     }
 }
+
+extension BackendClientTests {
+    static let enrichBundle = """
+    {"profile":{"name":"Maya Render","headline":"Head of Growth at Reelio",
+     "company":"Reelio","title":"Head of Growth","location":"San Francisco, CA",
+     "summary":"Ships fast.","linkedinURL":"https://www.linkedin.com/in/maya",
+     "positions":[{"title":"Head of Growth","company":"Reelio","period":"2023–present"}],
+     "education":[{"school":"UC Berkeley","degree":"BA","period":"2014–2018"}]},
+     "webFacts":[{"text":"Maya spoke on a panel.","url":"https://ex.example/p"}],
+     "source":"both","fetchedAt":"2026-07-04T18:00:00Z"}
+    """
+
+    @Test("enrichPerson posts the wire request and decodes the bundle")
+    func enrichPersonDecodes() async throws {
+        let transport = FakeTransport()
+        transport.script = [("device/register", 200, Self.creds),
+                            ("enrich/person", 200, Self.enrichBundle)]
+        let client = BackendClient(baseURL: URL(string: "http://test")!,
+                                   tokenStore: MemoryDeviceToken(), transport: transport.handler())
+        let out = try await client.enrichPerson(WireEnrichRequest(
+            name: "Maya Render", linkedinHandle: "att-9", hints: ["growth"]))
+
+        #expect(out.source == "both")
+        #expect(out.profile?.headline == "Head of Growth at Reelio")
+        #expect(out.profile?.positions.first?.company == "Reelio")
+        #expect(out.webFacts.first?.url == "https://ex.example/p")
+
+        let req = transport.requests.first { $0.url!.path.contains("enrich/person") }
+        #expect(req?.httpMethod == "POST")
+        let body = try JSONDecoder().decode(WireEnrichRequest.self, from: req!.httpBody!)
+        #expect(body.name == "Maya Render")
+        #expect(body.linkedinHandle == "att-9")
+        #expect(body.hints == ["growth"])
+    }
+}

@@ -1,0 +1,51 @@
+{
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Dump/DumpFormats/ListDumpFormat.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ListDumpFormat.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ListDumpFormat.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ListDumpFormat.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ListDumpFormat.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ListDumpFormat.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Dump/DumpFormats/QuoteDumpFormat.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/QuoteDumpFormat.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/QuoteDumpFormat.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/QuoteDumpFormat.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/QuoteDumpFormat.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/QuoteDumpFormat.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/FTS/FTS3.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/FTS/FTS3Pattern.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3Pattern.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3Pattern.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3Pattern.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3Pattern.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3Pattern.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/FTS/FTS3TokenizerDescriptor.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3TokenizerDescriptor.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3TokenizerDescriptor.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3TokenizerDescriptor.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3TokenizerDescriptor.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS3TokenizerDescriptor.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/FTS/FTS4.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS4.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS4.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS4.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS4.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS4.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/FTS/FTS5.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS5.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS5.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS5.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS5.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FTS5.swiftdeps"
+  }
+}

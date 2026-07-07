@@ -1,0 +1,23 @@
+{
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQLGeneration/SQLIndexGenerator.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLIndexGenerator.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLIndexGenerator.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLIndexGenerator.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLIndexGenerator.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLIndexGenerator.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQLGeneration/SQLQueryGenerator.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLQueryGenerator.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLQueryGenerator.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLQueryGenerator.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLQueryGenerator.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLQueryGenerator.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQLGeneration/SQLTableAlterationGenerator.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableAlterationGenerator.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableAlterationGenerator.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableAlterationGenerator.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableAlterationGenerator.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableAlterationGenerator.swiftdeps"
+  }
+}

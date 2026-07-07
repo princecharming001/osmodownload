@@ -20,6 +20,7 @@ public struct GlassSurface<S: InsettableShape>: View {
             shape
                 .fill(.clear)
                 .glassEffect(in: shape)
+                .overlay(specularHighlight)          // Apple-style corner glint
                 .overlay(shape.stroke(DS.Colors.glassBorder, lineWidth: 1))
         } else {
             VisualEffectView(material: .popover, blending: .behindWindow)
@@ -28,10 +29,22 @@ public struct GlassSurface<S: InsettableShape>: View {
                     shape.stroke(
                         LinearGradient(colors: [DS.Colors.glassTopEdge, .clear],
                                        startPoint: .top, endPoint: .bottom),
-                        lineWidth: 1))
+                        lineWidth: 1.2))
+                .overlay(specularHighlight)          // the Liquid-Glass tell
                 .overlay(shape.stroke(DS.Colors.glassBorder, lineWidth: 1))
                 .clipShape(shape)
         }
+    }
+
+    /// A soft top-leading glint — the specular highlight that reads as curved,
+    /// refracting glass rather than flat frosted plastic. Non-interactive; drawn
+    /// with plusLighter so it lifts whatever's behind the glass.
+    private var specularHighlight: some View {
+        RadialGradient(colors: [DS.Colors.glassSpecular, .clear],
+                       center: .topLeading, startRadius: 0, endRadius: 90)
+            .blendMode(.plusLighter)
+            .clipShape(shape)
+            .allowsHitTesting(false)
     }
 }
 
@@ -75,6 +88,9 @@ public struct GlassCard<Content: View>: View {
         content
             .background(GlassSurface(shape: shape))
             .clipShape(shape)
-            .shadow(color: DS.Colors.shadow, radius: 24, x: 0, y: 8)
+            // Layered shadow — a deep ambient lift + a tight contact shadow — the
+            // hallmark of Apple's floating Liquid-Glass surfaces.
+            .shadow(color: DS.Colors.shadow, radius: 32, x: 0, y: 14)
+            .shadow(color: DS.Colors.shadow.opacity(0.5), radius: 6, x: 0, y: 2)
     }
 }

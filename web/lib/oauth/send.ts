@@ -4,6 +4,22 @@
 
 type GmailTokens = { access_token?: string };
 type SlackTokens = { authed_user?: { access_token?: string } };
+type XTokens = { access_token?: string };
+
+/** Reply into an X DM conversation. platformThreadID is the dm_conversation_id. */
+export async function sendX(tokens: unknown, conversationId: string, text: string): Promise<{ messageId: string }> {
+  const token = (tokens as XTokens)?.access_token;
+  if (!token) throw new Error("x: no access token");
+  const res = await fetch(`https://api.x.com/2/dm_conversations/${conversationId}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "content-type": "application/json" },
+    body: JSON.stringify({ text }),
+  });
+  const data = await res.json() as { data?: { dm_event_id?: string }; errors?: unknown };
+  const id = data.data?.dm_event_id;
+  if (!id) throw new Error(`x dm send: ${JSON.stringify(data.errors ?? "failed").slice(0, 200)}`);
+  return { messageId: id };
+}
 
 /** Reply into a Slack DM/channel. platformThreadID is the channel id. */
 export async function sendSlack(tokens: unknown, channel: string, text: string): Promise<{ messageId: string }> {

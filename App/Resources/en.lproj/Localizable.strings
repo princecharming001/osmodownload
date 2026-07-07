@@ -1,0 +1,37 @@
+/* Osmo — base (English) localization.
+
+   This file makes the app localization-ready. To add a language, duplicate the
+   `en.lproj` folder as e.g. `es.lproj` and translate the right-hand strings.
+   In code, reach these with `String(localized: "today.title")` (or
+   `Text("today.title")` via a localized key) — the current UI uses inline
+   English literals; migrate high-traffic strings to keys here as you localize.
+
+   Only a starter set is included; extend it per screen as needed. */
+
+/* Sidebar sections */
+"section.today" = "Today";
+"section.inbox" = "Inbox";
+"section.people" = "People";
+"section.you" = "You";
+"section.connections" = "Connections";
+
+/* Common actions */
+"action.send" = "Send";
+"action.copy" = "Copy";
+"action.insert" = "Insert";
+"action.cancel" = "Cancel";
+"action.save" = "Save";
+"action.upgrade" = "Upgrade";
+
+/* Plan / billing */
+"plan.free" = "Free";
+"plan.pro" = "Pro";
+"plan.trial" = "Pro — trial";
+"plan.manage" = "Manage subscription";
+"plan.restore" = "Restore purchases";
+
+/* Account */
+"account.title" = "Your account";
+"account.signIn" = "Sign in";
+"account.signOut" = "Sign out";
+"account.delete" = "Delete account…";

@@ -1,0 +1,37 @@
+{
+  "/Users/home/Osmo/Sources/OsmoCore/Models/SyncMeta.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/SyncMeta.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Normalizer/IMessageNormalizer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/IMessageNormalizer.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Queue/MorningQueue.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MorningQueue.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Queue/TextingStatus.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/TextingStatus.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Queue/ThreadIntelKinds.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/ThreadIntelKinds.swiftdeps"
+  }
+}

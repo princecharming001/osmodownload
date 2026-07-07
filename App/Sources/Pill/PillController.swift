@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Combine
+import ApplicationServices
 import OsmoCore
 import OsmoShell
 
@@ -19,7 +20,19 @@ final class PillController: ObservableObject {
     private weak var model: AppModel?
     private var positionSaveWork: DispatchWorkItem?
 
+    /// The live focused compose field in the frontmost app (set by the detector),
+    /// so a chosen reply can be written straight back into it.
+    var focusedElement: AXUIElement?
+
     private init() {}
+
+    /// Insert a chosen reply into the real compose field the user was typing in
+    /// (AX setValue, ⌘V paste fallback). Returns whether we had a field to target.
+    @discardableResult
+    func insertIntoFocusedField(_ text: String) -> Bool {
+        ScreenContextReader.insert(text, into: focusedElement)
+        return focusedElement != nil
+    }
 
     func attach(model: AppModel) {
         self.model = model
@@ -48,7 +61,7 @@ final class PillController: ObservableObject {
     private func apply(_ event: PillStateMachine.Event) {
         let next = PillStateMachine.reduce(state, event)
         guard next != state else { return }
-        withAnimation(DS.Motion.morph) { state = next }
+        withAnimation(DS.Motion.morphPill) { state = next }
         syncPanel()
     }
 
@@ -81,40 +94,83 @@ final class PillController: ObservableObject {
             panel.orderOut(nil)
         case .idle, .ready:
             panel.wantsKey = false
-            repositionIfOffscreen()
+            positionPanel()
             panel.present()
         case .expanded, .generating:
             panel.wantsKey = true
-            repositionIfOffscreen()
+            positionPanel()
             panel.present()
             // The text field becomes key on click without activating Osmo.
         }
+        #if DEBUG
+        writeDebugState()
+        #endif
     }
 
-    /// Re-run positioning if the panel isn't fully on the active screen (handles
-    /// early-launch geometry, display changes, and a stale saved position).
-    private func repositionIfOffscreen() {
-        guard let panel, let screen = NSScreen.main else { return }
-        if !screen.visibleFrame.contains(panel.frame) { positionPanel() }
+    #if DEBUG
+    /// DEBUG-only: publish the pill's current state + on-screen click point so an
+    /// automated smoke can verify a REAL mouse click lands (the pill panel is a
+    /// borderless non-activating NSPanel and is NOT exposed via Accessibility, so
+    /// AX-driven probes can't see it — that's what produced false "green" runs).
+    private func writeDebugState() {
+        guard let panel else { return }
+        let name: String
+        switch state {
+        case .hidden: name = "hidden"; case .idle: name = "idle"; case .ready: name = "ready"
+        case .expanded: name = "expanded"; case .generating: name = "generating"
+        }
+        let f = panel.frame  // AppKit screen coords (bottom-left origin)
+        // The pill sits bottom-center of the panel (8pt inset, 28pt orb).
+        let pillCenterAppKit = CGPoint(x: f.midX, y: f.minY + 8 + 14)
+        let screenH = NSScreen.main?.frame.height ?? 0
+        // CoreGraphics event coords are top-left origin.
+        let clickCG = CGPoint(x: pillCenterAppKit.x, y: screenH - pillCenterAppKit.y)
+        let dict: [String: Any] = ["state": name, "clickX": clickCG.x, "clickY": clickCG.y]
+        let url = URL(fileURLWithPath: NSHomeDirectory())
+            .appendingPathComponent("Library/Application Support/Osmo/.pillstate-debug.json")
+        if let data = try? JSONSerialization.data(withJSONObject: dict) { try? data.write(to: url) }
     }
+    #endif
 
-    // MARK: - Position (persisted, clamped)
+    // MARK: - Position (field-anchored, else persisted, clamped)
 
     private func positionPanel() {
-        guard let panel, let screen = NSScreen.main else { return }
-        let saved = loadPosition()
+        guard let panel else { return }
         let size = panel.frame.size
+        // Preferred: pop up right next to the compose field the user is typing in.
+        if let frame = state.context?.fieldFrame, let origin = anchorOrigin(for: frame, size: size) {
+            panel.setFrameOrigin(origin)
+            return
+        }
+        // Fallback: the persisted (dragged) position, else bottom-center.
+        guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
         let origin: NSPoint
-        if let saved {
+        if let saved = loadPosition() {
             origin = NSPoint(
                 x: min(max(saved.x, visible.minX), visible.maxX - size.width),
                 y: min(max(saved.y, visible.minY), visible.maxY - size.height))
         } else {
-            // Default: bottom-center, 24pt up.
             origin = NSPoint(x: visible.midX - size.width / 2, y: visible.minY + 24)
         }
         panel.setFrameOrigin(origin)
+    }
+
+    /// Place the (bottom-anchored) content just above the field, horizontally
+    /// centered on it, clamped to the field's screen. The pill/panel content sits
+    /// at the bottom of the oversized panel (8pt inset), so aligning the panel's
+    /// bottom-center to the field's top edge lands it beside the message bar.
+    private func anchorOrigin(for field: CGRect, size: NSSize) -> NSPoint? {
+        let anchorScreen = NSScreen.screens.first {
+            $0.frame.contains(CGPoint(x: field.midX, y: field.midY))
+        } ?? NSScreen.main
+        guard let visible = anchorScreen?.visibleFrame else { return nil }
+        let gap: CGFloat = 12, contentInset: CGFloat = 8
+        var origin = NSPoint(x: field.midX - size.width / 2,
+                             y: field.maxY + gap - contentInset)   // field top edge + gap
+        origin.x = min(max(origin.x, visible.minX), visible.maxX - size.width)
+        origin.y = min(max(origin.y, visible.minY), visible.maxY - size.height)
+        return origin
     }
 
     /// Called by the drag gesture; moves the window and debounces a save.

@@ -12,6 +12,8 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralSettings().tabItem { Label("General", systemImage: "gear") }
+            PlanSettings().environmentObject(model)
+                .tabItem { Label("Plan", systemImage: "creditcard") }
             ConnectionsView().environmentObject(model)
                 .tabItem { Label("Connections", systemImage: "link") }
             PillSettings().tabItem { Label("Pill & Hotkey", systemImage: "capsule") }
@@ -19,12 +21,24 @@ struct SettingsView: View {
             NotificationSettings().tabItem { Label("Notifications", systemImage: "bell") }
             PrivacySettings().tabItem { Label("Privacy", systemImage: "lock") }
         }
-        .frame(width: 520, height: 420)
+        .frame(width: 540, height: 560)
+        .background(DS.Colors.paper)
+    }
+}
+
+/// Plan & billing as a settings tab (same surface as the account sheet).
+struct PlanSettings: View {
+    @EnvironmentObject var model: AppModel
+    var body: some View {
+        ScrollView {
+            PlanBillingView().environmentObject(model).padding(DS.Space.l)
+        }
         .background(DS.Colors.paper)
     }
 }
 
 struct GeneralSettings: View {
+    @EnvironmentObject var model: AppModel
     @AppStorage("hasOnboarded") private var hasOnboarded = true
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
@@ -34,6 +48,11 @@ struct GeneralSettings: View {
                 .onChange(of: launchAtLogin) { _, on in
                     try? on ? SMAppService.mainApp.register() : SMAppService.mainApp.unregister()
                 }
+            Section {
+                Toggle("Demo mode", isOn: $model.demoMode)
+                Text("Shows only the 5 most recent conversations per platform from the last 15 days. A view filter — nothing is deleted, and turning it off restores everything.")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             Section {
                 Button("Replay welcome…") { hasOnboarded = false }
             }
@@ -72,6 +91,14 @@ struct AISettings: View {
 
     var body: some View {
         Form {
+            Section {
+                HStack {
+                    Toggle("Autodraft on arrival", isOn: $model.autodraftEnabled)
+                    ProTag()
+                }
+                Text("When a priority conversation needs a reply, Osmo drafts one before you open it — never overwrites a reply you've already started typing. Capped at 30 a day.")
+                    .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+            }
             Section("AI proxy") {
                 TextField("Proxy URL", text: $proxyURL, prompt: Text("http://localhost:3000/api/suggest"))
                 TextField("Session token", text: $token)
@@ -156,6 +183,16 @@ struct PrivacySettings: View {
                     }
                 }
             }
+            Section("Profile enrichment") {
+                Toggle("Look up public profiles (LinkedIn + web)", isOn: $model.enrichmentEnabled)
+                Text("When you open a person, Osmo asks its backend to fetch their public LinkedIn profile and public web mentions. Only their name and LinkedIn handle are sent — never your messages.")
+                    .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                Button("Clear fetched profiles") {
+                    try? model.store.deleteAllEnrichments()
+                    model.reload()
+                    model.toast = "Fetched profiles cleared."
+                }
+            }
             Section("Your data") {
                 Button("Export all data (JSON)…") { exportData() }
                 Button("Reveal database in Finder") {
@@ -184,7 +221,11 @@ struct PrivacySettings: View {
         guard let data = model.exportData() else { return }
         let panel = NSSavePanel()
         panel.nameFieldStringValue = "osmo-export.json"
-        if panel.runModal() == .OK, let url = panel.url {
+        // `.begin` (non-blocking) — an app-modal `.runModal()` session here
+        // freezes every Osmo window (including the main window) until the
+        // panel closes, which reads exactly like the reported "freeze".
+        panel.begin { response in
+            guard response == .OK, let url = panel.url else { return }
             try? data.write(to: url)
         }
     }

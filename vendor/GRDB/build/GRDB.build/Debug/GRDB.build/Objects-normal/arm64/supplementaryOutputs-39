@@ -1,0 +1,23 @@
+{
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQLGeneration/SQLTableGenerator.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableGenerator.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableGenerator.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableGenerator.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableGenerator.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLTableGenerator.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQLGeneration/TableAlias.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/TableAlias.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/TableAlias.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/TableAlias.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/TableAlias.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/TableAlias.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/SQLInterpolation+QueryInterface.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLInterpolation+QueryInterface.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLInterpolation+QueryInterface.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLInterpolation+QueryInterface.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLInterpolation+QueryInterface.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/arm64/SQLInterpolation+QueryInterface.swiftdeps"
+  }
+}

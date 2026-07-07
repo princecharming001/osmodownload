@@ -9,7 +9,17 @@ import type { Connection, Platform } from "../connections/types";
 import { getStore } from "../connections/memoryStore";
 import { publish } from "../connections/events";
 import { demoAccountName, demoConversations, dripMessage } from "../demo/seed";
-import type { HostedAuthOptions, UnipileAccount, UnipileClient } from "./client";
+import type { HostedAuthOptions, UnipileAccount, UnipileClient, UnipileUserProfile } from "./client";
+
+/** Tiny FNV-1a hash — stable across processes, unlike anything Math.random. */
+function fnv(s: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h;
+}
 
 const DRIP_DEFAULT_MS = 20_000;
 
@@ -106,10 +116,46 @@ class MockUnipileClient implements UnipileClient {
   // interface-compliance stubs — never exercised in the mock flow.
   async listChats(): Promise<{ chats: never[]; cursor: null }> { return { chats: [], cursor: null }; }
   async listMessages(): Promise<{ messages: never[]; cursor: null }> { return { messages: [], cursor: null }; }
+  async listChatAttendees(): Promise<never[]> { return []; }
+
+  /** Deterministic demo profile — same identifier always yields the same
+      person, so the keyless feature is stable and testable. */
+  async getUserProfile(_accountId: string, identifier: string): Promise<UnipileUserProfile> {
+    const h = fnv(identifier);
+    const roles = ["Head of Growth", "Product Designer", "Founding Engineer",
+                   "Recruiter", "Startup Founder", "Data Scientist"];
+    const companies = ["Reelio", "Northbeam Labs", "Cobalt Systems",
+                       "Fernwood Health", "Parallel AI", "Draft & Field"];
+    const cities = ["San Francisco, CA", "New York, NY", "Austin, TX",
+                    "Seattle, WA", "Los Angeles, CA", "Chicago, IL"];
+    const schools = ["UC Berkeley", "University of Michigan", "Georgia Tech",
+                     "NYU", "UT Austin", "UCLA"];
+    const title = roles[h % roles.length];
+    const company = companies[(h >> 3) % companies.length];
+    const prior = companies[(h >> 6) % companies.length];
+    return {
+      name: identifier,
+      headline: `${title} at ${company}`,
+      company, title,
+      location: cities[(h >> 9) % cities.length],
+      summary: `${title} focused on shipping fast and measuring what matters. ` +
+               `Previously ${prior}. (Demo profile — connect live LinkedIn for real data.)`,
+      positions: [
+        { title, company, period: "2023–present" },
+        { title: "Senior " + title.split(" ").slice(-1)[0], company: prior, period: "2020–2023" },
+      ],
+      education: [{ school: schools[(h >> 12) % schools.length], degree: "BS", period: "2012–2016" }],
+      linkedinURL: null,
+    };
+  }
 
   async sendMessage(_accountId: string, chatId: string, _text: string): Promise<{ messageId: string }> {
     return { messageId: `mock-sent-${chatId}-${crypto.randomUUID().slice(0, 8)}` };
   }
+
+  // Mock mode never seeds real attachment bytes — the media route falls back
+  // to a placeholder image whenever this returns null.
+  async downloadAttachment(): Promise<Buffer | null> { return null; }
 }
 
 let instance: MockUnipileClient | null = null;

@@ -10,6 +10,10 @@ struct DetectedContext: Equatable {
     var partnerName: String?
     var draftText: String?
     var url: String?
+    /// The focused compose field's frame (AppKit global coords) so the pill can
+    /// anchor right beside it. CGRect is Equatable; the live AXUIElement can't be
+    /// carried in a value type, so it's exposed separately on the detector.
+    var fieldFrame: CGRect?
 }
 
 /// Watches the frontmost app; when the user focuses a text field in an
@@ -27,6 +31,11 @@ final class TypingDetector {
 
     /// nil = context left the field / non-messaging app.
     var onContext: ((DetectedContext?) -> Void)?
+
+    /// The AXUIElement of the field the last emitted context was for — used by
+    /// the pill to insert a chosen reply straight back into the real compose box.
+    /// Not carried in `DetectedContext` (AXUIElement isn't a value type).
+    private(set) var focusedElement: AXUIElement?
 
     func start() {
         guard !running, AXPermission.isTrusted else { return }
@@ -47,6 +56,7 @@ final class TypingDetector {
         if let token = workspaceToken {
             NSWorkspace.shared.notificationCenter.removeObserver(token)
         }
+        focusedElement = nil
         onContext?(nil)
     }
 
@@ -54,6 +64,7 @@ final class TypingDetector {
         observer?.stop(); observer = nil
         debounceWork?.cancel()   // drop any pending emit from the previous app
         guard let bundleID = app.bundleIdentifier, allowlist.isObservable(bundleID: bundleID) else {
+            focusedElement = nil
             onContext?(nil)
             return
         }
@@ -64,7 +75,7 @@ final class TypingDetector {
             Task { @MainActor in self?.focusedField(bundleID: bundleID, element: element, windowTitle: windowTitle) }
         }
         observer.onFocusLeft = { [weak self] in
-            Task { @MainActor in self?.debounceEmit(nil) }
+            Task { @MainActor in self?.debounceEmit(nil, element: nil) }
         }
         observer.start()
         self.observer = observer
@@ -73,17 +84,24 @@ final class TypingDetector {
     private func focusedField(bundleID: String, element: AXUIElement?, windowTitle: String?) {
         let url = sniffer.activeTabURL(bundleID: bundleID)
         guard let platform = allowlist.platform(bundleID: bundleID, url: url) else {
-            debounceEmit(nil); return
+            debounceEmit(nil, element: nil); return
         }
         let partner = WindowTitleParser.partnerName(bundleID: bundleID, windowTitle: windowTitle)
         let draft = element.flatMap { ScreenContextReader.draftText(from: $0) }
+        let frame = element.flatMap { ScreenContextReader.fieldFrame(of: $0) }
         debounceEmit(DetectedContext(bundleID: bundleID, platform: platform,
-                                     partnerName: partner, draftText: draft, url: url))
+                                     partnerName: partner, draftText: draft, url: url,
+                                     fieldFrame: frame),
+                     element: element)
     }
 
-    private func debounceEmit(_ context: DetectedContext?) {
+    private func debounceEmit(_ context: DetectedContext?, element: AXUIElement?) {
         debounceWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in self?.onContext?(context) }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.focusedElement = element
+            self.onContext?(context)
+        }
         debounceWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
     }

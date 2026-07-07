@@ -27,6 +27,37 @@ public struct HairlineDivider: View {
     }
 }
 
+/// A left-to-right, top-to-bottom wrapping row — for chip groups whose labels
+/// vary in width, where a fixed-column grid would truncate or waste space.
+public struct FlowLayout: Layout {
+    var spacing: CGFloat
+    public init(spacing: CGFloat = 6) { self.spacing = spacing }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: width.isFinite ? width : x, height: y + rowHeight)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let width = bounds.width
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0
+        for view in subviews {
+            let size = view.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width { x = 0; y += rowHeight + spacing; rowHeight = 0 }
+            view.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
+
 /// Primary (accent-filled) or quiet (chip) capsule button.
 public struct PillButton: View {
     public enum Kind { case primary, quiet, destructive }
@@ -97,6 +128,20 @@ public struct Eyebrow: View {
             .font(DS.Typography.eyebrow)
             .tracking(0.8)
             .foregroundStyle(DS.Colors.muted)
+    }
+}
+
+/// A small "PRO" badge for gating copy in Settings — never implies the
+/// feature is broken for free users, just that it needs the upgrade.
+public struct ProTag: View {
+    public init() {}
+    public var body: some View {
+        Text("PRO")
+            .font(.system(size: 9, weight: .bold))
+            .tracking(0.5)
+            .padding(.horizontal, 5).padding(.vertical, 2)
+            .foregroundStyle(.white)
+            .background(DS.Colors.accent, in: Capsule())
     }
 }
 

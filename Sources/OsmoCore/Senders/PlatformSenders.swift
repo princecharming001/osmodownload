@@ -29,6 +29,14 @@ public struct IMessageSender: MessageSending {
         try exec(Self.script(text: text, handle: handle))
     }
 
+    /// Best-effort "reveal this conversation" for a deep-link click: there is
+    /// no public AppleScript API to select a specific chat by identifier, so
+    /// this activates Messages (bringing the app forward) as the honest half
+    /// of the assist — the caller pairs it with an `imessage://` URL attempt.
+    public func activateMessages() throws {
+        try exec(#"tell application "Messages" to activate"#)
+    }
+
     /// The AppleScript that sends `text` to `handle` over iMessage. Both values
     /// are escaped for AppleScript string literals.
     static func script(text: String, handle: String) -> String {

@@ -34,23 +34,58 @@ public enum BackendBatchNormalizer {
                 id: OsmoThread.makeID(platform: platform, platformThreadID: w.platformThreadID),
                 updatedAt: epoch, deviceSeq: 0,
                 platform: platform, platformThreadID: w.platformThreadID,
-                title: w.title, isGroup: w.isGroup, lastMessageAt: w.lastMessageAt))
+                title: w.title, isGroup: w.isGroup, lastMessageAt: w.lastMessageAt,
+                automatedHint: w.automatedHint ?? false, providerThreadID: w.providerThreadID))
         }
 
         var messages: [OsmoMessage] = []
+        var reactionAdds: [MessageReaction] = []
+        var attachmentAdds: [OsmoAttachment] = []
         for w in wire.messages {
             guard let platform = Platform(rawValue: w.platform) else { skipped += 1; continue }
+            let messageID = OsmoMessage.makeID(platform: platform, platformMessageID: w.platformMessageID)
             messages.append(OsmoMessage(
-                id: OsmoMessage.makeID(platform: platform, platformMessageID: w.platformMessageID),
+                id: messageID,
                 updatedAt: epoch, deviceSeq: 0,
                 platform: platform, platformMessageID: w.platformMessageID,
                 threadID: OsmoThread.makeID(platform: platform, platformThreadID: w.platformThreadID),
                 senderContactID: w.senderHandle.map { OsmoContact.makeID(platform: platform, handle: $0) },
                 isFromMe: w.isFromMe, text: w.text,
-                sentAt: w.sentAt, readAt: w.readAt))
+                sentAt: w.sentAt, readAt: w.readAt,
+                inReplyToMessageID: w.replyToMessageID.map {
+                    OsmoMessage.makeID(platform: platform, platformMessageID: $0)
+                }))
+            // Provider emoji reactions fold onto their message exactly like
+            // iMessage tapbacks — deterministic id over (target, reactor, emoji)
+            // so re-pulls and overlapping pages dedup to one row.
+            for r in w.reactions ?? [] {
+                let reactor = r.isFromMe ? "me" : (r.senderHandle ?? "?")
+                reactionAdds.append(MessageReaction(
+                    id: MessageReaction.makeID(targetGuid: "\(platform.rawValue):\(w.platformMessageID)",
+                                               reactorKey: reactor, type: "emoji:\(r.emoji)"),
+                    targetMessageID: messageID,
+                    reactorContactID: r.isFromMe ? nil : r.senderHandle.map {
+                        OsmoContact.makeID(platform: platform, handle: $0)
+                    },
+                    reactionType: "emoji", emoji: r.emoji,
+                    isFromMe: r.isFromMe, reactedAt: w.sentAt))
+            }
+            // Media/file/link attachments — a lazily-fetched remote ref for
+            // everything except `link` (a shared post/reel has no bytes).
+            for a in w.attachments ?? [] {
+                let kind = AttachmentKind(rawValue: a.kind) ?? .from(mimeType: a.mimeType)
+                attachmentAdds.append(OsmoAttachment(
+                    id: OsmoAttachment.makeID(platform: platform, platformMessageID: w.platformMessageID,
+                                              attachmentRef: a.id),
+                    updatedAt: epoch, deviceSeq: 0,
+                    messageID: messageID, kind: kind, mimeType: a.mimeType, filename: a.filename,
+                    sizeBytes: a.sizeBytes, width: a.width, height: a.height,
+                    remoteRef: a.remoteRef, linkURL: a.url, title: a.title))
+            }
         }
 
-        return Result(batch: NormalizedBatch(contacts: contacts, threads: threads, messages: messages),
+        return Result(batch: NormalizedBatch(contacts: contacts, threads: threads, messages: messages,
+                                             reactionAdds: reactionAdds, attachmentAdds: attachmentAdds),
                       skippedUnknownPlatform: skipped)
     }
 }

@@ -1,0 +1,121 @@
+{
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/Schema/ColumnDefinition.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ColumnDefinition.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ColumnDefinition.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ColumnDefinition.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ColumnDefinition.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ColumnDefinition.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/Schema/Database+SchemaDefinition.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/Database+SchemaDefinition.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/Database+SchemaDefinition.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/Database+SchemaDefinition.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/Database+SchemaDefinition.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/Database+SchemaDefinition.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/Schema/ForeignKeyDefinition.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ForeignKeyDefinition.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ForeignKeyDefinition.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ForeignKeyDefinition.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ForeignKeyDefinition.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/ForeignKeyDefinition.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/Schema/IndexDefinition.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/IndexDefinition.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/IndexDefinition.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/IndexDefinition.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/IndexDefinition.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/IndexDefinition.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/Schema/TableAlteration.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableAlteration.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableAlteration.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableAlteration.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableAlteration.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableAlteration.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/Schema/TableDefinition.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableDefinition.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableDefinition.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableDefinition.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableDefinition.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableDefinition.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/Schema/VirtualTableModule.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/VirtualTableModule.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/VirtualTableModule.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/VirtualTableModule.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/VirtualTableModule.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/VirtualTableModule.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/TableRecord+Association.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+Association.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+Association.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+Association.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+Association.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+Association.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/QueryInterface/TableRecord+QueryInterfaceRequest.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+QueryInterfaceRequest.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+QueryInterfaceRequest.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+QueryInterfaceRequest.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+QueryInterfaceRequest.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/TableRecord+QueryInterfaceRequest.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Record/EncodableRecord+Encodable.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord+Encodable.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord+Encodable.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord+Encodable.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord+Encodable.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord+Encodable.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Record/EncodableRecord.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/EncodableRecord.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Record/FetchableRecord+Decodable.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+Decodable.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+Decodable.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+Decodable.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+Decodable.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+Decodable.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Record/FetchableRecord+TableRecord.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+TableRecord.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+TableRecord.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+TableRecord.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+TableRecord.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord+TableRecord.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Record/FetchableRecord.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/FetchableRecord.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Record/MutablePersistableRecord+DAO.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+DAO.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+DAO.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+DAO.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+DAO.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+DAO.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Record/MutablePersistableRecord+Delete.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Delete.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Delete.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Delete.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Delete.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Delete.swiftdeps"
+  },
+  "/Users/home/Osmo/vendor/GRDB/GRDB/Record/MutablePersistableRecord+Insert.swift" : {
+    "const-values" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Insert.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Insert.d",
+    "diagnostics" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Insert.dia",
+    "object" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Insert.o",
+    "swift-dependencies" : "/Users/home/Osmo/vendor/GRDB/build/GRDB.build/Debug/GRDB.build/Objects-normal/x86_64/MutablePersistableRecord+Insert.swiftdeps"
+  }
+}

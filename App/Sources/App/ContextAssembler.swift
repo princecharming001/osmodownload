@@ -11,6 +11,16 @@ import OsmoShell
 struct ContextAssembler {
     let store: OsmoStore
     let projects: [Project]
+    /// The user's onboarding context layer rendered as a preamble ("They're using
+    /// Osmo to… They want to come across as…"), merged into `selfContext` so every
+    /// draft is framed for who they are — even before a per-person project exists.
+    var selfPreamble: String = ""
+
+    /// Merge the global onboarding preamble with any per-person project self-note.
+    private func mergedSelf(_ projectSelf: String?) -> String? {
+        let parts = [selfPreamble, projectSelf].compactMap { $0 }.filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
 
     /// From a real thread the app already has.
     func context(threadID: UUID, platform: Platform, personName: String,
@@ -22,16 +32,24 @@ struct ContextAssembler {
         let transcript = ((try? store.messages(inThread: threadID)) ?? [])
             .suffix(20)
             .map { ThreadTurn(fromMe: $0.isFromMe, text: $0.text, sentAt: $0.sentAt) }
+        // Public identity (enrichment) — a draft to a VC shouldn't read like
+        // one to a gym buddy.
+        let enrichment = personID.flatMap { try? store.enrichment(forPerson: $0) }
+        let background = enrichment.flatMap { e -> String? in
+            guard let role = e.roleLine else { return nil }
+            return e.location.map { "\(role), \($0)" } ?? role
+        }
         return SuggestionContext(
             relationshipLabel: project?.title ?? personName,
             platform: platform,
             goalText: project?.goalText,
             toneHint: toneOverride ?? project?.toneHint,
             boundaries: project?.boundaries ?? [],
-            selfContext: project?.selfContext,
+            selfContext: mergedSelf(project?.selfContext),
             relationshipMemory: memory?.promptContext,
             transcript: transcript,
-            userIntent: userIntent)
+            userIntent: userIntent,
+            partnerBackground: background)
     }
 
     /// From a detected pill context. If we can fuzzy-match the partner to a known
@@ -55,6 +73,7 @@ struct ContextAssembler {
             relationshipLabel: pill.partnerName ?? "them",
             platform: platform,
             toneHint: toneOverride,
+            selfContext: mergedSelf(nil),
             userIntent: intent)
     }
 

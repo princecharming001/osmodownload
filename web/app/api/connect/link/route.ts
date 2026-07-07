@@ -7,7 +7,8 @@ import { getStore } from "@/lib/connections/memoryStore";
 import type { ConnectLinkResponse, Platform } from "@/lib/connections/types";
 import { CONNECTABLE } from "@/lib/connections/types";
 import { getUnipile } from "@/lib/unipile/client";
-import { authURL, isLiveOAuth } from "@/lib/oauth/providers";
+import { ensureUnipileWebhooks } from "@/lib/unipile/webhooks";
+import { authURL, isLiveOAuth, makePkce } from "@/lib/oauth/providers";
 
 export async function POST(req: Request): Promise<Response> {
   let deviceId: string;
@@ -31,7 +32,24 @@ export async function POST(req: Request): Promise<Response> {
   if (platform === "gmail" || platform === "slack") {
     url = authURL(platform, link.linkId, origin);
     mode = isLiveOAuth(platform) ? "oauth" : "mock";
+  } else if (platform === "x") {
+    if (isLiveOAuth("x")) {
+      // X requires PKCE. Stash the verifier on the pending link (mutating the
+      // stored object) so the callback can complete the token exchange.
+      const { verifier, challenge } = makePkce();
+      link.codeVerifier = verifier;
+      url = authURL("x", link.linkId, origin, challenge);
+      mode = "oauth";
+    } else {
+      url = authURL("x", link.linkId, origin);   // keyless → mock wizard
+      mode = "mock";
+    }
   } else {
+    // Lazy catch-up: if the server started before PUBLIC_URL was reachable
+    // (e.g. the tunnel came up after boot), the first real connect attempt
+    // still gets the webhooks registered. Fire-and-forget — never blocks the
+    // hosted-auth link the user is waiting on.
+    void ensureUnipileWebhooks();
     const unipile = getUnipile();
     const out = await unipile.createHostedAuthLink({
       linkId: link.linkId, platform, deviceId, origin,

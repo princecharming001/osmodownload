@@ -1,0 +1,37 @@
+{
+  "/Users/home/Osmo/Sources/OsmoCore/Models/Person.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Person.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/PersonEnrichment.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/PersonEnrichment.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/Platform.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Platform.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/Project.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/Project.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/RelationshipMemory.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/RelationshipMemory.swiftdeps"
+  }
+}

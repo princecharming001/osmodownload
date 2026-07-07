@@ -1,0 +1,4 @@
+module OsmoCore {
+header "OsmoCore-Swift.h"
+export *
+}

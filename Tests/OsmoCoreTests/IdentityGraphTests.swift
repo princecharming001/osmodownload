@@ -86,10 +86,110 @@ struct IdentityGraphTests {
         #expect(try store.contacts(forPerson: survivor!.id).count == 2)
     }
 
+    @Test("A confirmed merge is NOT re-suggested on the next rebuild (the bug)")
+    func mergeStopsResuggesting() throws {
+        let store = try OsmoStore.inMemory()
+        try store.ingest(contact(.slack, "u1", name: "Jonathan Reyes"))
+        try store.ingest(contact(.instagram, "u2", name: "Jonathan Reyes"))
+        let first = try store.rebuildIdentityGraph()
+        #expect(!first.isEmpty)                          // suggested once
+
+        let people = try store.people()
+        _ = try store.mergePeople(people.map(\.id))
+
+        // The heart of the fix: rebuilding again must NOT re-propose the pair the
+        // user already confirmed — both clusters now resolve to one person.
+        let second = try store.rebuildIdentityGraph()
+        #expect(second.isEmpty)
+        #expect(try store.people().count == 1)           // still one person, stable
+    }
+
+    @Test("'Not the same' persists — a rejected pair never returns")
+    func rejectedPairNeverReturns() throws {
+        let store = try OsmoStore.inMemory()
+        try store.ingest(contact(.slack, "u1", name: "Jonathan Reyes"))
+        try store.ingest(contact(.instagram, "u2", name: "Jonathan Reyes"))
+        let s = try store.rebuildIdentityGraph()
+        let pair = try #require(s.first)
+
+        try store.rejectMergePair(contactIDsA: pair.contactIDsA, contactIDsB: pair.contactIDsB)
+
+        let after = try store.rebuildIdentityGraph()
+        #expect(after.isEmpty)                            // gone for good
+        #expect(try store.people().count == 2)            // and NOT merged
+    }
+
+    @Test("pairKey is stable + order-independent")
+    func pairKeyStable() {
+        let a = [UUID(uuidString: "00000000-0000-0000-0000-000000000002")!,
+                 UUID(uuidString: "00000000-0000-0000-0000-000000000009")!]
+        let b = [UUID(uuidString: "00000000-0000-0000-0000-000000000005")!]
+        #expect(IdentityResolver.pairKey(a, b) == IdentityResolver.pairKey(b, a))
+        #expect(IdentityResolver.pairKey(a, b) ==
+                "00000000-0000-0000-0000-000000000002|00000000-0000-0000-0000-000000000005")
+    }
+
+    @Test("A shared photo pairs two clusters even when names differ (avatar block)")
+    func avatarMatchAcrossDifferentNames() throws {
+        let store = try OsmoStore.inMemory()
+        let photo = Data([0xDE, 0xAD, 0xBE, 0xEF])
+        try store.ingest(contact(.slack, "u1", name: "Bob", avatar: photo))
+        try store.ingest(contact(.instagram, "u2", name: "Robert", avatar: photo))
+        let suggestions = try store.rebuildIdentityGraph()
+        #expect(try store.people().count == 2)                 // not auto-merged
+        // "Bob"/"Robert" fall in different name buckets, but the identical photo
+        // must still surface a high-confidence suggestion.
+        #expect(suggestions.contains { $0.confidence >= 0.9 })
+    }
+
     @Test("String similarity ratio behaves")
     func similarity() {
         #expect(StringSimilarity.ratio("Sarah", "Sarah") == 1)
         #expect(StringSimilarity.ratio("Jonathan", "Jonathon") > 0.8)
         #expect(StringSimilarity.ratio("Sarah", "Michael") < 0.4)
+    }
+
+    @Test("Two contacts that both inherited a group's title as their displayName are never suggested (the spam bug)")
+    func groupTitleContactsNeverSuggested() throws {
+        let store = try OsmoStore.inMemory()
+        // Simulate the leaked-title bug: two different group-message senders
+        // whose displayName ended up being the SAME group's title.
+        try store.ingest(contact(.whatsapp, "att1", name: "General"))
+        try store.ingest(contact(.instagram, "att2", name: "General"))
+        try store.dbQueue.write { db in
+            try OsmoThread(id: OsmoThread.makeID(platform: .whatsapp, platformThreadID: "grp1"),
+                          updatedAt: .distantPast, deviceSeq: 0,
+                          platform: .whatsapp, platformThreadID: "grp1",
+                          title: "General", isGroup: true).save(db)
+        }
+        let suggestions = try store.rebuildIdentityGraph()
+        #expect(suggestions.isEmpty)
+        #expect(try store.people().count == 2)   // two distinct people, correctly NOT merged
+    }
+
+    @Test("The static generic-name stoplist blocks a match even with no group thread on record")
+    func genericStoplistBlocksWithoutThread() throws {
+        let store = try OsmoStore.inMemory()
+        try store.ingest(contact(.slack, "u1", name: "Announcements"))
+        try store.ingest(contact(.gmail, "u2", name: "announcements"))
+        let suggestions = try store.rebuildIdentityGraph()
+        #expect(suggestions.isEmpty)
+    }
+
+    @Test("A real person whose name happens to share letters with a group title still gets suggested")
+    func realNamesStillWorkAlongsideExclusions() throws {
+        let store = try OsmoStore.inMemory()
+        try store.ingest(contact(.whatsapp, "att1", name: "General"))   // excluded
+        try store.ingest(contact(.slack, "u1", name: "Jonathan Reyes"))
+        try store.ingest(contact(.instagram, "u2", name: "Jonathan Reyes"))
+        try store.dbQueue.write { db in
+            try OsmoThread(id: OsmoThread.makeID(platform: .whatsapp, platformThreadID: "grp1"),
+                          updatedAt: .distantPast, deviceSeq: 0,
+                          platform: .whatsapp, platformThreadID: "grp1",
+                          title: "General", isGroup: true).save(db)
+        }
+        let suggestions = try store.rebuildIdentityGraph()
+        #expect(suggestions.contains { $0.displayNameA == "Jonathan Reyes" && $0.displayNameB == "Jonathan Reyes" })
+        #expect(!suggestions.contains { $0.displayNameA == "General" || $0.displayNameB == "General" })
     }
 }

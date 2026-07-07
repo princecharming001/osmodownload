@@ -6,6 +6,27 @@ import ApplicationServices
 /// text back into it (AX first, ⌘V paste as fallback).
 enum ScreenContextReader {
 
+    /// The focused field's frame in AppKit (bottom-left origin) global screen
+    /// coordinates, or nil. Used to anchor the pill right beside the compose box.
+    static func fieldFrame(of element: AXUIElement) -> CGRect? {
+        var posV: AnyObject?, sizeV: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXPositionAttribute as CFString, &posV) == .success,
+              AXUIElementCopyAttributeValue(element, kAXSizeAttribute as CFString, &sizeV) == .success
+        else { return nil }
+        var point = CGPoint.zero, size = CGSize.zero
+        guard AXValueGetValue(posV as! AXValue, .cgPoint, &point),
+              AXValueGetValue(sizeV as! AXValue, .cgSize, &size),
+              size.width > 1, size.height > 1 else { return nil }
+        // AX reports a top-left origin in the global flipped space (y grows down
+        // from the primary display's top). Convert to AppKit's bottom-left origin
+        // using the PRIMARY display height (the screen whose origin is (0,0)), so
+        // multi-display setups flip correctly — not NSScreen.main (the key one).
+        let primaryH = NSScreen.screens.first(where: { $0.frame.origin == .zero })?.frame.height
+            ?? NSScreen.main?.frame.height ?? 0
+        let appkitY = primaryH - point.y - size.height
+        return CGRect(x: point.x, y: appkitY, width: size.width, height: size.height)
+    }
+
     /// Existing text in the focused compose field (so the pill can continue a draft).
     static func draftText(from element: AXUIElement) -> String? {
         var value: AnyObject?

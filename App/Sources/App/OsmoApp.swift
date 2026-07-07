@@ -9,6 +9,7 @@ import OsmoShell
 @main
 struct OsmoApp: App {
     @StateObject private var model = AppModel()
+    @StateObject private var updater = UpdaterController()
     @AppStorage("hasOnboarded") private var hasOnboarded = false
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
@@ -34,10 +35,24 @@ struct OsmoApp: App {
         .windowStyle(.hiddenTitleBar)
         .commands {
             CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { updater.checkForUpdates() }
+                    .disabled(!updater.canCheckForUpdates)
+                Button("My Account…") { model.activeSheet = .account }
                 Button("Replay Welcome…") { hasOnboarded = false }
             }
+            CommandGroup(replacing: .help) {
+                Button("Osmo Help") { model.activeSheet = .help }
+                Button("Send Feedback…") { model.activeSheet = .feedback }
+                Divider()
+                Button("Terms of Service") {
+                    if let u = URL(string: "https://osmo.app/terms") { NSWorkspace.shared.open(u) }
+                }
+                Button("Privacy Policy") {
+                    if let u = URL(string: "https://osmo.app/privacy") { NSWorkspace.shared.open(u) }
+                }
+            }
             CommandGroup(replacing: .newItem) {
-                Button("New Project") { model.section = .projects }
+                Button("New Goal") { model.section = .people }
                     .keyboardShortcut("n", modifiers: .command)
             }
             CommandGroup(after: .toolbar) {
@@ -45,6 +60,18 @@ struct OsmoApp: App {
                     .keyboardShortcut("k", modifiers: .command)
                 Button("Summon Osmo") { PillController.shared.handleHotkey() }
                     .keyboardShortcut(.space, modifiers: .option)
+                Divider()
+                // Kinso-parity fast filters, one keystroke each.
+                Button(model.unansweredOnly ? "Show All Conversations" : "Unanswered Only") {
+                    model.unansweredOnly.toggle()
+                    model.section = .inbox
+                }
+                .keyboardShortcut("u", modifiers: [.command, .shift])
+                Button(model.inboxSort == .priority ? "Sort by Recency" : "Sort by Priority") {
+                    model.inboxSort = model.inboxSort == .priority ? .recent : .priority
+                    model.section = .inbox
+                }
+                .keyboardShortcut("p", modifiers: [.command, .shift])
             }
         }
 
@@ -85,10 +112,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor private func startDetector() {
         guard AXPermission.isTrusted, detector == nil else { return }
         let detector = TypingDetector()
-        detector.onContext = { context in
+        detector.onContext = { [weak detector] context in
+            // Hand the live focused element to the controller so a chosen reply
+            // can be written straight back into the real compose box.
+            PillController.shared.focusedElement = detector?.focusedElement
             let pill = context.map {
                 PillContext(bundleID: $0.bundleID, platform: $0.platform,
-                            partnerName: $0.partnerName, draftText: $0.draftText, sourceURL: $0.url)
+                            partnerName: $0.partnerName, draftText: $0.draftText,
+                            sourceURL: $0.url, fieldFrame: $0.fieldFrame)
             }
             PillController.shared.contextDetected(pill)
         }

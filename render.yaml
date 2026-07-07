@@ -1,0 +1,63 @@
+# Render Blueprint for the Osmo backend (the Next.js app in web/). ONE always-on
+# instance — required because the connection/message sync uses in-memory state +
+# SSE, which serverless would break. Deploy: connect this repo in Render → it
+# reads this file → set the secret env vars (sync:false) in the dashboard.
+#
+# Point https://api.leftonread.in at this service (Render → Settings → Custom
+# Domain → add a CNAME). The shipped app talks to that origin (OsmoBackend.base).
+services:
+  - type: web
+    name: osmo-backend
+    runtime: node
+    rootDir: web
+    plan: starter            # bump to standard for real traffic
+    region: oregon
+    buildCommand: npm ci && npm run build
+    startCommand: npm run start
+    autoDeploy: false        # deploy on explicit push only (matches the "never auto-push" rule)
+    envVars:
+      # --- non-secret config (safe to keep in the blueprint) ---
+      - key: NODE_ENV
+        value: production
+      - key: PUBLIC_URL
+        value: https://api.leftonread.in
+      - key: X_REDIRECT_URI
+        value: https://api.leftonread.in/api/oauth/x/callback
+      - key: OSMO_REQUIRE_AUTH
+        value: "1"
+      - key: OSMO_BACKFILL_SCOPE
+        value: full
+      # --- secrets: set these in the Render dashboard (sync:false = not in git) ---
+      - key: ANTHROPIC_API_KEY          # CRITICAL — no AI drafting/Ask without it
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY  # accounts/subscriptions persistence
+        sync: false
+      - key: OSMO_LICENSE_PRIVATE_D     # entitlement signing — MUST stay stable
+        sync: false
+      - key: OSMO_LICENSE_PUBLIC_X
+        sync: false
+      - key: UNIPILE_DSN                # LinkedIn / WhatsApp / Instagram
+        sync: false
+      - key: UNIPILE_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID           # Gmail connect
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SLACK_CLIENT_ID            # Slack connect
+        sync: false
+      - key: SLACK_CLIENT_SECRET
+        sync: false
+      - key: X_CLIENT_ID                # X (Twitter) DMs
+        sync: false
+      - key: X_CLIENT_SECRET
+        sync: false
+      - key: RESEND_API_KEY             # magic-link + notification emails
+        sync: false
+      - key: EXA_API_KEY               # people enrichment
+        sync: false
+      - key: OSMO_WEBHOOK_SECRET        # Unipile webhook verification
+        sync: false
+      # Stripe intentionally omitted — launching free-first.

@@ -1,0 +1,37 @@
+{
+  "/Users/home/Osmo/Sources/OsmoCore/Models/GoalKind.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/GoalKind.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/MessageReaction.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/MessageReaction.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/OsmoContact.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoContact.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/OsmoMessage.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoMessage.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Models/OsmoThread.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/x86_64/OsmoThread.swiftdeps"
+  }
+}

@@ -121,6 +121,14 @@ struct SuggestionStrip: View {
     }
 
     private func draft() {
+        // The metered thing: every AI draft passes through here (pill, inbox
+        // assist, Today). Free tier gets a weekly allowance; the cap opens the
+        // paywall instead of silently failing.
+        guard model.requestDraftAllowance() else {
+            error = "You're out of free drafts this week — Osmo Pro is unlimited."
+            loading = false
+            return
+        }
         loading = true; error = nil
         let ctx = tone == nil ? context : withTone(context, tone!)
         Task {

@@ -1,0 +1,30 @@
+{
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/Gmail/GmailNormalizer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/GmailNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/GmailNormalizer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/GmailNormalizer.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/GmailNormalizer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/GmailNormalizer.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/Slack/SlackNormalizer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SlackNormalizer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SlackNormalizer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SlackNormalizer.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SlackNormalizer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SlackNormalizer.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/SyncCoordinator.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SyncCoordinator.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SyncCoordinator.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SyncCoordinator.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SyncCoordinator.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/SyncCoordinator.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoCore/Readers/WhatsApp/WhatsAppReader.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/WhatsAppReader.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/WhatsAppReader.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/WhatsAppReader.dia",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/WhatsAppReader.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoCore.build/Objects-normal/arm64/WhatsAppReader.swiftdeps"
+  }
+}

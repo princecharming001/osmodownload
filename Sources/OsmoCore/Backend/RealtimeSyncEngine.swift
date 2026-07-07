@@ -233,6 +233,14 @@ public actor RealtimeSyncEngine {
                 fresh.append(NewInbound(message: message, threadID: message.threadID))
             }
         }
+        // Tapbacks: apply adds then removes (a remove deletes the matching add by
+        // its deterministic id — order-independent since ids are content-derived).
+        for reaction in batch.reactionAdds { try? store.upsertReaction(reaction) }
+        for rid in batch.reactionRemoves { try? store.removeReaction(id: rid) }
+        // Attachments go through the same change-aware `ingest` as every other
+        // reader-sourced row — its `preservingEnrichment` hook is what protects
+        // an already-fetched `localPath`/`thumbnailData` from this re-ingest.
+        for attachment in batch.attachmentAdds { _ = try? store.ingest(attachment) }
         return fresh
     }
 
@@ -305,7 +313,15 @@ public actor RealtimeSyncEngine {
         return result
     }
 
+    /// Run ONE immediate iMessage chat.db poll — used right after an AppleScript
+    /// send so the just-sent message is ingested + shown without waiting for the
+    /// ~3s background loop. Fully idempotent (ROWID watermark advances only over
+    /// new rows; ingest dedups on the real chat.db guid), so calling it repeatedly
+    /// — or racing the background loop — can never duplicate a message.
+    public func pollLocalNow() async { await pollChatDB() }
+
     private func pollChatDB() async {
+        if localMuted { return }   // user paused/disconnected iMessage
         if chatReader == nil {
             // Reader opens lazily; FDA may be granted mid-session. Rely on the real
             // open (not isReadableFile, which TCC fools on the world-readable file).
@@ -315,9 +331,20 @@ public actor RealtimeSyncEngine {
         guard let reader = chatReader else { return }
 
         let watermark = cursorStore.loadChatDBRowID()
-        guard let (rows, maxRowID) = try? reader.readSince(rowID: watermark), !rows.isEmpty else {
-            // Nothing new; if we'd been importing, mark it done.
-            if watermark != 0 { onImportProgress?(.imessage, 1.0) }
+        guard let (rows, maxRowID) = try? reader.readSince(rowID: watermark) else {
+            // The READ itself failed (vs. simply "no new rows"). A reader opened
+            // before Full Disk Access became effective can't actually read — drop
+            // it so the next tick reopens with current access. This lets iMessage
+            // recover mid-session on macOS versions that propagate the FDA grant
+            // without a relaunch (the relaunch affordance covers the rest).
+            chatReader = nil
+            return
+        }
+        guard !rows.isEmpty else {
+            // Nothing new. Signal "done" ONLY on the transition out of an import —
+            // NOT on every empty poll. Firing 1.0 each poll made the app reload the
+            // whole thread list every few seconds forever (the real CPU peg).
+            if wasImporting { onImportProgress?(.imessage, 1.0); wasImporting = false }
             return
         }
 
@@ -326,16 +353,29 @@ public actor RealtimeSyncEngine {
         // progressively and shows a real "importing X%" instead of freezing then
         // dumping everything at once. Later polls are tiny and ingest in one shot.
         if watermark == 0, rows.count > 1500 {
+            wasImporting = true
             await importInChunks(rows, maxRowID: maxRowID)
+            wasImporting = false
         } else {
             let batch = enrichWithContacts(IMessageNormalizer.normalize(rows))
             let fresh = ingest(batch)
             cursorStore.saveChatDBRowID(maxRowID)
             for inbound in fresh { inboundContinuation?.yield(inbound) }
             if !fresh.isEmpty { scheduleIdentityRebuild() }
+            // We just ingested genuinely-new rows (past the !rows.isEmpty guard) —
+            // refresh the UI. This is naturally rate-limited to actual new messages,
+            // unlike the every-poll firing the empty branch used to do.
             onImportProgress?(.imessage, 1.0)
         }
     }
+
+    /// True while the big first-import is running, so the "import complete" signal
+    /// fires exactly once (on completion) instead of on every subsequent poll.
+    private var wasImporting = false
+
+    /// When the user pauses/disconnects iMessage, stop reading chat.db.
+    private var localMuted = false
+    public func setLocalMuted(_ muted: Bool) { localMuted = muted }
 
     /// Ingest a large first-import in slices, reporting fractional progress and
     /// yielding so the app stays responsive and the thread list fills as it goes.
@@ -345,13 +385,22 @@ public actor RealtimeSyncEngine {
         onImportProgress?(.imessage, 0.001)   // flip the UI into "importing" immediately
         while i < rows.count {
             let end = min(i + chunk, rows.count)
-            let batch = enrichWithContacts(IMessageNormalizer.normalize(Array(rows[i..<end])))
+            let slice = Array(rows[i..<end])
+            let batch = enrichWithContacts(IMessageNormalizer.normalize(slice))
             _ = ingest(batch)
             i = end
+            // Advance the watermark AFTER EACH CHUNK (rows are ROWID-ascending, so
+            // the slice's last row is its max). Ingest is idempotent, so if the app
+            // quits mid-import the next launch RESUMES from here instead of redoing
+            // the whole (potentially minutes-long) first import — which otherwise
+            // pegs the CPU on every restart until the user happens to let it finish.
+            if let lastRowID = slice.last?.rowID, lastRowID > 0 {
+                cursorStore.saveChatDBRowID(lastRowID)
+            }
             onImportProgress?(.imessage, Double(i) / Double(rows.count))
             await Task.yield()
         }
-        cursorStore.saveChatDBRowID(maxRowID)   // AFTER all chunks — crash-safe
+        cursorStore.saveChatDBRowID(maxRowID)
         scheduleIdentityRebuild()
         onImportProgress?(.imessage, 1.0)
     }

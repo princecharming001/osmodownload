@@ -23,11 +23,78 @@ public struct WireThread: Codable, Equatable, Sendable {
     public var title: String?
     public var isGroup: Bool
     public var lastMessageAt: Date?
+    /// Optional so older servers/rows decode unchanged.
+    public var automatedHint: Bool?
+    public var providerThreadID: String?
     public init(platform: String, platformThreadID: String, title: String?,
-                isGroup: Bool, lastMessageAt: Date?) {
+                isGroup: Bool, lastMessageAt: Date?,
+                automatedHint: Bool? = nil, providerThreadID: String? = nil) {
         self.platform = platform; self.platformThreadID = platformThreadID
         self.title = title; self.isGroup = isGroup; self.lastMessageAt = lastMessageAt
+        self.automatedHint = automatedHint; self.providerThreadID = providerThreadID
     }
+}
+
+public struct WireReaction: Codable, Equatable, Sendable {
+    public var emoji: String
+    public var senderHandle: String?
+    public var isFromMe: Bool
+    public init(emoji: String, senderHandle: String? = nil, isFromMe: Bool = false) {
+        self.emoji = emoji; self.senderHandle = senderHandle; self.isFromMe = isFromMe
+    }
+}
+
+public struct WireAttachment: Codable, Equatable, Sendable {
+    public var id: String
+    public var kind: String            // AttachmentKind.rawValue
+    public var mimeType: String?
+    public var filename: String?
+    public var sizeBytes: Int64?
+    public var width: Int?
+    public var height: Int?
+    public var remoteRef: String?
+    public var url: String?
+    public var title: String?
+    public init(id: String, kind: String, mimeType: String? = nil, filename: String? = nil,
+                sizeBytes: Int64? = nil, width: Int? = nil, height: Int? = nil,
+                remoteRef: String? = nil, url: String? = nil, title: String? = nil) {
+        self.id = id; self.kind = kind; self.mimeType = mimeType; self.filename = filename
+        self.sizeBytes = sizeBytes; self.width = width; self.height = height
+        self.remoteRef = remoteRef; self.url = url; self.title = title
+    }
+}
+
+// Person-enrichment wire (POST /api/enrich/person). Leaf types
+// (EnrichedPosition/EnrichedEducation/WebFact) are the storage model's own —
+// shared verbatim so the wire and the store can't drift.
+
+public struct WireEnrichRequest: Codable, Sendable {
+    public var name: String
+    public var linkedinHandle: String?
+    public var hints: [String]
+    public init(name: String, linkedinHandle: String?, hints: [String]) {
+        self.name = name; self.linkedinHandle = linkedinHandle; self.hints = hints
+    }
+}
+
+public struct WireEnrichedProfile: Codable, Equatable, Sendable {
+    public var name: String?
+    public var headline: String?
+    public var company: String?
+    public var title: String?
+    public var location: String?
+    public var summary: String?
+    public var linkedinURL: String?
+    public var positions: [EnrichedPosition]
+    public var education: [EnrichedEducation]
+}
+
+public struct WireEnrichment: Codable, Equatable, Sendable {
+    public var profile: WireEnrichedProfile?
+    public var webFacts: [WebFact]
+    /// Includes "none" — which the app never persists.
+    public var source: String
+    public var fetchedAt: Date
 }
 
 public struct WireMessage: Codable, Equatable, Sendable {
@@ -39,11 +106,21 @@ public struct WireMessage: Codable, Equatable, Sendable {
     public var text: String
     public var sentAt: Date
     public var readAt: Date?
+    /// Emoji reactions + reply threading when the provider exposes them —
+    /// optional, so older servers/rows decode unchanged.
+    public var reactions: [WireReaction]?
+    public var replyToMessageID: String?
+    /// Media/files/shared-post attachments, when the provider exposes them.
+    public var attachments: [WireAttachment]?
     public init(platform: String, platformMessageID: String, platformThreadID: String,
-                senderHandle: String?, isFromMe: Bool, text: String, sentAt: Date, readAt: Date?) {
+                senderHandle: String?, isFromMe: Bool, text: String, sentAt: Date, readAt: Date?,
+                reactions: [WireReaction]? = nil, replyToMessageID: String? = nil,
+                attachments: [WireAttachment]? = nil) {
         self.platform = platform; self.platformMessageID = platformMessageID
         self.platformThreadID = platformThreadID; self.senderHandle = senderHandle
         self.isFromMe = isFromMe; self.text = text; self.sentAt = sentAt; self.readAt = readAt
+        self.reactions = reactions; self.replyToMessageID = replyToMessageID
+        self.attachments = attachments
     }
 }
 
@@ -64,6 +141,47 @@ public struct DeviceCredentials: Codable, Equatable, Sendable {
     public var deviceId: String
     public var deviceToken: String
     public var mode: String            // "mock" | "live"
+}
+
+/// A server-signed entitlement (verified locally by `EntitlementVerifier`).
+public struct WireEntitlement: Codable, Equatable, Sendable {
+    public var entitlement: String     // base64url payload
+    public var signature: String       // base64url Ed25519 signature
+    public init(entitlement: String, signature: String) {
+        self.entitlement = entitlement; self.signature = signature
+    }
+}
+
+/// The checkout URL the app opens to subscribe.
+public struct WireCheckout: Codable, Equatable, Sendable {
+    public var url: String
+    public var mode: String            // "mock" | "stripe-pending"
+}
+
+/// The user this device is now linked to (Sign in with Apple).
+public struct WireAccountUser: Codable, Equatable, Sendable {
+    public var id: String
+    public var email: String
+    public var displayName: String?
+}
+
+/// Response of /api/account/link — the linked user + a fresh signed entitlement
+/// that reflects the account's subscription.
+public struct WireAccountLink: Codable, Equatable, Sendable {
+    public var user: WireAccountUser
+    public var entitlement: WireEntitlement
+}
+
+/// Remote feature flags + kill-switch.
+public struct WireFlags: Codable, Equatable, Sendable {
+    public var flags: [String: Bool]
+}
+
+/// Service health / incident status.
+public struct WireHealth: Codable, Equatable, Sendable {
+    public var ok: Bool
+    public var status: String        // "operational" | "degraded" | "down"
+    public var message: String?
 }
 
 public struct ConnectLink: Codable, Equatable, Sendable {

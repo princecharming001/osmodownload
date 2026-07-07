@@ -43,16 +43,56 @@ public final class ConnectionsManager: ObservableObject {
     }
 
     public func pause(_ platform: Platform, paused: Bool) async {
-        guard let id = connectionIDs[platform] else { return }
-        try? await client.pause(id: id, paused: paused)
+        // iMessage is local: pause = stop the poller + hold a paused phase that
+        // probeLocal must NOT auto-flip back to live; resume clears it.
+        if platform == .imessage {
+            if paused { phases[.imessage] = .paused }
+            else { phases[.imessage] = .notConnected; probeLocal() }   // clear → re-probe FDA
+            persist()
+            return
+        }
+        // Backend platforms: reflect the tap immediately (optimistic), then tell
+        // the backend. connectionIDs don't survive a relaunch, so re-fetch if
+        // missing rather than silently no-op'ing (the old bug).
+        if connectionIDs[platform] == nil { await reconcile() }
         apply(platform, .statusEvent(paused ? "paused" : "connected"))
+        if let id = connectionIDs[platform] { try? await client.pause(id: id, paused: paused) }
     }
 
     public func disconnect(_ platform: Platform) async {
-        guard let id = connectionIDs[platform] else { return }
-        try? await client.disconnect(id: id)
+        if platform == .imessage {
+            phases[.imessage] = .disconnected   // held; probeLocal won't revive it
+            persist()
+            return
+        }
+        if connectionIDs[platform] == nil { await reconcile() }
+        apply(platform, .statusEvent("disconnected"))       // optimistic
+        if let id = connectionIDs[platform] { try? await client.disconnect(id: id) }
         connectionIDs[platform] = nil
-        apply(platform, .statusEvent("disconnected"))
+    }
+
+    /// Re-run the deep 2-month history import for a live backend platform — for
+    /// accounts connected before the deeper window shipped. Shows backfilling
+    /// progress via the normal status events. (iMessage is always full, so no-op.)
+    public func reimportHistory(_ platform: Platform) async {
+        guard platform != .imessage else { return }
+        apply(platform, .backfillProgress(0.02))   // reflect the tap immediately
+        do { try await client.rebackfill(platform: platform) }
+        catch { await reconcile() }                 // heal the phase if it failed
+    }
+
+    /// Re-enable a user-paused/disconnected iMessage (the "Reconnect"/"Resume"
+    /// path): drop the held phase and re-probe Full Disk Access.
+    public func enableLocal() {
+        phases[.imessage] = .notConnected
+        probeLocal()
+        persist()
+    }
+
+    /// Whether iMessage polling should run (false while the user has paused or
+    /// disconnected it) — the sync engine checks this to stop pulling.
+    public var isLocalMuted: Bool {
+        phases[.imessage] == .paused || phases[.imessage] == .disconnected
     }
 
     /// User bailed out of a stuck "waiting for authorization" — reset to
@@ -86,7 +126,13 @@ public final class ConnectionsManager: ObservableObject {
     public func reconcile() async {
         guard let accounts = try? await client.accounts() else { return }
         let byPlatform = Dictionary(grouping: accounts, by: { Platform(rawValue: $0.platform) })
-        for platform in Platform.allCases where platform.access != .localData {
+        // Backend truth drives every platform EXCEPT iMessage (local FDA probe).
+        // This deliberately INCLUDES WhatsApp: it's `.localData` access but has no
+        // local reader, so its connected state must come from the backend —
+        // otherwise a stale persisted `.live` could never be cleared (reconcile
+        // used to skip every localData platform), which is one way phantom
+        // WhatsApp "Connected" survived on accounts that never linked it.
+        for platform in Platform.allCases where platform != .imessage {
             let info = byPlatform[platform]?.first
             if let info { connectionIDs[platform] = info.id }
             apply(platform, .accountsSnapshot(present: info != nil, status: info?.status))
@@ -104,6 +150,10 @@ public final class ConnectionsManager: ObservableObject {
     /// — chat.db is world-readable at the POSIX layer, so isReadableFile can
     /// mislead; only actually opening it proves Full Disk Access is effective.
     public func probeLocal() {
+        // Never override a user's explicit Pause/Disconnect — that was why those
+        // buttons "didn't work" for iMessage (probeLocal ran on every foreground /
+        // reconcile / import tick and flipped it straight back to live).
+        if phases[.imessage] == .paused || phases[.imessage] == .disconnected { return }
         let ok = ChatDBReader.canRead(path: chatDBPath)
         phases[.imessage] = ok ? .live : .notConnected
     }
@@ -145,12 +195,22 @@ public final class ConnectionsManager: ObservableObject {
         var out = initialPhases()
         for (raw, phase) in snapshot {
             guard let platform = Platform(rawValue: raw) else { continue }
-            // Transient phases don't survive a relaunch meaningfully.
-            switch phase {
-            case .linking, .backfilling: out[platform] = .notConnected
-            default: out[platform] = phase
-            }
+            out[platform] = rehydrated(phase)
         }
         return out
+    }
+
+    /// A persisted phase, sanitized for load. We NEVER resurrect a "connected"
+    /// phase from disk — a fresh or relaunched app must re-verify EVERY connection
+    /// live: iMessage via the Full-Disk-Access probe, backend platforms via
+    /// reconcile against `/api/accounts`. This is the root-cause guard against a
+    /// stale `connections.json` showing WhatsApp / LinkedIn / Instagram as
+    /// "Connected" on an account that never linked them. User-intent holds
+    /// (paused / disconnected) are preserved so we don't silently re-enable them.
+    nonisolated static func rehydrated(_ phase: ConnectionPhase) -> ConnectionPhase {
+        switch phase {
+        case .linking, .backfilling, .live, .degraded: return .notConnected
+        case .notConnected, .paused, .disconnected: return phase
+        }
     }
 }

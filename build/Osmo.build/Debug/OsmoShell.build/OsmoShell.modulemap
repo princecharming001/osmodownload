@@ -1,0 +1,4 @@
+module OsmoShell {
+header "OsmoShell-Swift.h"
+export *
+}

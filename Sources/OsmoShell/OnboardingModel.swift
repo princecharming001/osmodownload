@@ -6,16 +6,31 @@ import Foundation
 public final class OnboardingModel: @unchecked Sendable {
 
     public enum Step: Int, CaseIterable, Sendable {
-        case welcome, hotkey, permission, practice, connect, finish
+        case welcome, privacy, goals, style, struggles, signIn,
+             hotkey, permission, connect, notifications, finish
 
         public var title: String {
             switch self {
-            case .welcome:    return "Every conversation, remembered."
-            case .hotkey:     return "Your summon key"
-            case .permission: return "One permission"
-            case .practice:   return "Try it right now"
-            case .connect:    return "Bring your conversations"
-            case .finish:     return "You're set"
+            case .welcome:       return "Every conversation, remembered."
+            case .privacy:       return "Your messages never leave your Mac"
+            case .goals:         return "What brings you to Osmo?"
+            case .style:         return "How do you want to come across?"
+            case .struggles:     return "Where does messaging trip you up?"
+            case .signIn:        return "Save your account"
+            case .hotkey:        return "Your summon key"
+            case .permission:    return "One permission"
+            case .connect:       return "Bring your conversations"
+            case .notifications: return "Nudges when it matters"
+            case .finish:        return "You're set"
+            }
+        }
+
+        /// Steps the user may skip without breaking the app (context + niceties).
+        /// welcome/privacy/permission/connect/finish are the spine.
+        public var isSkippable: Bool {
+            switch self {
+            case .goals, .style, .struggles, .signIn, .hotkey, .notifications: return true
+            default: return false
             }
         }
     }

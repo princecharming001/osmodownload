@@ -1,0 +1,119 @@
+{
+  "" : {
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OsmoShell-primary.dia",
+    "emit-module-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OsmoShell-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OsmoShell-primary-emit-module.dia",
+    "pch" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OsmoShell-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OsmoShell-primary.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/AppAllowlist.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AppAllowlist.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AppAllowlist.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AppAllowlist.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AppAllowlist.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AppAllowlist.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AppAllowlist.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AppAllowlist.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AppAllowlist~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/AutodraftPolicy.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AutodraftPolicy.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AutodraftPolicy.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AutodraftPolicy.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AutodraftPolicy.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AutodraftPolicy.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AutodraftPolicy.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AutodraftPolicy.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/AutodraftPolicy~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/DemoScope.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/DemoScope.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/DemoScope.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/DemoScope.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/DemoScope.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/DemoScope.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/DemoScope.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/DemoScope.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/DemoScope~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/Entitlements.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/Entitlements.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/Entitlements.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/Entitlements.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/Entitlements.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/Entitlements.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/Entitlements.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/Entitlements.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/Entitlements~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/HumanThreadClassifier.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/HumanThreadClassifier.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/HumanThreadClassifier.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/HumanThreadClassifier.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/HumanThreadClassifier.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/HumanThreadClassifier.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/HumanThreadClassifier.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/HumanThreadClassifier.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/HumanThreadClassifier~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/InboxFilter.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/InboxFilter.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/InboxFilter.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/InboxFilter.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/InboxFilter.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/InboxFilter.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/InboxFilter.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/InboxFilter.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/InboxFilter~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/NotificationRules.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/NotificationRules.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/NotificationRules.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/NotificationRules.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/NotificationRules.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/NotificationRules.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/NotificationRules.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/NotificationRules.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/NotificationRules~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/OnboardingModel.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OnboardingModel.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OnboardingModel.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OnboardingModel.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OnboardingModel.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OnboardingModel.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OnboardingModel.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OnboardingModel.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/OnboardingModel~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/PillStateMachine.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/PillStateMachine.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/PillStateMachine.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/PillStateMachine.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/PillStateMachine.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/PillStateMachine.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/PillStateMachine.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/PillStateMachine.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/PillStateMachine~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/ThreadSignals.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/ThreadSignals.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/ThreadSignals.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/ThreadSignals.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/ThreadSignals.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/ThreadSignals.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/ThreadSignals.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/ThreadSignals.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/ThreadSignals~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoShell/TopicClassifier.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/TopicClassifier.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/TopicClassifier.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/TopicClassifier.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/TopicClassifier.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/TopicClassifier.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/TopicClassifier.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/TopicClassifier.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoShell.build/Objects-normal/x86_64/TopicClassifier~partial.swiftmodule"
+  }
+}

@@ -73,6 +73,50 @@ final class OsmoNotifier: ObservableObject {
              body: "You asked to be reminded about this.", threadID: threadID)
     }
 
+    /// Schedule the trial-ending reminder ladder (2 days out, last day, ended).
+    /// Idempotent — re-scheduling replaces the prior set, so a refresh that
+    /// reports the same trial doesn't stack duplicates.
+    func scheduleTrialEnding(endsAt: Date) {
+        guard authorized else { return }
+        let center = UNUserNotificationCenter.current()
+        center.removePendingNotificationRequests(withIdentifiers: ["trial.2d", "trial.1d", "trial.0d"])
+        scheduleAt("trial.2d", endsAt.addingTimeInterval(-2 * 86_400),
+                   "Your Osmo Pro trial ends in 2 days",
+                   "Keep unlimited drafts, the Read on everyone, and autodraft.")
+        scheduleAt("trial.1d", endsAt.addingTimeInterval(-86_400),
+                   "Last day of your Osmo Pro trial",
+                   "Subscribe to keep Pro without interruption.")
+        scheduleAt("trial.0d", endsAt,
+                   "Your Osmo Pro trial has ended",
+                   "You're back on Free — upgrade anytime to unlock Pro again.")
+    }
+
+    private func scheduleAt(_ id: String, _ date: Date, _ title: String, _ body: String) {
+        guard date > Date() else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title; content.body = body; content.sound = .default
+        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: date)
+        let trigger = UNCalendarNotificationTrigger(dateMatching: comps, repeats: false)
+        UNUserNotificationCenter.current().add(
+            UNNotificationRequest(identifier: id, content: content, trigger: trigger))
+    }
+
+    /// A provider session dropped (the account went CREDENTIALS/ERROR/STOPPED).
+    /// The one-click "Reconnect" already lives in Connections; this is the
+    /// proactive half — so a dead connection surfaces the moment it happens
+    /// instead of waiting for the user to notice a stale inbox. Caller dedupes
+    /// (one notification per drop, cleared on reconnect).
+    func notifyConnectionDegraded(platform: Platform) {
+        guard authorized else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "\(platform.displayName) needs a quick re-link"
+        content.body = "One click to reconnect — nothing else to set up."
+        content.sound = .default
+        let request = UNNotificationRequest(
+            identifier: "degraded-\(platform.rawValue)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request)
+    }
+
     // MARK: - Plumbing
 
     private func post(id: String, title: String, body: String, threadID: UUID) {

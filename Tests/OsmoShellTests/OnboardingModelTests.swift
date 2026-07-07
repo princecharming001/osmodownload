@@ -18,17 +18,17 @@ struct OnboardingModelTests {
 
     @Test("Skip records the step and still advances")
     func skip() {
-        let m = OnboardingModel(start: .connect)
+        let m = OnboardingModel(start: .goals)
         m.skip()
-        #expect(m.skipped.contains(.connect))
-        #expect(m.step == .finish)
+        #expect(m.skipped.contains(.goals))
+        #expect(m.step == .style)
     }
 
     @Test("Granting the permission auto-advances only on the permission step")
     func permissionAdvance() {
         let m = OnboardingModel(start: .permission)
         #expect(m.permissionGranted())        // advances
-        #expect(m.step == .practice)
+        #expect(m.step == .connect)
         #expect(!m.skipped.contains(.permission))
         // On a different step, permissionGranted is a no-op.
         let other = OnboardingModel(start: .welcome)
@@ -43,9 +43,9 @@ struct OnboardingModelTests {
         m.advance(); m.advance()
         #expect(m.progress > 0 && m.progress < 1)
         m.back()
-        #expect(m.step == .hotkey)
+        #expect(m.step == .privacy)
         // goTo jumps directly (replay-from-settings).
-        m.goTo(.practice)
-        #expect(m.step == .practice)
+        m.goTo(.signIn)
+        #expect(m.step == .signIn)
     }
 }

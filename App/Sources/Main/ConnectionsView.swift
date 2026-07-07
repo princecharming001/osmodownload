@@ -41,8 +41,7 @@ struct ConnectionRow: View {
         Card {
             VStack(spacing: DS.Space.s) {
                 HStack(spacing: DS.Space.m) {
-                    Image(systemName: platform.symbolName)
-                        .font(.system(size: 16)).foregroundStyle(platform.tint)
+                    PlatformLogo(platform, size: 26)
                         .frame(width: 28)
                     VStack(alignment: .leading, spacing: 2) {
                         Text(platform.displayName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
@@ -97,7 +96,13 @@ struct ConnectionRow: View {
     @ViewBuilder private var connectActions: some View {
         switch phase {
         case .notConnected:
-            PillButton(platform == .imessage ? "Enable" : "Connect") { model.connect(platform) }
+            if platform == .imessage && model.iMessageAwaitingRelaunch {
+                // FDA was just granted but this process cached the old denial —
+                // one click to relaunch and finish enabling iMessage.
+                PillButton("Relaunch to finish", icon: "arrow.clockwise") { model.relaunchApp() }
+            } else {
+                PillButton(platform == .imessage ? "Enable" : "Connect") { model.connect(platform) }
+            }
         case .linking:
             HStack(spacing: DS.Space.s) {
                 ProgressView().controlSize(.small)
@@ -115,6 +120,11 @@ struct ConnectionRow: View {
             }
         case .live:
             Menu {
+                if platform != .imessage {
+                    Button("Re-import full history") {
+                        Task { await model.connections.reimportHistory(platform) }
+                    }
+                }
                 Button("Pause") { Task { await model.connections.pause(platform, paused: true) } }
                 Button("Disconnect", role: .destructive) { Task { await model.connections.disconnect(platform) } }
             } label: { Text("Connected").font(DS.Typography.captionEm).foregroundStyle(DS.Colors.muted) }
@@ -141,6 +151,9 @@ struct ConnectionRow: View {
         if platform.comingSoon { return "Support in progress — not connectable yet" }
         switch phase {
         case .notConnected:
+            if platform == .imessage && model.iMessageAwaitingRelaunch {
+                return "Granted Full Disk Access? Relaunch Osmo to finish."
+            }
             return platform.access == .overlayOnly ? "Works through the pill — connect for full history" : "Not connected"
         case .linking: return "Waiting for authorization…"
         case .backfilling: return "Importing history…"
@@ -159,6 +172,8 @@ struct SearchResultsView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Space.m) {
+                // Search-or-ask: the same query, answered instead of matched.
+                askRow
                 Eyebrow("\(model.searchResults.count) results")
                 if model.searchResults.isEmpty {
                     Text("No matches for “\(model.searchText)”.")
@@ -188,6 +203,42 @@ struct SearchResultsView: View {
             .padding(DS.Space.xl)
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity)
+        }
+    }
+
+    /// "Ask Osmo" card at the top of results: turns the query into a grounded
+    /// question; the latest answer renders inline right below.
+    @ViewBuilder private var askRow: some View {
+        Button {
+            model.askOsmo(model.searchText)
+        } label: {
+            HStack(spacing: DS.Space.s) {
+                AskOrb(mode: model.askBusy ? .thinking : .idle, size: 20)
+                Text("Ask Osmo: “\(model.searchText)”")
+                    .font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink).lineLimit(1)
+                Spacer()
+                if !model.askBusy {
+                    Image(systemName: "return").font(.system(size: 10)).foregroundStyle(DS.Colors.muted)
+                }
+            }
+            .padding(DS.Space.m)
+            .background(DS.Colors.accent.opacity(0.06),
+                        in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous)
+                .stroke(DS.Colors.accent.opacity(0.25), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .disabled(model.askBusy)
+        if let last = model.askExchanges.last, last.q == model.searchText.trimmingCharacters(in: .whitespacesAndNewlines) {
+            Card {
+                HStack(alignment: .top, spacing: DS.Space.s) {
+                    AskOrb(mode: .idle, size: 18)
+                    Text(last.a).font(DS.Typography.body).foregroundStyle(DS.Colors.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
     }
 

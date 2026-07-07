@@ -1,9 +1,65 @@
 // Unipile webhook/API JSON → wire rows. Pure functions, fixture-testable.
 // Live-mode only path (mock mode seeds wire rows directly).
 
-import type { Platform, WireContact, WireMessage, WireThread } from "../connections/types";
+import type { Platform, WireAttachment, WireContact, WireMessage, WireReaction, WireThread } from "../connections/types";
 import type { RowBundle } from "../connections/memoryStore";
+import { kindFromMime } from "../connections/attachments";
 import type { UnipileChat, UnipileMessage } from "./client";
+
+/** Attachments off a Unipile message, across payload variants (`attachments`
+    or `files` arrays; id|attachment_id|provider_id; mimetype|mime_type;
+    file_size|size). `post`/`link`-typed entries (shared posts, IG reels) map
+    to kind "link" with the destination `url` and a `title`, since there are no
+    bytes to fetch. */
+export function readAttachments(msg: Record<string, unknown>): WireAttachment[] | undefined {
+  const raw = (msg.attachments ?? msg.files) as unknown;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: WireAttachment[] = [];
+  for (const a of raw as Record<string, unknown>[]) {
+    const id = (a.id ?? a.attachment_id ?? a.provider_id) as string | undefined;
+    if (!id) continue;
+    const mime = (a.mimetype ?? a.mime_type) as string | undefined;
+    const kind = kindFromMime(a.type as string | undefined, mime);
+    const size = (a.file_size ?? a.size) as unknown;
+    out.push({
+      id: String(id), kind,
+      mimeType: mime ?? null,
+      filename: ((a.file_name ?? a.filename) as string | undefined) ?? null,
+      sizeBytes: typeof size === "number" ? size : null,
+      remoteRef: kind === "link" ? null : String(id),
+      url: kind === "link" ? ((a.url as string | undefined) ?? null) : null,
+      title: ((a.title ?? a.name) as string | undefined) ?? null,
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** Emoji reactions off a Unipile message, across payload variants
+    (`reactions: [{value|emoji|reaction, sender_id|attendee_id, is_sender}]`). */
+function readReactions(msg: Record<string, unknown>): WireReaction[] | undefined {
+  const raw = msg.reactions;
+  if (!Array.isArray(raw) || raw.length === 0) return undefined;
+  const out: WireReaction[] = [];
+  for (const r of raw as Record<string, unknown>[]) {
+    const emoji = (r.value ?? r.emoji ?? r.reaction) as string | undefined;
+    if (!emoji) continue;
+    out.push({
+      emoji: String(emoji),
+      senderHandle: (r.sender_id ?? r.attendee_id ?? r.attendee_provider_id ?? null) as string | null,
+      isFromMe: Boolean(r.is_sender ?? r.from_me ?? false),
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
+
+/** The platform id of the message this one quotes/replies to, if any. */
+function readReplyTo(msg: Record<string, unknown>): string | null {
+  const direct = msg.quoted_message_id ?? msg.replied_message_id ?? msg.reply_to_message_id;
+  if (typeof direct === "string" && direct) return direct;
+  const nested = (msg.quoted ?? msg.reply_to ?? msg.replied_to) as Record<string, unknown> | undefined;
+  const id = nested?.id ?? nested?.message_id ?? nested?.provider_id;
+  return typeof id === "string" && id ? id : null;
+}
 
 /** Read the first present key from a loose object (Unipile field names vary
     a little by provider; we degrade instead of crashing). */
@@ -12,9 +68,14 @@ function pick(obj: Record<string, unknown>, ...keys: string[]): unknown {
   return undefined;
 }
 
-/** chatId → {title, isGroup} from a page of Unipile chats. */
-export function chatIndex(chats: UnipileChat[]): Map<string, { title: string | null; isGroup: boolean }> {
-  const map = new Map<string, { title: string | null; isGroup: boolean }>();
+/** chatId → {title, isGroup, providerId} from a page of Unipile chats.
+    `providerId` is the provider's OWN thread id (distinct from `id`, Unipile's
+    internal chat id) — what a working deep link into the real conversation
+    actually needs. */
+export function chatIndex(
+  chats: UnipileChat[],
+): Map<string, { title: string | null; isGroup: boolean; providerId: string | null }> {
+  const map = new Map<string, { title: string | null; isGroup: boolean; providerId: string | null }>();
   for (const c of chats) {
     const id = pick(c, "id", "chat_id", "provider_id") as string | undefined;
     if (!id) continue;
@@ -22,7 +83,8 @@ export function chatIndex(chats: UnipileChat[]): Map<string, { title: string | n
     // Unipile chat `type`: 0/1 direct, 2 group (varies) — treat a present
     // attendee count > 2 or an explicit flag as group.
     const isGroup = Boolean(pick(c, "is_group") ?? (Number(pick(c, "type") ?? 0) >= 2));
-    map.set(id, { title, isGroup });
+    const providerId = (c.provider_id as string | undefined) ?? null;
+    map.set(id, { title, isGroup, providerId });
   }
   return map;
 }
@@ -30,7 +92,7 @@ export function chatIndex(chats: UnipileChat[]): Map<string, { title: string | n
 /** One Unipile message (from GET /messages) → wire rows. */
 export function normalizeUnipileMessage(
   msg: UnipileMessage, platform: Platform,
-  chats: Map<string, { title: string | null; isGroup: boolean }>,
+  chats: Map<string, { title: string | null; isGroup: boolean; providerId: string | null }>,
 ): RowBundle | null {
   const chatId = pick(msg, "chat_id", "thread_id", "chat_provider_id") as string | undefined;
   const messageId = pick(msg, "id", "message_id", "provider_id") as string | undefined;
@@ -45,8 +107,16 @@ export function normalizeUnipileMessage(
                             "profile_picture", "attendee_picture_url", "picture_url") as string | undefined;
   const chat = chats.get(chatId);
 
+  // The chat-title fallback is only valid in a 1:1 (there the chat's title IS
+  // the counterpart's name). In a GROUP, the chat's title is the group's name
+  // — falling back to it here was the root cause of the group sender
+  // attribution bug (WhatsApp/IG often omit sender_name on group messages, so
+  // every sender's displayName silently became the group's title instead of
+  // their own name). The backfill's attendee-enrichment pass fills in the
+  // real per-attendee name when this leaves displayName null.
+  const senderFallbackName = chat?.isGroup ? null : chat?.title ?? null;
   const contacts: WireContact[] = (!isFromMe && senderHandle) ? [{
-    platform, handle: senderHandle, displayName: senderName ?? chat?.title ?? null,
+    platform, handle: senderHandle, displayName: senderName ?? senderFallbackName,
     avatarUrl: senderAvatar ?? null, isMe: false,
   }] : [];
   const threads: WireThread[] = [{
@@ -54,11 +124,15 @@ export function normalizeUnipileMessage(
     title: chat?.title ?? senderName ?? null,
     isGroup: chat?.isGroup ?? false,
     lastMessageAt: sentAt,
+    providerThreadID: chat?.providerId ?? null,
   }];
   const messages: WireMessage[] = [{
     platform, platformMessageID: messageId, platformThreadID: chatId,
     senderHandle: isFromMe ? null : (senderHandle ?? null),
     isFromMe, text, sentAt, readAt: null,
+    reactions: readReactions(msg),
+    replyToMessageID: readReplyTo(msg),
+    attachments: readAttachments(msg),
   }];
   return { contacts, threads, messages };
 }
@@ -105,6 +179,9 @@ export function normalizeMessageWebhook(payload: Record<string, unknown>): RowBu
     platform, platformMessageID: messageId, platformThreadID: chatId,
     senderHandle: isFromMe ? null : senderHandle ?? null,
     isFromMe, text, sentAt, readAt: null,
+    reactions: readReactions(payload),
+    replyToMessageID: readReplyTo(payload),
+    attachments: readAttachments(payload),
   }];
   return { contacts, threads, messages };
 }

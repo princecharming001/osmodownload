@@ -1,0 +1,249 @@
+{
+  "" : {
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain-primary.dia",
+    "emit-module-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain-primary-emit-module.d",
+    "emit-module-diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain-primary-emit-module.dia",
+    "pch" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain-primary-Bridging-header.pch",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain-primary.swiftdeps"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/AntiTell.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/AntiTell.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/AntiTell.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/AntiTell.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/AntiTell.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/AntiTell.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/AntiTell.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/AntiTell.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/AntiTell~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Ask.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Ask.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Ask.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Ask.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Ask.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Ask.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Ask.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Ask.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Ask~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/ClaudeProxyGenerator.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ClaudeProxyGenerator.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ClaudeProxyGenerator.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ClaudeProxyGenerator.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ClaudeProxyGenerator.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ClaudeProxyGenerator.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ClaudeProxyGenerator.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ClaudeProxyGenerator.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ClaudeProxyGenerator~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Dossier.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Dossier.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Dossier.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Dossier.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Dossier.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Dossier.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Dossier.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Dossier.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Dossier~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Generator.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Generator.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Generator.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Generator.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Generator.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Generator.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Generator.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Generator.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Generator~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Insight.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Insight.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Insight.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Insight.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Insight.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Insight.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Insight.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Insight.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Insight~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/MessageJudge.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/MessageJudge.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/MessageJudge.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/MessageJudge.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/MessageJudge.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/MessageJudge.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/MessageJudge.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/MessageJudge.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/MessageJudge~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Moves.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Moves.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Moves.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Moves.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Moves.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Moves.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Moves.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Moves.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Moves~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/OsmoBrain.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/OsmoBrain~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/PartnerProfile.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PartnerProfile.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PartnerProfile.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PartnerProfile.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PartnerProfile.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PartnerProfile.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PartnerProfile.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PartnerProfile.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PartnerProfile~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/PromptComposer.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PromptComposer.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PromptComposer.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PromptComposer.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PromptComposer.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PromptComposer.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PromptComposer.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PromptComposer.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/PromptComposer~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/ReachOutVerdict.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ReachOutVerdict.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ReachOutVerdict.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ReachOutVerdict.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ReachOutVerdict.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ReachOutVerdict.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ReachOutVerdict.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ReachOutVerdict.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ReachOutVerdict~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Registers.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Registers.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Registers.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Registers.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Registers.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Registers.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Registers.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Registers.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Registers~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Safety.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Safety.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Safety.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Safety.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Safety.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Safety.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Safety.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Safety.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Safety~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Strategy.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Strategy.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Strategy.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Strategy.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Strategy.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Strategy.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Strategy.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Strategy.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Strategy~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Suggestion.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Suggestion.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Suggestion.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Suggestion.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Suggestion.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Suggestion.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Suggestion.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Suggestion.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Suggestion~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/SuggestionService.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/SuggestionService.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/SuggestionService.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/SuggestionService.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/SuggestionService.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/SuggestionService.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/SuggestionService.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/SuggestionService.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/SuggestionService~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Techniques.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Techniques.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Techniques.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Techniques.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Techniques.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Techniques.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Techniques.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Techniques.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Techniques~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/ThreadIntel.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadIntel.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadIntel.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadIntel.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadIntel.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadIntel.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadIntel.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadIntel.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadIntel~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/ThreadRead.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadRead.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadRead.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadRead.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadRead.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadRead.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadRead.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadRead.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ThreadRead~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/ToneCheck.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ToneCheck.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ToneCheck.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ToneCheck.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ToneCheck.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ToneCheck.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ToneCheck.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ToneCheck.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/ToneCheck~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/Trajectory.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Trajectory.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Trajectory.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Trajectory.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Trajectory.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Trajectory.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Trajectory.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Trajectory.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/Trajectory~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/VoiceProfile.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceProfile.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceProfile.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceProfile.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceProfile.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceProfile.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceProfile.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceProfile.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceProfile~partial.swiftmodule"
+  },
+  "/Users/home/Osmo/Sources/OsmoBrain/VoiceStats.swift" : {
+    "const-values" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceStats.swiftconstvalues",
+    "dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceStats.d",
+    "diagnostics" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceStats.dia",
+    "index-unit-output-path" : "/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceStats.o",
+    "llvm-bc" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceStats.bc",
+    "object" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceStats.o",
+    "swift-dependencies" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceStats.swiftdeps",
+    "swiftmodule" : "/Users/home/Osmo/build/Osmo.build/Debug/OsmoBrain.build/Objects-normal/x86_64/VoiceStats~partial.swiftmodule"
+  }
+}

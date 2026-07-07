@@ -25,6 +25,40 @@ export interface PendingLink {
   platform: Platform;
   createdAt: number;
   used: boolean;
+  /** PKCE verifier for X OAuth (stored at authorize, read at token exchange). */
+  codeVerifier?: string;
+}
+
+/** Server-side subscription state per device — the SOURCE OF TRUTH for a
+    device's tier (the app only caches a signed copy). Postgres later. */
+export interface LicenseRecord {
+  deviceId: string;
+  licenseKey: string | null;
+  subscriptionActive: boolean;
+  plan: string | null;            // product/price id when subscribed
+  trialStartedAt: number | null;  // epoch ms — server-recorded so it can't be reset client-side
+}
+
+/** Rolling weekly usage window for the free-tier quota. */
+export interface UsageWindow {
+  weekStart: number;              // epoch ms
+  count: number;
+}
+
+/** A single-use email magic-link token — the web login flow. */
+export interface MagicLink {
+  token: string;
+  email: string;
+  expiresAt: number;   // epoch ms
+  used: boolean;
+}
+
+/** A signed-in browser session (web account page — separate from the Mac
+    app's device-token auth). */
+export interface WebSession {
+  token: string;
+  email: string;
+  createdAt: number;   // epoch ms
 }
 
 export interface ConnectionsStore {
@@ -57,6 +91,29 @@ export interface ConnectionsStore {
   // Mock outbox — what /api/sync/send recorded (E2E assertion surface).
   recordOutbound(deviceId: string, message: WireMessage): void;
   outbox(deviceId: string): WireMessage[];
+
+  // Subscription / trial — the server-side source of truth for a device's tier.
+  license(deviceId: string): LicenseRecord;
+  setLicense(deviceId: string, patch: Partial<LicenseRecord>): LicenseRecord;
+  /** Start the trial once; idempotent (a second call never re-opens it). */
+  startTrial(deviceId: string, nowMs: number): LicenseRecord;
+
+  // Free-tier weekly usage quota (server-enforced so a client can't lie).
+  usage(deviceId: string): UsageWindow;
+  /** Bump usage for the week containing `weekStartMs`, rolling over on a new week. */
+  bumpUsage(deviceId: string, weekStartMs: number): UsageWindow;
+
+  /** Account deletion: purge EVERY server record for a device. */
+  purgeDevice(deviceId: string): void;
+
+  // Web login (magic link) — separate from the Mac app's device-token auth.
+  /** Mints a fresh 15-minute single-use link for the given email. */
+  createMagicLink(email: string, nowMs: number): MagicLink;
+  /** Single-use + expiry-checked: returns the email once, then never again. */
+  consumeMagicLink(token: string, nowMs: number): string | null;
+  createWebSession(email: string): WebSession;
+  webSession(token: string): WebSession | null;
+  deleteWebSession(token: string): void;
 }
 
 interface MemoryState {
@@ -68,6 +125,10 @@ interface MemoryState {
   seqs: Map<string, number>;                 // deviceId → last seq
   oauth: Map<string, unknown>;               // `${deviceId}:${platform}` → tokens
   outboxes: Map<string, WireMessage[]>;      // deviceId → sent messages
+  licenses: Map<string, LicenseRecord>;      // deviceId → subscription/trial state
+  usage: Map<string, UsageWindow>;           // deviceId → weekly free-tier usage
+  magicLinks: Map<string, MagicLink>;        // token → link
+  webSessions: Map<string, WebSession>;      // token → session
 }
 
 function freshState(): MemoryState {
@@ -75,6 +136,8 @@ function freshState(): MemoryState {
     devices: new Map(), links: new Map(), connections: new Map(),
     oplogs: new Map(), dedup: new Map(), seqs: new Map(),
     oauth: new Map(), outboxes: new Map(),
+    licenses: new Map(), usage: new Map(),
+    magicLinks: new Map(), webSessions: new Map(),
   };
 }
 
@@ -197,6 +260,74 @@ class MemoryConnectionsStore implements ConnectionsStore {
     this.s.outboxes.set(deviceId, box);
   }
   outbox(deviceId: string) { return this.s.outboxes.get(deviceId) ?? []; }
+
+  license(deviceId: string): LicenseRecord {
+    return this.s.licenses.get(deviceId) ?? {
+      deviceId, licenseKey: null, subscriptionActive: false, plan: null, trialStartedAt: null,
+    };
+  }
+  setLicense(deviceId: string, patch: Partial<LicenseRecord>): LicenseRecord {
+    const merged = { ...this.license(deviceId), ...patch, deviceId };
+    this.s.licenses.set(deviceId, merged);
+    return merged;
+  }
+  startTrial(deviceId: string, nowMs: number): LicenseRecord {
+    const rec = this.license(deviceId);
+    if (rec.trialStartedAt != null) return rec;   // idempotent — never re-opens
+    return this.setLicense(deviceId, { trialStartedAt: nowMs });
+  }
+
+  usage(deviceId: string): UsageWindow {
+    return this.s.usage.get(deviceId) ?? { weekStart: 0, count: 0 };
+  }
+  bumpUsage(deviceId: string, weekStartMs: number): UsageWindow {
+    const cur = this.usage(deviceId);
+    const next = cur.weekStart === weekStartMs
+      ? { weekStart: weekStartMs, count: cur.count + 1 }
+      : { weekStart: weekStartMs, count: 1 };
+    this.s.usage.set(deviceId, next);
+    return next;
+  }
+
+  purgeDevice(deviceId: string): void {
+    this.s.licenses.delete(deviceId);
+    this.s.usage.delete(deviceId);
+    this.s.oplogs.delete(deviceId);
+    this.s.dedup.delete(deviceId);
+    this.s.seqs.delete(deviceId);
+    this.s.outboxes.delete(deviceId);
+    for (const key of [...this.s.oauth.keys()]) {
+      if (key.startsWith(`${deviceId}:`)) this.s.oauth.delete(key);
+    }
+    for (const [id, c] of [...this.s.connections]) {
+      if (c.deviceId === deviceId) this.s.connections.delete(id);
+    }
+    for (const [token, d] of [...this.s.devices]) {
+      if (d.id === deviceId) this.s.devices.delete(token);
+    }
+  }
+
+  createMagicLink(email: string, nowMs: number): MagicLink {
+    const link: MagicLink = {
+      token: crypto.randomBytes(24).toString("base64url"),
+      email, expiresAt: nowMs + 15 * 60_000, used: false,
+    };
+    this.s.magicLinks.set(link.token, link);
+    return link;
+  }
+  consumeMagicLink(token: string, nowMs: number): string | null {
+    const link = this.s.magicLinks.get(token);
+    if (!link || link.used || link.expiresAt < nowMs) return null;
+    link.used = true;
+    return link.email;
+  }
+  createWebSession(email: string): WebSession {
+    const session: WebSession = { token: crypto.randomBytes(24).toString("base64url"), email, createdAt: Date.now() };
+    this.s.webSessions.set(session.token, session);
+    return session;
+  }
+  webSession(token: string): WebSession | null { return this.s.webSessions.get(token) ?? null; }
+  deleteWebSession(token: string): void { this.s.webSessions.delete(token); }
 }
 
 // globalThis singleton — survives route-module re-evaluation in `next dev`.

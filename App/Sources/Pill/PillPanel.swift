@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import OsmoShell
 
 /// The non-activating floating panel that hosts the pill. A small visible pill
 /// lives inside an oversized transparent window so expansion never reframes it.
@@ -11,8 +12,11 @@ final class PillPanel: NSPanel {
     var wantsKey = false
 
     init() {
+        // Oversized + transparent: the pill sits at the bottom and the expanded
+        // panel (who-picker + three takes + draft box + intent field) grows UP
+        // into the slack, so it never clips or reframes the window.
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 340),
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 620),
             styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
             backing: .buffered, defer: false)
         isFloatingPanel = true
@@ -41,8 +45,13 @@ final class PillHitTestView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         guard let panel else { return super.hitTest(point) }
-        // point is in window coords already (this view fills the window).
-        for rect in panel.interactiveRects where rect.contains(point) {
+        // `point` arrives in window BASE coords (bottom-left origin); the pill
+        // reports `interactiveRects` in SwiftUI `.global` (top-left origin). They
+        // must be reconciled by flipping Y — otherwise a click on the pill (which
+        // sits at the panel BOTTOM = small AppKit y) is tested against a
+        // top-anchored rect and misses, so the click passes through and the pill
+        // is completely non-interactive. This was THE freeze. See PillHitTestTests.
+        if PillHitTest.isInteractive(point: point, rects: panel.interactiveRects, panelHeight: bounds.height) {
             return super.hitTest(point)
         }
         return nil   // pass the click through to whatever is behind

@@ -98,6 +98,12 @@ public actor BackendClient {
                                              body: ["action": paused ? "pause" : "resume"])
     }
 
+    /// Re-run the deep (2-month) history import for an already-connected platform.
+    public func rebackfill(platform: Platform) async throws {
+        let _: OkEnvelope = try await authed("POST", "/api/connect/rebackfill",
+                                             body: ["platform": platform.rawValue])
+    }
+
     public func pull(since: String, limit: Int = 500) async throws -> WireBatch {
         try await authed("GET", "/api/sync/pull",
                          query: [("since", since.isEmpty ? "0" : since), ("limit", String(limit))])
@@ -110,6 +116,109 @@ public actor BackendClient {
             "text": text,
         ])
         return envelope.message
+    }
+
+    /// Public-profile bundle for one person (LinkedIn + web, server-side keys).
+    public func enrichPerson(_ enrichRequest: WireEnrichRequest) async throws -> WireEnrichment {
+        try await authed("POST", "/api/enrich/person",
+                         bodyData: try JSONEncoder.osmoWire.encode(enrichRequest))
+    }
+
+    // MARK: - Billing / entitlement
+
+    /// This device's backend id (needed to bind a verified entitlement).
+    public func deviceID() async throws -> String { try await registerIfNeeded().deviceId }
+
+    /// Fetch a fresh signed entitlement, optionally redeeming a license key.
+    public func validateLicense(licenseKey: String? = nil) async throws -> WireEntitlement {
+        try await authed("POST", "/api/license/validate",
+                         body: licenseKey.map { ["licenseKey": $0] } ?? [:])
+    }
+
+    /// Start the server-recorded trial; returns the fresh signed entitlement.
+    public func startServerTrial() async throws -> WireEntitlement {
+        try await authed("POST", "/api/trial/start", body: [:])
+    }
+
+    /// Dev/testing only: clear this device's subscription + trial (keyless mode).
+    public func resetLicense() async throws -> WireEntitlement {
+        try await authed("POST", "/api/license/reset", body: [:])
+    }
+
+    /// Create a checkout session → the URL the app opens to subscribe.
+    public func createCheckout(plan: String) async throws -> WireCheckout {
+        try await authed("POST", "/api/checkout/session", body: ["plan": plan])
+    }
+
+    /// Redeem a referral/promo code → the fresh signed entitlement.
+    public func redeemPromo(code: String) async throws -> WireEntitlement {
+        try await authed("POST", "/api/promo/redeem", body: ["code": code])
+    }
+
+    /// Remote feature flags + kill-switch (public config).
+    public func featureFlags() async throws -> [String: Bool] {
+        let wire: WireFlags = try await authed("GET", "/api/config/flags")
+        return wire.flags
+    }
+
+    /// Service health — drives the app's incident banner.
+    public func health() async throws -> WireHealth {
+        try await authed("GET", "/api/health")
+    }
+
+    // MARK: - Account
+
+    /// Link THIS device to a user account after Sign in with Apple. The server
+    /// finds-or-creates the user for this Apple identity, attaches the device,
+    /// merges any anonymous subscription, and returns the user + a fresh signed
+    /// entitlement reflecting the account. After this the same account +
+    /// subscription is shared with the website.
+    public func linkAccount(appleUserID: String, email: String?, fullName: String?) async throws -> WireAccountLink {
+        var body: [String: String] = ["appleUserID": appleUserID]
+        if let email, !email.isEmpty { body["email"] = email }
+        if let fullName, !fullName.isEmpty { body["fullName"] = fullName }
+        return try await authed("POST", "/api/account/link", body: body)
+    }
+
+    /// Permanently purge this device's server-side record (account deletion).
+    public func deleteAccount() async throws {
+        let _: OkEnvelope = try await authed("POST", "/api/account/delete", body: [:])
+    }
+
+    /// Send a feedback / bug report. `meta` carries opt-in diagnostics.
+    @discardableResult
+    public func sendFeedback(message: String, meta: String?) async throws -> Bool {
+        var body = ["message": message]
+        if let meta { body["meta"] = meta }
+        let env: OkEnvelope = try await authed("POST", "/api/feedback", body: body)
+        return env.ok
+    }
+
+    /// One attachment's raw bytes through the backend's binary media proxy —
+    /// not JSON, so it bypasses `authed<T: Decodable>` and returns `Data`
+    /// directly (same 401→re-register→retry-once policy as every other call).
+    public func fetchMedia(platform: Platform, messageRef: String,
+                           attachmentRef: String, mime: String? = nil) async throws -> Data {
+        var creds = try await registerIfNeeded()
+        var query: [(String, String)] = [
+            ("platform", platform.rawValue), ("messageRef", messageRef), ("attachmentRef", attachmentRef),
+        ]
+        if let mime { query.append(("mime", mime)) }
+
+        for attempt in 0..<2 {
+            let req = request("GET", "/api/media", query: query, token: creds.deviceToken)
+            let (data, response) = try await transport(req)
+            if response.statusCode == 401 && attempt == 0 {
+                dropCredentials()
+                creds = try await register()
+                continue
+            }
+            guard (200..<300).contains(response.statusCode) else {
+                throw BackendError.badStatus(response.statusCode)
+            }
+            return data
+        }
+        throw BackendError.notRegistered
     }
 
     // MARK: - SSE events
@@ -198,7 +307,14 @@ public actor BackendClient {
     private func authed<T: Decodable>(_ method: String, _ path: String,
                                       query: [(String, String)] = [],
                                       body: [String: String]? = nil) async throws -> T {
-        let bodyData = body.map { try! JSONSerialization.data(withJSONObject: $0) }
+        try await authed(method, path, query: query,
+                         bodyData: body.map { try! JSONSerialization.data(withJSONObject: $0) })
+    }
+
+    /// Same policy, raw JSON body — for request shapes richer than [String: String].
+    private func authed<T: Decodable>(_ method: String, _ path: String,
+                                      query: [(String, String)] = [],
+                                      bodyData: Data?) async throws -> T {
         var creds = try await registerIfNeeded()
 
         for attempt in 0..<2 {

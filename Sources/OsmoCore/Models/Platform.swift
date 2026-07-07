@@ -26,20 +26,15 @@ public enum Platform: String, Codable, Sendable, CaseIterable, Hashable {
     public var access: Access {
         switch self {
         case .imessage, .whatsapp: return .localData
-        case .gmail, .slack: return .officialAPI
-        case .linkedin, .x, .instagram: return .overlayOnly
+        case .gmail, .slack, .x: return .officialAPI   // X = official API v2 DMs (OAuth 2.0)
+        case .linkedin, .instagram: return .overlayOnly
         }
     }
 
-    /// Platforms Osmo lists but can't reliably connect yet — X's Unipile provider
-    /// is mid-refactor ("no longer maintained") and the official X API is paid with
-    /// no free tier. Shown as "Coming soon" rather than a connect flow that fails.
-    public var comingSoon: Bool {
-        switch self {
-        case .x: return true
-        default: return false
-        }
-    }
+    /// Platforms Osmo lists but can't reliably connect yet. None right now — X now
+    /// connects via the official X API v2 DM endpoints (OAuth 2.0 + PKCE), so it's
+    /// a real connect flow. Kept as a hook for any future not-yet-ready platform.
+    public var comingSoon: Bool { false }
 
     /// Whether Osmo can send directly (true one-click) vs. draft-and-insert.
     /// The red platforms permanently ban auto-send, so there the app inserts the

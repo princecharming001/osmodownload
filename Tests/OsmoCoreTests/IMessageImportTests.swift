@@ -26,7 +26,11 @@ struct IMessageImportTests {
             try db.execute(sql: """
                 CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT,
                                       handle_id INTEGER, is_from_me INTEGER, date INTEGER,
-                                      date_read INTEGER, attributedBody BLOB)
+                                      date_read INTEGER, attributedBody BLOB,
+                                      associated_message_type INTEGER DEFAULT 0,
+                                      associated_message_guid TEXT,
+                                      associated_message_emoji TEXT,
+                                      thread_originator_guid TEXT)
                 """)
             try db.execute(sql: "CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER)")
 

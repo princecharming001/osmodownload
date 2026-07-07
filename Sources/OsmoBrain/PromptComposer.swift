@@ -40,6 +40,8 @@ public enum PromptComposer {
         """
     }()
 
+    /// `now` MUST be the same instant handed to `ThreadRead.read` (OsmoBrain.plan
+    /// guarantees this) — otherwise the idle math and the moment lines disagree.
     public static func compose(relationshipLabel: String,
                                goalText: String?,
                                goalKind: GoalKind,
@@ -50,11 +52,16 @@ public enum PromptComposer {
                                transcript: [ThreadTurn],
                                userIntent: String?,
                                strategy: StrategyPlan,
-                               read: ThreadRead) -> ComposedPrompt {
+                               read: ThreadRead,
+                               now: Date = Date(),
+                               partnerBackground: String? = nil) -> ComposedPrompt {
         var s: [String] = []
 
         s.append("WHO YOU'RE TEXTING")
         s.append("They are your \(relationshipLabel).")
+        if let bg = partnerBackground, !bg.isEmpty {
+            s.append("WHO THEY ARE: \(bg)")
+        }
         s.append(strategy.register.guidance)
 
         if let goalText, !goalText.trimmingCharacters(in: .whitespaces).isEmpty {
@@ -78,12 +85,26 @@ public enum PromptComposer {
         s.append("\nTHE MOVE (this message is \(movePhrase(strategy.move)))")
         for tech in strategy.techniques { s.append("- \(tech.directive)") }
 
-        // Read the room: who owes, whether the user is over-carrying, how long
-        // it's been quiet — the difference between a natural reply and a needy one.
+        // One read of the other person feeds both the timing section and the
+        // per-person style directives below.
+        let partner = PartnerProfile.read(transcript)
+
+        // Read the room: who owes and whether the user is over-carrying — the
+        // difference between a natural reply and a needy one. (All clock-shaped
+        // silence interpretation lives in `timing` — single owner, no contradictions.)
         let state = threadState(read)
         if !state.isEmpty {
             s.append("\nREAD OF WHERE THIS STANDS")
             for line in state { s.append("- \(line)") }
+        }
+
+        // WHEN this lands: their reply rhythm vs the current silence, their
+        // active hours vs right now, and odd-hour cautions — the "knows when,
+        // not just what" half of the product.
+        let when = timing(read: read, partner: partner, transcript: transcript, now: now)
+        if !when.isEmpty {
+            s.append("\nWHEN THIS LANDS")
+            for line in when { s.append("- \(line)") }
         }
 
         // How the USER themselves texts — the draft must sound like them.
@@ -91,6 +112,14 @@ public enum PromptComposer {
         if !voice.isEmpty {
             s.append("\nYOUR OWN TEXTING VOICE (sound like this)")
             for line in voice { s.append("- \(line)") }
+        }
+
+        // How THIS PERSON communicates, read from their whole history — the
+        // durable per-person register (the last-message calibration below handles
+        // the immediate moment; this handles who they are).
+        if !partner.directives.isEmpty {
+            s.append("\nHOW THEY COMMUNICATE (calibrate to this person)")
+            for line in partner.directives { s.append("- \(line)") }
         }
 
         let cal = calibration(read)
@@ -130,20 +159,100 @@ public enum PromptComposer {
             .joined(separator: "\n")
     }
 
-    /// Relational state directives — attachment-aware, so the draft doesn't chase.
+    /// Relational state directives — attachment psychology only. ALL clock-shaped
+    /// silence interpretation lives in `timing` (single owner, so the two sections
+    /// can never contradict each other about the same quiet).
     static func threadState(_ read: ThreadRead) -> [String] {
         var lines: [String] = []
         if read.userCarrying {
             lines.append("You already sent the last message(s) and they've gone quiet. Do NOT double-text harder, over-warm, guilt, or test them. Keep it light and low-pressure, and give them an easy way back in.")
         }
-        if let idle = read.idle {
-            let days = idle / 86_400
-            if days >= 7 {
-                lines.append("This thread's been quiet ~\(Int(days)) days — acknowledge the gap lightly and honestly; don't pretend no time passed or over-apologize for it.")
-            } else if days >= 2 {
+        return lines
+    }
+
+    /// The timing read — WHEN people send messages, folded into the drafting
+    /// logic. Owns every clock-shaped judgment: the current silence measured
+    /// against THEIR reply rhythm (not a fixed threshold), what tempo to expect
+    /// from them, whether this moment is inside their active window, and odd-hour
+    /// wording cautions. Every line is gated so it only fires when honest.
+    static func timing(read: ThreadRead, partner: PartnerProfile,
+                       transcript: [ThreadTurn], now: Date) -> [String] {
+        var lines: [String] = []
+        // True once a silence line has framed their rhythm — the tempo line then
+        // stays quiet instead of citing the same median twice.
+        var framedRhythm = false
+
+        // 1. Silence. Rhythm-aware ONLY when the quiet is theirs to break (the
+        //    user sent last — ball == .mine); when THEY sent last, the silence is
+        //    the user's, and claiming "they've gone quiet" would be false.
+        if read.ball != .empty, let idle = read.idle, idle > 0 {
+            let days = Int(idle / 86_400)
+            let median = read.ball == .mine ? partner.medianReplySeconds : nil
+            if idle >= 7 * 86_400 {
+                // Past a week, ratios stop meaning anything — days phrasing.
+                lines.append("This thread's been quiet ~\(days) days — acknowledge the gap lightly and honestly; don't pretend no time passed or over-apologize for it.")
+            } else if let median, median > 0 {
+                let ratio = idle / median
+                let gap = PartnerProfile.humanGap(median)
+                if ratio >= 3, idle >= 86_400 {
+                    // The absolute floor keeps a fast replier's 3-hour nap from
+                    // reading as abandonment (ratio alone would scream 36x).
+                    framedRhythm = true
+                    if ratio >= 10 {
+                        lines.append("They've been quiet far past their usual reply rhythm (typically ~\(gap)) — a light, no-pressure re-open is warranted.")
+                    } else {
+                        lines.append("They've been quiet ~\(Int(ratio.rounded()))x longer than their usual reply rhythm (typically ~\(gap)) — a light, no-pressure re-open is warranted.")
+                    }
+                } else if idle >= 2 * 86_400 {
+                    framedRhythm = true
+                    if ratio < 1.5 {
+                        lines.append("It's been ~\(days) days, but that's within their normal rhythm (they typically take ~\(gap)) — don't read into it or write like there's a gap to acknowledge.")
+                    } else {
+                        lines.append("A bit longer than their usual rhythm — a light re-entry works; don't make the gap a thing.")
+                    }
+                }
+                // else: no silence line at all — under the floors, quiet is noise.
+            } else if idle >= 2 * 86_400 {
+                // No rhythm data (or the quiet is the user's own): the honest
+                // sender-agnostic fallback, unchanged from before.
                 lines.append("It's been a couple days — a light re-entry beats acting like it's mid-conversation.")
             }
         }
+
+        // 2. Reply-tempo expectation — only for genuinely slow repliers, and only
+        //    when the silence lines didn't already frame their rhythm.
+        if !framedRhythm, let median = partner.medianReplySeconds, median >= 1800 {
+            lines.append("They typically reply in ~\(PartnerProfile.humanGap(median)) — don't write anything that begs a faster answer.")
+        }
+
+        // 3. Their active window vs right now — reply expectation only (the
+        //    moment line below owns time-reference wording).
+        if let block = partner.activeBlock {
+            let nowBlock = PartnerProfile.hourBlock(Calendar.current.component(.hour, from: now))
+            if nowBlock == block {
+                lines.append("This lands in their usual active window (\(block)) — natural timing.")
+            } else {
+                lines.append("They're usually active \(block); it's \(nowBlock) now — don't expect a fast reply, and don't write anything that presumes one.")
+            }
+        }
+
+        // 4. The current moment — wording cautions for odd hours.
+        let hour = Calendar.current.component(.hour, from: now)
+        if hour >= 23 || hour < 5 {
+            lines.append("It's the middle of the night — don't propose plans for 'tonight' or 'today' ambiguously; if the odd hour is noticeable, acknowledging it naturally is fine.")
+        } else if hour < 7 {
+            lines.append("It's very early in the morning — don't write as if their day is already underway.")
+        }
+
+        // 5. THEIR last message's send hour — energy context, only while fresh.
+        if read.ball == .theirs, let idle = read.idle, idle < 8 * 3600,
+           let lastTheirs = transcript.last(where: { !$0.fromMe })?.sentAt {
+            let h = Calendar.current.component(.hour, from: lastTheirs)
+            if h >= 23 || h < 5 {
+                lines.append("Their last message was sent late at night — read the energy as end-of-day, not peak.")
+            }
+        }
+
         return lines
     }
 

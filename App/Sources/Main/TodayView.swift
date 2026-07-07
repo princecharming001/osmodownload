@@ -1,5 +1,6 @@
 import SwiftUI
 import OsmoCore
+import OsmoBrain
 
 /// The daily digest — grouped queue cards (Owed / Follow-ups / Goal nudges /
 /// Reconnect), each opening the thread with a pre-fired suggestion. Empty state
@@ -7,10 +8,15 @@ import OsmoCore
 struct TodayView: View {
     @EnvironmentObject var model: AppModel
 
+    @AppStorage("winBackDismissed") private var winBackDismissed = false
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: DS.Space.xl) {
                 header
+                SetupChecklistCard()
+                KeyPeopleCard()
+                winBackCard
                 if model.queue.isEmpty {
                     if model.isMockMode {
                         EmptyStateView(
@@ -25,6 +31,7 @@ struct TodayView: View {
                     }
                 } else {
                     notificationNudge
+                    followupLane
                     ForEach(groups, id: \.title) { group in
                         section(group.title, cards: group.cards)
                     }
@@ -36,11 +43,61 @@ struct TodayView: View {
         }
     }
 
+    /// A gentle win-back for someone whose trial lapsed — dismissible, once.
+    @ViewBuilder private var winBackCard: some View {
+        if model.trialLapsed && !winBackDismissed {
+            Card {
+                HStack(spacing: DS.Space.m) {
+                    Image(systemName: "sparkles").font(.system(size: 16)).foregroundStyle(DS.Colors.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Miss unlimited drafts?").font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
+                        Text("Your trial ended — pick up Pro anytime to unlock the Read, autodraft, and more.")
+                            .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                    }
+                    Spacer()
+                    PillButton("See plans") { model.activeSheet = .account }
+                    Button { winBackDismissed = true } label: {
+                        Image(systemName: "xmark").font(.system(size: 10, weight: .medium))
+                    }.buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
+                }
+            }
+        }
+    }
+
     private var header: some View {
         VStack(alignment: .leading, spacing: DS.Space.xs) {
             Eyebrow(greeting)
             Text("Today").font(DS.Typography.display).foregroundStyle(DS.Colors.ink)
+            if model.newInbound24h > 0 || model.activeThreads7d > 0 {
+                Text("You've got \(model.newInbound24h) new message\(model.newInbound24h == 1 ? "" : "s") and \(model.activeThreads7d) active conversation\(model.activeThreads7d == 1 ? "" : "s").")
+                    .font(DS.Typography.body).foregroundStyle(DS.Colors.ink.opacity(0.75))
+            }
+            if let briefing {
+                Text(briefing).font(DS.Typography.body).foregroundStyle(DS.Colors.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            AskOsmoBox()
+                .padding(.top, DS.Space.s)
         }
+    }
+
+    /// The morning briefing, one honest sentence: what needs you first, computed
+    /// locally — no model call, no waiting.
+    private var briefing: String? {
+        let byKind = Dictionary(grouping: model.queue, by: \.kind)
+        var parts: [String] = []
+        if let r = byKind[.reply], !r.isEmpty {
+            let names = r.prefix(2).map(\.personName).joined(separator: " and ")
+            parts.append("\(r.count == 1 ? names + " is" : "\(r.count) people are") waiting on you\(r.count > 1 ? " — \(names) first" : "")")
+        }
+        if !model.dueFollowups.isEmpty {
+            parts.append("\(model.dueFollowups.count) follow-up\(model.dueFollowups.count == 1 ? "" : "s") came due")
+        }
+        if let n = byKind[.goalNudge]?.count, n > 0 {
+            parts.append("\(n) worth a nudge toward your goals")
+        }
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: " · ") + "."
     }
 
     @ViewBuilder private var notificationNudge: some View {
@@ -59,6 +116,19 @@ struct TodayView: View {
         }
     }
 
+    /// Armed "nudge me if no reply" reminders that just came due — the top of
+    /// the ritual: these are asks YOU made of Osmo.
+    @ViewBuilder private var followupLane: some View {
+        if !model.dueFollowups.isEmpty {
+            VStack(alignment: .leading, spacing: DS.Space.s) {
+                Eyebrow("Follow-ups due — still no reply")
+                ForEach(model.dueFollowups, id: \.threadID) { f in
+                    FollowupRow(followup: f)
+                }
+            }
+        }
+    }
+
     private func section(_ title: String, cards: [QueueCard]) -> some View {
         VStack(alignment: .leading, spacing: DS.Space.s) {
             Eyebrow(title)
@@ -69,10 +139,11 @@ struct TodayView: View {
     private var groups: [(title: String, cards: [QueueCard])] {
         let byKind = Dictionary(grouping: model.queue, by: \.kind)
         var out: [(String, [QueueCard])] = []
-        if let r = byKind[.reply] { out.append(("Owed replies", r)) }
-        if let r = byKind[.leftOnRead] { out.append(("Follow-ups", r)) }
-        if let r = byKind[.goalNudge] { out.append(("Goal nudges", r)) }
-        if let r = byKind[.reconnect] { out.append(("Reconnect", r)) }
+        // The pitch's morning ritual, in its words: owe / gone quiet / worth a nudge.
+        if let r = byKind[.reply] { out.append(("You owe a reply", r)) }
+        if let r = byKind[.leftOnRead] { out.append(("Gone quiet on you", r)) }
+        if let r = byKind[.goalNudge] { out.append(("Worth a nudge", r)) }
+        if let r = byKind[.reconnect] { out.append(("Drifting — reconnect", r)) }
         return out
     }
 
@@ -93,24 +164,433 @@ struct QueueCardRow: View {
 
     var body: some View {
         Card {
-            HStack(spacing: DS.Space.m) {
+            HStack(alignment: .top, spacing: DS.Space.m) {
                 AvatarView(name: card.personName, size: 38)
-                VStack(alignment: .leading, spacing: 2) {
+                VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: DS.Space.s) {
                         Text(card.personName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
                         Chip(card.platform.displayName, systemImage: card.platform.symbolName)
+                        verdictChip
+                        urgencyChip
+                        if model.isHighPriority(card.threadID) {
+                            Label("Priority", systemImage: "flame.fill")
+                                .font(DS.Typography.eyebrow)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .foregroundStyle(DS.Colors.red)
+                                .background(DS.Colors.red.opacity(0.10), in: Capsule())
+                        }
+                        if draftReady {
+                            Label("Draft ready", systemImage: "sparkles")
+                                .font(DS.Typography.eyebrow)
+                                .padding(.horizontal, 6).padding(.vertical, 1)
+                                .foregroundStyle(DS.Colors.accent)
+                                .background(DS.Colors.accent.opacity(0.10), in: Capsule())
+                        }
                     }
-                    Text(card.reason).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted).lineLimit(1)
+                    // Memory jogger: what was actually said, and when.
+                    if let jogger {
+                        Text(jogger).font(DS.Typography.caption).foregroundStyle(DS.Colors.ink.opacity(0.75))
+                            .lineLimit(2)
+                    }
+                    // The brief: AI-read history + long-term context (cached), or
+                    // the deterministic goal/memory/trend line. A quiet accent
+                    // rule marks it as a read, not a quote — no icon needed.
+                    if let line = model.insightByThread[card.threadID] ?? model.insightLine(forThread: card.threadID) {
+                        HStack(alignment: .top, spacing: DS.Space.s) {
+                            Rectangle().fill(DS.Colors.accent.opacity(0.4)).frame(width: 2)
+                            Text(line).font(DS.Typography.caption).italic().foregroundStyle(DS.Colors.muted)
+                                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    followUpOneTap
                 }
                 Spacer()
                 PillButton("Draft") { openThread() }
             }
         }
+        .task { model.ensureIntel(forThread: card.threadID) }
+    }
+
+    /// Today/overdue only — `.soon` doesn't earn a card-level chip (the flame
+    /// above already signals general priority; this reserves red/amber for
+    /// what's genuinely pressing).
+    @ViewBuilder private var urgencyChip: some View {
+        let urgency = model.intel(forThread: card.threadID).urgency
+        if urgency == .today || urgency == .overdue {
+            IntelChip(kind: .urgency(urgency!, reason: model.intel(forThread: card.threadID).urgencyReason))
+        }
+    }
+
+    /// True once an autodraft has actually landed for this thread (isAuto is
+    /// only ever set true by the autodraft path — a user save always clears it).
+    private var draftReady: Bool {
+        (try? model.store.draftRecord(forThread: card.threadID))?.isAuto == true
+    }
+
+    /// One tap to arm the same "nudge if no reply" reminder the thread's
+    /// deterministic deadline read implies — skipped once a reminder is already
+    /// pending or due, so this never offers to arm what's already armed.
+    @ViewBuilder private var followUpOneTap: some View {
+        if let due = model.suggestedFollowUpBy(forThread: card.threadID),
+           !model.pendingFollowups.contains(where: { $0.threadID == card.threadID }),
+           !model.dueFollowups.contains(where: { $0.threadID == card.threadID }) {
+            Button {
+                model.armFollowup(thread: card.threadID, after: due.timeIntervalSinceNow)
+            } label: {
+                Label("Follow up by \(Self.weekdayFormatter.string(from: due))", systemImage: "bell")
+                    .font(DS.Typography.eyebrow)
+            }
+            .buttonStyle(.plain).foregroundStyle(DS.Colors.accent)
+        }
+    }
+
+    static let weekdayFormatter: DateFormatter = {
+        let f = DateFormatter(); f.dateFormat = "EEE"; return f
+    }()
+
+    /// Their (or your) last words, quoted — the fastest possible re-orientation.
+    private var jogger: String? {
+        guard let last = try? model.store.lastMessage(inThread: card.threadID) else { return nil }
+        let text = previewLine(last)
+        let when = RelativeDateTimeFormatter().localizedString(for: last.sentAt, relativeTo: Date())
+        return last.isFromMe ? "You: “\(text)” · \(when)" : "“\(text)” · \(when)"
+    }
+
+    /// The explicit timing call, right on the card — nudge or lay back.
+    private var verdict: ReachOutVerdict { model.reachOutVerdict(forThread: card.threadID) }
+
+    private var verdictChip: some View {
+        let hot = verdict.kind == .goodTime || verdict.kind == .yourTurn
+        return Text(verdict.headline)
+            .font(DS.Typography.eyebrow)
+            .padding(.horizontal, 6).padding(.vertical, 1)
+            .foregroundStyle(hot ? DS.Colors.accent : DS.Colors.muted)
+            .background((hot ? DS.Colors.accent : DS.Colors.muted).opacity(0.12), in: Capsule())
     }
 
     private func openThread() {
         model.focusedThreadID = card.threadID
         model.section = .inbox
         model.selectedThreadID = card.threadID
+    }
+}
+
+/// A due follow-up: person + how long overdue, one tap to draft the nudge, one
+/// to let it go (clear the reminder).
+struct FollowupRow: View {
+    @EnvironmentObject var model: AppModel
+    let followup: ThreadFollowup
+
+    var body: some View {
+        Card {
+            HStack(spacing: DS.Space.m) {
+                Image(systemName: "bell.badge").font(.system(size: 14)).foregroundStyle(DS.Colors.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(title).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink).lineLimit(1)
+                    Text("You asked to be nudged if they didn't reply — they haven't.")
+                        .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                }
+                Spacer()
+                Button("Let it go") {
+                    try? model.store.clearFollowup(thread: followup.threadID)
+                    model.reload()
+                }
+                .font(DS.Typography.captionEm).buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
+                PillButton("Draft the nudge") {
+                    model.focusedThreadID = followup.threadID
+                    model.section = .inbox
+                    model.selectedThreadID = followup.threadID
+                }
+            }
+        }
+    }
+
+    private var title: String {
+        guard let thread = try? model.store.thread(id: followup.threadID) else { return "Conversation" }
+        let members = (try? model.store.contacts(inThread: thread.id)) ?? []
+        return threadTitle(thread, members: members)
+    }
+}
+
+/// "Ask Osmo" — a grounded local Q&A chat. Answers come only from the user's own
+/// messages + people directory. A real chat surface: right-aligned questions,
+/// orb-avatared answers, an animated thinking indicator, and suggested prompts
+/// on the empty state. Session-scoped (clears on relaunch).
+struct AskOsmoBox: View {
+    @EnvironmentObject var model: AppModel
+    @State private var question = ""
+    @State private var pending: String?        // the just-asked question, shown while busy
+    @FocusState private var focused: Bool
+
+    /// A few grounded starters — the last one references a real recent person so
+    /// the suggestion feels personal, not canned.
+    private var suggestions: [String] {
+        var s = ["Who's waiting on me?", "Who am I overdue to reach out to?"]
+        if let name = model.people.first?.name.split(separator: " ").first.map(String.init) {
+            s.append("What did \(name) and I last talk about?")
+        } else {
+            s.append("Summarize what's happened this week")
+        }
+        return s
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: DS.Space.m) {
+            if model.askExchanges.isEmpty && pending == nil {
+                emptyState
+            } else {
+                transcript
+            }
+            inputBar
+        }
+        .padding(DS.Space.m)
+        .background(DS.Colors.card.opacity(0.55),
+                    in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+            .stroke(DS.Colors.hairline, lineWidth: 1))
+        .animation(DS.Motion.standard, value: model.askExchanges.count)
+        .animation(DS.Motion.standard, value: pending)
+        .onChange(of: model.askBusy) { _, busy in if !busy { pending = nil } }
+    }
+
+    // MARK: Empty state
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: DS.Space.s) {
+            HStack(spacing: DS.Space.s) {
+                AskOrb(mode: .idle, size: 24)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Ask Osmo").font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
+                    Text("About your conversations and people — answered from what's on your Mac.")
+                        .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(suggestions, id: \.self) { s in
+                    Button { ask(s) } label: {
+                        HStack(spacing: DS.Space.s) {
+                            Image(systemName: "sparkle").font(.system(size: 10)).foregroundStyle(DS.Colors.accent)
+                            Text(s).font(DS.Typography.caption).foregroundStyle(DS.Colors.ink)
+                            Spacer(minLength: 0)
+                            Image(systemName: "arrow.up.right").font(.system(size: 9)).foregroundStyle(DS.Colors.muted)
+                        }
+                        .padding(.horizontal, DS.Space.s).padding(.vertical, 7)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(DS.Colors.paper, in: RoundedRectangle(cornerRadius: DS.Radius.m, style: .continuous))
+                        .overlay(RoundedRectangle(cornerRadius: DS.Radius.m, style: .continuous)
+                            .stroke(DS.Colors.hairlineSoft, lineWidth: 1))
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    // MARK: Transcript
+
+    private var transcript: some View {
+        VStack(alignment: .leading, spacing: DS.Space.m) {
+            ForEach(Array(model.askExchanges.enumerated()), id: \.offset) { _, ex in
+                userBubble(ex.q)
+                answerRow(ex.a)
+            }
+            if let pending {
+                userBubble(pending)
+                thinkingRow
+            }
+        }
+    }
+
+    private func userBubble(_ text: String) -> some View {
+        HStack {
+            Spacer(minLength: 44)
+            Text(text).font(DS.Typography.body).foregroundStyle(.white)
+                .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)
+                .background(DS.Colors.accent, in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
+                .textSelection(.enabled)
+        }
+        .transition(.move(edge: .trailing).combined(with: .opacity))
+    }
+
+    private func answerRow(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: DS.Space.s) {
+            AskOrb(mode: .idle, size: 20)
+            Text(text).font(DS.Typography.body).foregroundStyle(DS.Colors.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+                .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(DS.Colors.paper, in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous)
+                    .stroke(DS.Colors.hairlineSoft, lineWidth: 1))
+        }
+        .transition(.opacity)
+    }
+
+    private var thinkingRow: some View {
+        HStack(alignment: .center, spacing: DS.Space.s) {
+            AskOrb(mode: .thinking, size: 20)
+            AskThinkingDots()
+                .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s + 3)
+                .background(DS.Colors.paper, in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous)
+                    .stroke(DS.Colors.hairlineSoft, lineWidth: 1))
+            Spacer(minLength: 0)
+        }
+        .transition(.opacity)
+    }
+
+    // MARK: Input
+
+    private var inputBar: some View {
+        HStack(spacing: DS.Space.s) {
+            TextField("Ask about your conversations or contacts…", text: $question)
+                .textFieldStyle(.plain).font(DS.Typography.body).focused($focused)
+                .onSubmit { ask(question) }
+            if canSend {
+                Button { ask(question) } label: {
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 18))
+                }.buttonStyle(.plain).foregroundStyle(DS.Colors.accent)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)
+        .background(DS.Colors.paper, in: Capsule())
+        .overlay(Capsule().stroke(canSend ? DS.Colors.accent.opacity(0.5) : DS.Colors.hairline, lineWidth: 1))
+        .animation(DS.Motion.standard, value: canSend)
+    }
+
+    private var canSend: Bool {
+        !model.askBusy && !question.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    private func ask(_ text: String) {
+        let q = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !q.isEmpty, !model.askBusy else { return }
+        pending = q
+        model.askOsmo(q)
+        question = ""
+    }
+}
+
+/// A three-dot "typing" indicator — the classic chat thinking animation, staggered.
+struct AskThinkingDots: View {
+    @State private var animating = false
+    var body: some View {
+        HStack(spacing: 5) {
+            ForEach(0..<3, id: \.self) { i in
+                Circle().fill(DS.Colors.muted)
+                    .frame(width: 6, height: 6)
+                    .opacity(animating ? 1 : 0.3)
+                    .scaleEffect(animating ? 1 : 0.7)
+                    .animation(.easeInOut(duration: 0.6).repeatForever().delay(Double(i) * 0.18),
+                               value: animating)
+            }
+        }
+        .onAppear { animating = true }
+        .accessibilityLabel("Osmo is thinking")
+    }
+}
+
+/// Post-onboarding "get set up" checklist — shows until every step is done or the
+/// user dismisses it. Each unfinished row jumps to the action.
+struct SetupChecklistCard: View {
+    @EnvironmentObject var model: AppModel
+    @AppStorage("setupChecklistDismissed") private var dismissed = false
+
+    private var connected: Bool { model.connections.phases.values.contains { $0.isActive } }
+    private var items: [(label: String, done: Bool, act: () -> Void)] {
+        [
+            ("Sign in to save your account", model.account.isSignedIn, { model.activeSheet = .account }),
+            ("Connect a platform", connected, { model.section = .connections }),
+            ("Grant Accessibility for the pill", AXPermission.isTrusted, { AXPermission.promptIfNeeded() }),
+            ("Turn on reply reminders", model.notifier.authorized, { Task { await model.notifier.requestAuthorization() } }),
+        ]
+    }
+
+    var body: some View {
+        let done = items.filter(\.done).count
+        if !dismissed && done < items.count {
+            Card {
+                VStack(alignment: .leading, spacing: DS.Space.s) {
+                    HStack {
+                        Text("Get the most out of Osmo").font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
+                        Spacer()
+                        Text("\(done)/\(items.count)").font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                        Button { dismissed = true } label: {
+                            Image(systemName: "xmark").font(.system(size: 10, weight: .medium))
+                        }.buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
+                    }
+                    ForEach(Array(items.enumerated()), id: \.offset) { _, item in
+                        Button(action: item.act) {
+                            HStack(spacing: DS.Space.s) {
+                                Image(systemName: item.done ? "checkmark.circle.fill" : "circle")
+                                    .foregroundStyle(item.done ? DS.Colors.green : DS.Colors.hairline)
+                                Text(item.label).font(DS.Typography.body)
+                                    .foregroundStyle(item.done ? DS.Colors.muted : DS.Colors.ink)
+                                    .strikethrough(item.done)
+                                Spacer()
+                                if !item.done {
+                                    Image(systemName: "chevron.right").font(.system(size: 10)).foregroundStyle(DS.Colors.muted)
+                                }
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain).disabled(item.done)
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// After the first sync, let the user flag who matters most — picked from REAL
+/// synced people (not free text). Feeds `onboardingProfile.keyPeople` → prompts.
+struct KeyPeopleCard: View {
+    @EnvironmentObject var model: AppModel
+    @AppStorage("keyPeopleAsked") private var asked = false
+    @State private var selected: Set<String> = []
+
+    var body: some View {
+        let candidates = Array(model.people.prefix(12))
+        if !asked, model.onboardingProfile.keyPeople.isEmpty, !candidates.isEmpty {
+            Card {
+                VStack(alignment: .leading, spacing: DS.Space.s) {
+                    Text("Who matters most?").font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
+                    Text("Pick a few — Osmo prioritizes them and tailors your drafts. Straight from your real conversations.")
+                        .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], alignment: .leading, spacing: 6) {
+                        ForEach(candidates) { p in
+                            let on = selected.contains(p.name)
+                            Button {
+                                if on { selected.remove(p.name) } else { selected.insert(p.name) }
+                            } label: {
+                                HStack(spacing: 5) {
+                                    AvatarView(name: p.name, data: p.avatar, size: 18)
+                                    Text(p.name).font(DS.Typography.caption).foregroundStyle(DS.Colors.ink).lineLimit(1)
+                                    if on { Image(systemName: "checkmark").font(.system(size: 8, weight: .bold)).foregroundStyle(DS.Colors.accent) }
+                                }
+                                .padding(.horizontal, 8).padding(.vertical, 5)
+                                .background(on ? DS.Colors.accent.opacity(0.12) : DS.Colors.card, in: Capsule())
+                                .overlay(Capsule().stroke(on ? DS.Colors.accent.opacity(0.5) : DS.Colors.hairline, lineWidth: 1))
+                                .contentShape(Capsule())
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                    HStack {
+                        Button("Not now") { asked = true }
+                            .buttonStyle(.plain).font(DS.Typography.captionEm).foregroundStyle(DS.Colors.muted)
+                        Spacer()
+                        PillButton(selected.isEmpty ? "Save" : "Save \(selected.count)", kind: .quiet) {
+                            model.onboardingProfile.keyPeople = Array(selected)
+                            asked = true
+                        }.disabled(selected.isEmpty)
+                    }
+                }
+            }
+        }
     }
 }

@@ -90,6 +90,19 @@ public struct GeneratorRouter: Generator {
 /// from disk (see the app's config loader); defaults point at a local dev proxy
 /// so `npm run dev` in `web/` makes the app fully live. When the proxy is
 /// unreachable or unset, the router falls back to the keyless mock.
+/// The backend origin baked into the app. Debug builds point at the local dev
+/// server (so `npm run dev` in `web/` works); SHIPPED (Release) builds point at
+/// the hosted production backend — this is what stops a downloaded app from
+/// talking to localhost. Override at runtime via Settings if needed.
+public enum OsmoBackend {
+    #if DEBUG
+    public static let base = "http://localhost:3000"
+    #else
+    public static let base = "https://api.leftonread.in"
+    #endif
+    public static var defaultProxyURL: String { base + "/api/suggest" }
+}
+
 public struct RuntimeConfig: Codable, Sendable, Equatable {
     public var proxyURL: String
     public var authToken: String
@@ -98,10 +111,10 @@ public struct RuntimeConfig: Codable, Sendable, Equatable {
     /// old persisted configs still decode; defaults to the local dev server.
     public var backendURL: String?
 
-    public init(proxyURL: String = "http://localhost:3000/api/suggest",
+    public init(proxyURL: String = OsmoBackend.defaultProxyURL,
                 authToken: String = "local-dev",
                 model: String = "claude-sonnet-5",
-                backendURL: String? = "http://localhost:3000") {
+                backendURL: String? = OsmoBackend.base) {
         self.proxyURL = proxyURL
         self.authToken = authToken
         self.model = model
@@ -110,7 +123,7 @@ public struct RuntimeConfig: Codable, Sendable, Equatable {
 
     /// Resolved backend origin (falls back to the local dev server).
     public var backendOrigin: URL {
-        URL(string: backendURL ?? "http://localhost:3000") ?? URL(string: "http://localhost:3000")!
+        URL(string: backendURL ?? OsmoBackend.base) ?? URL(string: OsmoBackend.base)!
     }
 
     public var liveGenerator: Generator? {

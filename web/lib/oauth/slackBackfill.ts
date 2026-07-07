@@ -4,12 +4,46 @@
 
 import { getStore } from "../connections/memoryStore";
 import { publish } from "../connections/events";
-import type { WireContact, WireMessage, WireThread } from "../connections/types";
+import type { WireAttachment, WireContact, WireMessage, WireThread } from "../connections/types";
+import { backfillScope } from "../connections/scope";
+import { kindFromMime } from "../connections/attachments";
+
+interface SlackFile {
+  id?: string;
+  name?: string;
+  mimetype?: string;
+  filetype?: string;
+  size?: number;
+  url_private?: string;
+}
+
+/** Slack file shares → our wire shape. `remoteRef` carries the `url_private`
+    itself (not just an id) — that URL, fetched with the same bearer token
+    used here, IS how the media route re-downloads the bytes later. */
+export function readSlackAttachments(files: SlackFile[] | undefined): WireAttachment[] | undefined {
+  if (!files || files.length === 0) return undefined;
+  const out: WireAttachment[] = [];
+  for (const f of files) {
+    if (!f.id || !f.url_private) continue;
+    out.push({
+      id: f.id, kind: kindFromMime(f.filetype, f.mimetype),
+      mimeType: f.mimetype ?? null, filename: f.name ?? null,
+      sizeBytes: typeof f.size === "number" ? f.size : null,
+      remoteRef: f.url_private,
+    });
+  }
+  return out.length > 0 ? out : undefined;
+}
 
 const MAX_DMS = 25;
 const PER_PAGE = 100;
-const MAX_PER_DM = 300;                       // ~2 months of an active DM
-const OLDEST_TS = () => String(Math.floor(Date.now() / 1000) - 60 * 24 * 3600);  // 60 days ago
+const MAX_PER_DM = 300;                       // per-DM ceiling
+// Window start from the configured scope (60d full / 15d demo).
+const OLDEST_TS = () => String(Math.floor((Date.now() - backfillScope().sinceMs) / 1000));
+// Demo scope also caps the DM count. Slack's conversations.list isn't
+// recency-ordered, so this takes the first N returned — fine for a demo, and
+// DMs that are empty inside the window don't surface in the inbox anyway.
+const dmCap = () => Math.min(MAX_DMS, backfillScope().maxConversations ?? MAX_DMS);
 
 async function slack<T = Record<string, unknown>>(method: string, token: string, params: Record<string, string> = {}): Promise<T> {
   const q = new URLSearchParams(params);
@@ -20,7 +54,7 @@ async function slack<T = Record<string, unknown>>(method: string, token: string,
 }
 
 export async function backfillSlack(
-  deviceId: string, connectionId: string, userToken: string, myUserId: string,
+  deviceId: string, connectionId: string, userToken: string, myUserId: string, teamId?: string,
 ): Promise<void> {
   const store = getStore();
   try {
@@ -40,25 +74,25 @@ export async function backfillSlack(
     } catch { /* names optional */ }
 
     const ims = await slack<{ channels?: { id: string; user?: string }[] }>(
-      "conversations.list", userToken, { types: "im", limit: String(MAX_DMS) });
+      "conversations.list", userToken, { types: "im", limit: String(dmCap()) });
 
     const contacts = new Map<string, WireContact>();
     const threads = new Map<string, WireThread>();
     const messages: WireMessage[] = [];
 
     const oldest = OLDEST_TS();
-    for (const im of ims.channels ?? []) {
+    for (const im of (ims.channels ?? []).slice(0, dmCap())) {
       const partnerId = im.user;
       const partnerName = partnerId ? (names.get(partnerId) ?? null) : null;
 
       // Page this DM's history back ~2 months (bounded by MAX_PER_DM).
-      const dmMessages: { user?: string; text?: string; ts?: string }[] = [];
+      const dmMessages: { user?: string; text?: string; ts?: string; files?: SlackFile[] }[] = [];
       let cursor: string | undefined;
       while (dmMessages.length < MAX_PER_DM) {
         const params: Record<string, string> = { channel: im.id, limit: String(PER_PAGE), oldest };
         if (cursor) params.cursor = cursor;
         const page = await slack<{
-          messages?: { user?: string; text?: string; ts?: string }[];
+          messages?: { user?: string; text?: string; ts?: string; files?: SlackFile[] }[];
           response_metadata?: { next_cursor?: string };
         }>("conversations.history", userToken, params);
         dmMessages.push(...(page.messages ?? []));
@@ -76,6 +110,9 @@ export async function backfillSlack(
         platform: "slack", platformThreadID: im.id,
         title: partnerName, isGroup: false,
         lastMessageAt: tsToISO(dmMessages[0]?.ts),
+        // `teamId:channelId` — what a working `slack://channel?team=…&id=…`
+        // deep link actually needs (im.id alone isn't enough).
+        providerThreadID: teamId ? `${teamId}:${im.id}` : null,
       });
       for (const m of dmMessages) {
         if (!m.ts) continue;
@@ -84,6 +121,7 @@ export async function backfillSlack(
           platform: "slack", platformMessageID: `${im.id}:${m.ts}`, platformThreadID: im.id,
           senderHandle: isFromMe ? null : (m.user ?? null),
           isFromMe, text: String(m.text ?? ""), sentAt: tsToISO(m.ts), readAt: null,
+          attachments: readSlackAttachments(m.files),
         });
       }
     }

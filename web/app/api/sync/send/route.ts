@@ -7,7 +7,7 @@ import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
 import { getUnipile } from "@/lib/unipile/client";
-import { sendGmail, sendSlack } from "@/lib/oauth/send";
+import { sendGmail, sendSlack, sendX } from "@/lib/oauth/send";
 import { isLiveOAuth } from "@/lib/oauth/providers";
 import type { SendRequest, SendResponse, WireMessage } from "@/lib/connections/types";
 
@@ -36,6 +36,8 @@ export async function POST(req: Request): Promise<Response> {
         sent = await sendGmail(store.oauthTokens(device.id, "gmail"), platformThreadID, text);
       } else if (platform === "slack" && isLiveOAuth("slack")) {
         sent = await sendSlack(store.oauthTokens(device.id, "slack"), platformThreadID, text);
+      } else if (platform === "x" && isLiveOAuth("x")) {
+        sent = await sendX(store.oauthTokens(device.id, "x"), platformThreadID, text);
       } else {
         sent = await getUnipile().sendMessage(connection.id, platformThreadID, text);
       }

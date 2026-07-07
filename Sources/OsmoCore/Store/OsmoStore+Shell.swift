@@ -9,9 +9,13 @@ public struct ThreadDraft: Codable, Equatable, Sendable, FetchableRecord, Persis
     public var threadID: UUID
     public var text: String
     public var updatedAt: Date
+    /// True when Osmo wrote this draft itself (autodraft-on-arrival), never the
+    /// user. The never-overwrite-user-text rule reads this flag, not a text
+    /// marker (a prefix could leak into what actually gets sent).
+    public var isAuto: Bool = false
     public static let databaseTableName = "thread_draft"
-    public init(threadID: UUID, text: String, updatedAt: Date = Date()) {
-        self.threadID = threadID; self.text = text; self.updatedAt = updatedAt
+    public init(threadID: UUID, text: String, updatedAt: Date = Date(), isAuto: Bool = false) {
+        self.threadID = threadID; self.text = text; self.updatedAt = updatedAt; self.isAuto = isAuto
     }
 }
 
@@ -20,6 +24,19 @@ public struct ThreadSnooze: Codable, Equatable, Sendable, FetchableRecord, Persi
     public var until: Date
     public static let databaseTableName = "thread_snooze"
     public init(threadID: UUID, until: Date) { self.threadID = threadID; self.until = until }
+}
+
+/// "Nudge me if no reply" — a per-thread follow-up reminder. `setAt` marks when
+/// it was armed so an inbound reply AFTER arming auto-clears it (they answered;
+/// nothing to chase).
+public struct ThreadFollowup: Codable, Equatable, Sendable, FetchableRecord, PersistableRecord {
+    public var threadID: UUID
+    public var due: Date
+    public var setAt: Date
+    public static let databaseTableName = "thread_followup"
+    public init(threadID: UUID, due: Date, setAt: Date = Date()) {
+        self.threadID = threadID; self.due = due; self.setAt = setAt
+    }
 }
 
 public struct QueuedSend: Codable, Equatable, Sendable, FetchableRecord, PersistableRecord, Identifiable {
@@ -50,13 +67,21 @@ extension OsmoStore {
         }
     }
 
-    /// Empty text clears the draft.
-    public func saveDraft(_ text: String, forThread threadID: UUID) throws {
+    /// The full record — callers that need to know whether the saved draft was
+    /// Osmo's own autodraft (vs. user-typed) read this instead of `draft(forThread:)`.
+    public func draftRecord(forThread threadID: UUID) throws -> ThreadDraft? {
+        try dbQueue.read { db in try ThreadDraft.fetchOne(db, key: threadID) }
+    }
+
+    /// Empty text clears the draft. `isAuto` defaults false — every existing
+    /// (user-authored) call site keeps writing `isAuto: false` unchanged, which
+    /// is exactly the desired behavior: a real user save always clears the flag.
+    public func saveDraft(_ text: String, forThread threadID: UUID, isAuto: Bool = false) throws {
         try dbQueue.write { db in
             if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 _ = try ThreadDraft.deleteOne(db, key: threadID)
             } else {
-                try ThreadDraft(threadID: threadID, text: text).save(db)
+                try ThreadDraft(threadID: threadID, text: text, isAuto: isAuto).save(db)
             }
         }
     }
@@ -91,6 +116,43 @@ extension OsmoStore {
         }
     }
 
+    // MARK: - Follow-up reminders ("nudge me if no reply")
+
+    public func setFollowup(thread threadID: UUID, due: Date, now: Date = Date()) throws {
+        try dbQueue.write { db in
+            try ThreadFollowup(threadID: threadID, due: due, setAt: now).save(db)
+        }
+    }
+
+    public func clearFollowup(thread threadID: UUID) throws {
+        _ = try dbQueue.write { db in try ThreadFollowup.deleteOne(db, key: threadID) }
+    }
+
+    public func followup(forThread threadID: UUID) throws -> ThreadFollowup? {
+        try dbQueue.read { db in try ThreadFollowup.fetchOne(db, key: threadID) }
+    }
+
+    /// All armed follow-ups, auto-clearing any the other person already answered
+    /// (an inbound message after `setAt` means the nudge is moot). Returns the
+    /// still-armed ones; the caller splits due vs pending by `due <= now`.
+    public func activeFollowups(now: Date = Date()) throws -> [ThreadFollowup] {
+        try dbQueue.write { db in
+            let all = try ThreadFollowup.fetchAll(db)
+            var live: [ThreadFollowup] = []
+            for f in all {
+                let answered = try OsmoMessage
+                    .filter(Column("threadID") == f.threadID)
+                    .filter(Column("isFromMe") == false)
+                    .filter(Column("deletedAt") == nil)
+                    .filter(Column("sentAt") > f.setAt)
+                    .fetchCount(db) > 0
+                if answered { _ = try ThreadFollowup.deleteOne(db, key: f.threadID) }
+                else { live.append(f) }
+            }
+            return live.sorted { $0.due < $1.due }
+        }
+    }
+
     // MARK: - Offline send queue
 
     public func enqueueSend(_ send: QueuedSend) throws {
@@ -116,6 +178,32 @@ extension OsmoStore {
         }
     }
 
+    // MARK: - Person enrichment (public-profile cache)
+
+    public func enrichment(forPerson personID: UUID) throws -> PersonEnrichment? {
+        try dbQueue.read { db in try PersonEnrichment.fetchOne(db, key: personID) }
+    }
+
+    /// Bulk load for reload() — list subtitles + Ask read this with zero network.
+    public func enrichments() throws -> [PersonEnrichment] {
+        try dbQueue.read { db in try PersonEnrichment.fetchAll(db) }
+    }
+
+    public func upsertEnrichment(_ enrichment: PersonEnrichment) throws {
+        try dbQueue.write { db in try enrichment.save(db) }
+    }
+
+    public func deleteEnrichment(forPerson personID: UUID) throws {
+        _ = try dbQueue.write { db in try PersonEnrichment.deleteOne(db, key: personID) }
+    }
+
+    /// The Privacy pane's "clear fetched profiles" button.
+    public func deleteAllEnrichments() throws {
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM person_enrichment")
+        }
+    }
+
     // MARK: - Export + delete-all
 
     /// Whole-store JSON export (user-owned data; no key material, no tokens).
@@ -128,6 +216,7 @@ extension OsmoStore {
             var people: [Person]
             var memories: [RelationshipMemory]
             var projects: [Project]
+            var enrichments: [PersonEnrichment]
         }
         let export = try dbQueue.read { db in
             Export(exportedAt: Date(),
@@ -136,7 +225,8 @@ extension OsmoStore {
                    messages: try OsmoMessage.fetchAll(db),
                    people: try Person.fetchAll(db),
                    memories: try RelationshipMemory.fetchAll(db),
-                   projects: try Project.fetchAll(db))
+                   projects: try Project.fetchAll(db),
+                   enrichments: try PersonEnrichment.fetchAll(db))
         }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -153,6 +243,7 @@ extension OsmoStore {
             try db.execute(sql: "DELETE FROM send_queue")
             try db.execute(sql: "DELETE FROM thread_snooze")
             try db.execute(sql: "DELETE FROM thread_draft")
+            try db.execute(sql: "DELETE FROM person_enrichment")
             try db.execute(sql: "DELETE FROM message")
             try db.execute(sql: "DELETE FROM thread")
             try db.execute(sql: "DELETE FROM contact")

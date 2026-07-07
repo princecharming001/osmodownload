@@ -6,18 +6,57 @@ import OsmoCore
 struct MainWindow: View {
     @EnvironmentObject var model: AppModel
 
+    @AppStorage("acceptedLegalV1") private var acceptedLegal = false
+
     var body: some View {
-        NavigationSplitView {
-            sidebar
-                .navigationSplitViewColumnWidth(220)
-        } detail: {
-            detail
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(DS.Colors.paper)
+        VStack(spacing: 0) {
+            incidentBanner
+            NavigationSplitView {
+                sidebar
+                    .navigationSplitViewColumnWidth(220)
+            } detail: {
+                detail
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(DS.Colors.paper)
+            }
         }
         .background(DS.Colors.paper)
         .toast(model.toast) { model.toast = nil }
-        .onAppear { model.reload() }
+        .sheet(item: $model.activeSheet) { sheet in sheetContent(sheet) }
+        .onAppear {
+            model.reload()
+            if !acceptedLegal { model.activeSheet = .consent }
+        }
+    }
+
+    @ViewBuilder private func sheetContent(_ sheet: AppModel.AppSheet) -> some View {
+        switch sheet {
+        case .consent:
+            LegalConsentView { acceptedLegal = true; model.activeSheet = nil }
+                .interactiveDismissDisabled(true)
+        case .whatsNew: WhatsNewView().environmentObject(model)
+        case .paywall: PaywallView().environmentObject(model)
+        case .feedback: FeedbackView().environmentObject(model)
+        case .help: HelpView()
+        case .account: ProfileView().environmentObject(model)
+        }
+    }
+
+    /// App-wide incident banner — only when the backend reports trouble.
+    @ViewBuilder private var incidentBanner: some View {
+        if let message = model.serviceStatusMessage {
+            HStack(spacing: DS.Space.s) {
+                Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11))
+                    .accessibilityHidden(true)
+                Text(message).font(DS.Typography.captionEm)
+                Spacer()
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, DS.Space.l).padding(.vertical, 6)
+            .background(DS.Colors.amber)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Service notice: \(message)")
+        }
     }
 
     private var sidebar: some View {
@@ -47,6 +86,12 @@ struct MainWindow: View {
                             if section == .people, !model.mergeSuggestions.isEmpty {
                                 StatusDot(.attention)
                             }
+                            if section == .connections, model.degradedCount > 0 {
+                                Text("\(model.degradedCount)").font(DS.Typography.eyebrow)
+                                    .padding(.horizontal, 6).padding(.vertical, 1)
+                                    .background(DS.Colors.red, in: Capsule())
+                                    .foregroundStyle(.white)
+                            }
                         }
                     } icon: {
                         Image(systemName: section.icon)
@@ -57,9 +102,37 @@ struct MainWindow: View {
             .listStyle(.sidebar)
 
             Divider()
+            accountRow
+            Divider()
             syncRow
         }
         .background(DS.Colors.card)
+    }
+
+    /// The account footer — avatar + name + plan chip, opens the profile sheet.
+    private var accountRow: some View {
+        Button { model.activeSheet = .account } label: {
+            HStack(spacing: DS.Space.s) {
+                AvatarView(name: model.account.displayName.isEmpty ? "You" : model.account.displayName,
+                           data: model.account.avatarData, size: 28)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(model.account.displayName.isEmpty ? "Your account" : model.account.displayName)
+                        .font(DS.Typography.captionEm).foregroundStyle(DS.Colors.ink).lineLimit(1)
+                    Text(model.planName).font(DS.Typography.eyebrow).foregroundStyle(DS.Colors.muted)
+                }
+                Spacer()
+                if !model.isPro {
+                    Text("Upgrade").font(DS.Typography.eyebrow)
+                        .padding(.horizontal, 6).padding(.vertical, 2)
+                        .foregroundStyle(.white).background(DS.Colors.accent, in: Capsule())
+                }
+            }
+            .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Account, plan & billing")
+        .accessibilityIdentifier("sidebar.account")
     }
 
     private var syncRow: some View {
@@ -88,7 +161,7 @@ struct MainWindow: View {
             case .today: TodayView()
             case .inbox: InboxView()
             case .people: PeopleView()
-            case .projects: ProjectsView()
+            case .you: YouView()
             case .connections: ConnectionsView()
             }
         }
@@ -104,7 +177,7 @@ struct SearchField: View {
     var body: some View {
         HStack(spacing: DS.Space.s) {
             Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(DS.Colors.muted)
-            TextField("Search everyone, everything…", text: $text)
+            TextField("Search or ask anything…", text: $text)
                 .textFieldStyle(.plain).font(DS.Typography.body)
                 .onChange(of: text) { _, _ in onChange() }
             if !text.isEmpty {

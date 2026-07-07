@@ -33,6 +33,43 @@ struct ShellStoreTests {
         #expect(try store.draft(forThread: threadID) == nil)
     }
 
+    @Test("Follow-up arms, survives silence, and auto-clears when they reply")
+    func followups() throws {
+        let (store, threadID) = try seeded()
+        let armedAt = Date()
+        try store.setFollowup(thread: threadID, due: armedAt.addingTimeInterval(-60), now: armedAt)
+
+        // Still silent → the reminder is live (and due).
+        var live = try store.activeFollowups()
+        #expect(live.map(\.threadID) == [threadID])
+        #expect(live[0].due <= Date())
+
+        // An OLD inbound (before arming) must NOT clear it — the seeded message
+        // predates the reminder.
+        live = try store.activeFollowups()
+        #expect(live.count == 1)
+
+        // They reply AFTER arming → the nudge is moot; it clears itself.
+        try store.ingest(OsmoMessage(
+            id: OsmoMessage.makeID(platform: .imessage, platformMessageID: "m2"),
+            updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+            platform: .imessage, platformMessageID: "m2", threadID: threadID,
+            isFromMe: false, text: "hey sorry, yes!", sentAt: armedAt.addingTimeInterval(30)))
+        #expect(try store.activeFollowups().isEmpty)
+        #expect(try store.followup(forThread: threadID) == nil)
+
+        // My own messages never clear a reminder. (Re-arm AFTER m2's timestamp so
+        // the earlier reply doesn't count against the new reminder.)
+        let rearmedAt = armedAt.addingTimeInterval(120)
+        try store.setFollowup(thread: threadID, due: rearmedAt.addingTimeInterval(3600), now: rearmedAt)
+        try store.ingest(OsmoMessage(
+            id: OsmoMessage.makeID(platform: .imessage, platformMessageID: "m3"),
+            updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+            platform: .imessage, platformMessageID: "m3", threadID: threadID,
+            isFromMe: true, text: "bump", sentAt: rearmedAt.addingTimeInterval(60)))
+        #expect(try store.activeFollowups().count == 1)
+    }
+
     @Test("Snoozed threads hide until due; due snoozes surface once")
     func snoozes() throws {
         let (store, threadID) = try seeded()

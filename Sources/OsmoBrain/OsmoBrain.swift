@@ -16,12 +16,15 @@ public struct SuggestionContext: Sendable {
     /// Optional explicit intent ("apologize for missing the call"); when nil the
     /// move is inferred from the thread.
     public var userIntent: String?
+    /// Public identity from enrichment ("Head of Growth at Reelio, SF") — lets
+    /// drafts stop treating a VC and a gym buddy identically.
+    public var partnerBackground: String?
 
     public init(relationshipLabel: String, platform: Platform,
                 goalText: String? = nil, toneHint: String? = nil,
                 boundaries: [String] = [], selfContext: String? = nil,
                 relationshipMemory: String? = nil, transcript: [ThreadTurn] = [],
-                userIntent: String? = nil) {
+                userIntent: String? = nil, partnerBackground: String? = nil) {
         self.relationshipLabel = relationshipLabel
         self.platform = platform
         self.goalText = goalText
@@ -31,6 +34,7 @@ public struct SuggestionContext: Sendable {
         self.relationshipMemory = relationshipMemory
         self.transcript = transcript
         self.userIntent = userIntent
+        self.partnerBackground = partnerBackground
     }
 }
 
@@ -71,7 +75,8 @@ public struct OsmoBrain: Sendable {
             goalText: context.goalText, goalKind: goalKind, toneHint: context.toneHint,
             boundaries: context.boundaries, selfContext: context.selfContext,
             relationshipMemory: context.relationshipMemory, transcript: context.transcript,
-            userIntent: context.userIntent, strategy: strategy, read: read)
+            userIntent: context.userIntent, strategy: strategy, read: read, now: now,
+            partnerBackground: context.partnerBackground)
         let safety = Safety.check(goal: context.goalText, intent: context.userIntent,
                                   transcript: read.theirLastText)
         return SuggestionPlan(strategy: strategy, read: read, prompt: prompt, safety: safety)

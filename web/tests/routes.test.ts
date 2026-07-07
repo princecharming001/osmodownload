@@ -11,6 +11,7 @@ import { GET as pull } from "@/app/api/sync/pull/route";
 import { POST as send } from "@/app/api/sync/send/route";
 import { POST as emit } from "@/app/api/dev/emit/route";
 import { GET as outbox } from "@/app/api/dev/outbox/route";
+import { GET as media } from "@/app/api/media/route";
 
 const BASE = "http://localhost:3000";
 
@@ -172,5 +173,40 @@ describe("pause/disconnect", () => {
     const delRes = await deleteAccounts(req(`/api/accounts?id=${conn.id}`, token, { method: "DELETE" }));
     expect(delRes.status).toBe(200);
     expect((await (await accounts(req("/api/accounts", token))).json()).connections).toHaveLength(0);
+  });
+});
+
+describe("media proxy", () => {
+  it("rejects unauthenticated requests", async () => {
+    const res = await media(req("/api/media?platform=gmail&messageRef=m1&attachmentRef=a1"));
+    expect(res.status).toBe(401);
+  });
+
+  it("rejects a request missing required params", async () => {
+    const { token } = await registered();
+    const res = await media(req("/api/media?platform=gmail", token));
+    expect(res.status).toBe(400);
+  });
+
+  it("a device with no connection for the platform gets a placeholder image, not an error", async () => {
+    const { token } = await registered();
+    const res = await media(req("/api/media?platform=gmail&messageRef=m1&attachmentRef=a1", token));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("content-type")).toBe("image/png");
+  });
+
+  it("Slack refuses to fetch anything other than files.slack.com (SSRF guard)", async () => {
+    process.env.OSMO_MOCK_DRIP_MS = "0";
+    const { token, deviceId } = await registered();
+    const link = await (await connectLink(req("/api/connect/link", token, {
+      method: "POST", body: JSON.stringify({ platform: "slack" }),
+    }))).json();
+    await mockComplete(req("/api/connect/mock/complete", undefined, {
+      method: "POST", body: JSON.stringify({ linkId: link.linkId }),
+    }));
+    getStore().setOAuthTokens(deviceId, "slack", { access_token: "xoxp-fake" });
+    const res = await media(req(
+      "/api/media?platform=slack&messageRef=m1&attachmentRef=https://evil.example.com/steal", token));
+    expect(res.status).toBe(400);
   });
 });

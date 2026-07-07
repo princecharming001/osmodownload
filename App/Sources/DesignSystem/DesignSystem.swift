@@ -15,6 +15,7 @@ public enum DS {
         public static let accent = Color(hex: 0x0A84FF)   // iOS systemBlue
         public static let red    = Color(hex: 0xFF383C)   // iOS systemRed
         public static let green  = Color(hex: 0x30D158)   // connected dot (used sparingly)
+        public static let amber  = Color(hex: 0xFF9F0A)   // iOS systemOrange — "today" urgency
 
         // Ink-alpha hairlines + shadows (the orchid tell — never gray).
         public static let hairline     = ink.opacity(0.10)
@@ -26,7 +27,8 @@ public enum DS {
         public static let glassFill   = Color.white.opacity(0.25)
         public static let glassTint   = Color.white.opacity(0.55)
         public static let glassBorder = ink.opacity(0.10)
-        public static let glassTopEdge = Color.white.opacity(0.18)
+        public static let glassTopEdge = Color.white.opacity(0.30)   // brighter lit edge
+        public static let glassSpecular = Color.white.opacity(0.55)  // Liquid-Glass highlight
     }
 
     /// SF Pro, in-between weights (regular↔medium, never heavy). One serif for
@@ -66,6 +68,9 @@ public enum DS {
         public static let expoOut  = Animation.timingCurve(0.16, 1, 0.3, 1, duration: 0.3)
         public static let morph    = Animation.spring(response: 0.35, dampingFraction: 0.8)
         public static let pop      = Animation.spring(response: 0.3, dampingFraction: 0.6)
+        /// Bouncier spring reserved for the pill collapse/expand — more life than
+        /// `morph`, with a little overshoot so the glass "pops" open.
+        public static let morphPill = Animation.spring(response: 0.46, dampingFraction: 0.66)
     }
 }
 

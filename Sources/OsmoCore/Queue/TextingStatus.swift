@@ -16,11 +16,18 @@ public struct ThreadSnapshot: Equatable, Sendable {
     /// When *they* read the user's last message, if a read receipt exists.
     public var myLastReadByThem: Date?
     public var theirLastText: String?
+    /// Whether this looks like a genuine conversation with a person (vs. an OTP
+    /// bot, marketing blast, no-reply notification…). Defaults true so a snapshot
+    /// built without classification is treated as human.
+    public var isLikelyHuman: Bool
+    /// Short reason it was judged non-human (for the "why hidden" affordance).
+    public var nonHumanReason: String?
 
     public init(threadID: UUID, personID: UUID? = nil, personName: String,
                 platform: Platform, isEmpty: Bool = false, lastFromMe: Bool,
                 lastMessageAt: Date? = nil, myLastReadByThem: Date? = nil,
-                theirLastText: String? = nil) {
+                theirLastText: String? = nil,
+                isLikelyHuman: Bool = true, nonHumanReason: String? = nil) {
         self.threadID = threadID
         self.personID = personID
         self.personName = personName
@@ -30,6 +37,8 @@ public struct ThreadSnapshot: Equatable, Sendable {
         self.lastMessageAt = lastMessageAt
         self.myLastReadByThem = myLastReadByThem
         self.theirLastText = theirLastText
+        self.isLikelyHuman = isLikelyHuman
+        self.nonHumanReason = nonHumanReason
     }
 }
 

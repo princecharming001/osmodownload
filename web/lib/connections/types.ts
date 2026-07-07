@@ -34,6 +34,38 @@ export interface WireThread {
   title: string | null;
   isGroup: boolean;
   lastMessageAt: string | null;  // ISO-8601
+  /** Server-side automated-sender signal (List-Unsubscribe / Precedence:bulk /
+      List-Id / no-reply sender) — feeds the human-thread classifier. */
+  automatedHint?: boolean;
+  /** The provider's OWN thread/conversation id (not Unipile's internal chat id) —
+      what a deep link into LinkedIn/Instagram/WhatsApp/Slack actually needs. */
+  providerThreadID?: string | null;
+}
+
+export interface WireReaction {
+  emoji: string;
+  senderHandle: string | null;   // null when unknown
+  isFromMe: boolean;
+}
+
+export type AttachmentKind = "image" | "video" | "audio" | "file" | "link";
+
+export interface WireAttachment {
+  /** Stable per-attachment key (dedup) — provider attachment/file id. */
+  id: string;
+  kind: AttachmentKind;
+  mimeType: string | null;
+  filename: string | null;
+  sizeBytes: number | null;
+  width?: number | null;
+  height?: number | null;
+  /** Opaque ref used to refetch bytes through /api/media — provider-specific
+      (Gmail attachmentId, Slack url_private, Unipile attachment id). Absent
+      for `link` kind, which has no bytes to fetch. */
+  remoteRef?: string | null;
+  /** Destination URL for `link` kind (a shared post/reel) — no bytes exist. */
+  url?: string | null;
+  title?: string | null;
 }
 
 export interface WireMessage {
@@ -45,6 +77,12 @@ export interface WireMessage {
   text: string;
   sentAt: string;                // ISO-8601
   readAt: string | null;
+  /** Emoji reactions on this message, when the provider exposes them. */
+  reactions?: WireReaction[];
+  /** The platform message id this one replies to (quoted/threaded reply). */
+  replyToMessageID?: string | null;
+  /** Media/files/shared-post attachments, when the provider exposes them. */
+  attachments?: WireAttachment[];
 }
 
 export interface WireBatch {

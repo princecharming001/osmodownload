@@ -12,13 +12,16 @@ public struct PillContext: Equatable, Sendable {
     public var matchedThreadID: UUID?
     public var sourceURL: String?
     public var isPractice: Bool
+    /// The focused compose field's frame (AppKit global coords) so the pill can
+    /// pop up right next to the message bar. Carried through ready→expanded.
+    public var fieldFrame: CGRect?
 
     public init(bundleID: String? = nil, platform: Platform? = nil, partnerName: String? = nil,
                 draftText: String? = nil, matchedThreadID: UUID? = nil, sourceURL: String? = nil,
-                isPractice: Bool = false) {
+                isPractice: Bool = false, fieldFrame: CGRect? = nil) {
         self.bundleID = bundleID; self.platform = platform; self.partnerName = partnerName
         self.draftText = draftText; self.matchedThreadID = matchedThreadID
-        self.sourceURL = sourceURL; self.isPractice = isPractice
+        self.sourceURL = sourceURL; self.isPractice = isPractice; self.fieldFrame = fieldFrame
     }
 
     /// True when we actually detected a conversation (vs. a bare hotkey-summon

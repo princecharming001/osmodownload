@@ -9,3 +9,16 @@ DerivedData/
 *.db
 *.db-wal
 *.db-shm
+
+# --- secrets & local env (defense-in-depth; never commit these) ---
+.env
+.env.*
+*.env
+*.env.local
+node_modules/
+.next/
+*.p8
+*.pem
+*.key
+id_rsa*
+*.pillstate-debug.json

@@ -150,7 +150,11 @@ struct EngineTests {
             transcript: [ThreadTurn(fromMe: false, text: "i just felt like you didnt care tbh")],
             userIntent: "apologize for bailing last night")
         let brain = OsmoBrain()
-        let p = brain.plan(ctx)
+        // Fixed daytime `now` — the timing section reads the clock, and this
+        // prompt snapshot must not vary with when CI happens to run.
+        let daytime = Calendar.current.date(
+            from: DateComponents(year: 2026, month: 6, day: 10, hour: 14))!
+        let p = brain.plan(ctx, now: daytime)
 
         // Cacheable core is stable + carries the anti-tell + 3-take contract.
         #expect(p.prompt.systemCore == PromptComposer.systemCore)

@@ -68,3 +68,73 @@ struct BackendBatchNormalizerTests {
         #expect(batch.messages[0].readAt != nil)
     }
 }
+
+@Suite("Thread hints — automatedHint + providerThreadID (D1/D3)")
+struct ThreadHintsTests {
+    @Test("automatedHint and providerThreadID flow from wire through the normalizer")
+    func normalizerMapsHints() {
+        let wire = WireBatch(
+            contacts: [],
+            threads: [WireThread(platform: "gmail", platformThreadID: "t-1", title: "Newsletter",
+                                 isGroup: false, lastMessageAt: Date(),
+                                 automatedHint: true, providerThreadID: "t-1")],
+            messages: [], cursor: "1", hasMore: false)
+        let batch = BackendBatchNormalizer.normalize(wire).batch
+        #expect(batch.threads[0].automatedHint == true)
+        #expect(batch.threads[0].providerThreadID == "t-1")
+    }
+
+    @Test("Missing hint fields default to false/nil — old servers decode fine")
+    func missingHintsDefault() {
+        let wire = WireBatch(
+            contacts: [],
+            threads: [WireThread(platform: "gmail", platformThreadID: "t-2", title: nil,
+                                 isGroup: false, lastMessageAt: nil)],
+            messages: [], cursor: "1", hasMore: false)
+        let batch = BackendBatchNormalizer.normalize(wire).batch
+        #expect(batch.threads[0].automatedHint == false)
+        #expect(batch.threads[0].providerThreadID == nil)
+    }
+
+    @Test("preservingEnrichment: incoming nil providerThreadID never clobbers a stored value")
+    func providerThreadIDNeverRegresses() throws {
+        let store = try OsmoStore.inMemory()
+        let platform = Platform.linkedin
+        let id = OsmoThread.makeID(platform: platform, platformThreadID: "chat-1")
+        let resolved = OsmoThread(id: id, updatedAt: .distantPast, deviceSeq: 0,
+                                  platform: platform, platformThreadID: "chat-1", title: "Ada",
+                                  isGroup: false, lastMessageAt: Date(timeIntervalSince1970: 100),
+                                  providerThreadID: "urn:li:real-thread")
+        _ = try store.ingest(resolved)
+
+        // A later webhook bundle has no chat index → providerThreadID nil.
+        let bare = OsmoThread(id: id, updatedAt: .distantPast, deviceSeq: 0,
+                              platform: platform, platformThreadID: "chat-1", title: "Ada",
+                              isGroup: false, lastMessageAt: Date(timeIntervalSince1970: 200))
+        _ = try store.ingest(bare)
+
+        let fetched = try store.thread(id: id)
+        #expect(fetched?.providerThreadID == "urn:li:real-thread")
+        #expect(fetched?.lastMessageAt == Date(timeIntervalSince1970: 200))   // newer date still wins
+    }
+
+    @Test("preservingEnrichment: an out-of-order OLDER lastMessageAt never regresses the stored newer one")
+    func lastMessageAtNeverRegresses() throws {
+        let store = try OsmoStore.inMemory()
+        let platform = Platform.whatsapp
+        let id = OsmoThread.makeID(platform: platform, platformThreadID: "chat-2")
+        let newer = OsmoThread(id: id, updatedAt: .distantPast, deviceSeq: 0,
+                               platform: platform, platformThreadID: "chat-2", title: "Group",
+                               isGroup: true, lastMessageAt: Date(timeIntervalSince1970: 500))
+        _ = try store.ingest(newer)
+
+        // A page arriving out of order (older message) must not regress the thread's date.
+        let older = OsmoThread(id: id, updatedAt: .distantPast, deviceSeq: 0,
+                               platform: platform, platformThreadID: "chat-2", title: "Group",
+                               isGroup: true, lastMessageAt: Date(timeIntervalSince1970: 100))
+        _ = try store.ingest(older)
+
+        let fetched = try store.thread(id: id)
+        #expect(fetched?.lastMessageAt == Date(timeIntervalSince1970: 500))
+    }
+}
