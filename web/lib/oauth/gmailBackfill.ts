@@ -181,6 +181,9 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
     const automatedByThread = new Map<string, boolean>();
 
     for (const item of items) {
+      // User hit "Stop": the connection was flipped off "backfilling" — bail and
+      // keep whatever we've collected so far (finish() below appends it).
+      if (store.connectionById(connectionId)?.status !== "backfilling") break;
       if (!gate(item.threadId)) continue;   // gate BEFORE the format=full fetch
 
       const msg = await fetch(`${api}/messages/${item.id}?format=full`, { headers: auth })

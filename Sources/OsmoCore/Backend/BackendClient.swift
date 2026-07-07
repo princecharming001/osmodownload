@@ -98,6 +98,13 @@ public actor BackendClient {
                                              body: ["action": paused ? "pause" : "resume"])
     }
 
+    /// Halt an in-progress history import: the backend flips the connection to
+    /// connected (keeping whatever imported so far) and its backfill loop bails.
+    public func stopBackfill(id: String) async throws {
+        let _: OkEnvelope = try await authed("PATCH", "/api/accounts", query: [("id", id)],
+                                             body: ["action": "stop"])
+    }
+
     /// Re-run the deep (2-month) history import for an already-connected platform.
     public func rebackfill(platform: Platform) async throws {
         let _: OkEnvelope = try await authed("POST", "/api/connect/rebackfill",

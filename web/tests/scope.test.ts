@@ -4,10 +4,10 @@ import { backfillScope, makeConversationGate } from "@/lib/connections/scope";
 describe("backfill scope", () => {
   afterEach(() => { delete process.env.OSMO_BACKFILL_SCOPE; });
 
-  it("defaults to the full 60-day unlimited pull", () => {
+  it("defaults to the 30-day (1 month) unlimited pull", () => {
     delete process.env.OSMO_BACKFILL_SCOPE;
     const s = backfillScope();
-    expect(s.sinceMs).toBe(60 * 24 * 3600 * 1000);
+    expect(s.sinceMs).toBe(30 * 24 * 3600 * 1000);
     expect(s.maxConversations).toBeNull();
   });
 

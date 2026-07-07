@@ -661,6 +661,14 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// User tapped "Stop" on an importing platform: halt the import mid-way,
+    /// clear the progress bar immediately, and settle the row to Connected with
+    /// whatever's already been pulled in.
+    func stopImport(_ platform: Platform) {
+        importProgress[platform] = nil
+        Task { await connections.stopBackfill(platform); reload() }
+    }
+
     /// One-time (per install): re-import 2 months for any live backend platform
     /// that was connected BEFORE the deeper backfill window shipped — so e.g. a
     /// WhatsApp account connected earlier auto-deepens to the full 2 months

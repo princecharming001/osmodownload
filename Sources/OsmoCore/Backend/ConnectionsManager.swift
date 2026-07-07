@@ -71,6 +71,21 @@ public final class ConnectionsManager: ObservableObject {
         connectionIDs[platform] = nil
     }
 
+    /// Stop an in-progress history import mid-way. Keeps whatever's already been
+    /// imported and settles the platform to live — the backend backfill loop sees
+    /// the flipped status and bails. iMessage imports locally (and fast), so we
+    /// just settle it live; the sync engine won't re-pull a paused/live platform.
+    public func stopBackfill(_ platform: Platform) async {
+        if platform == .imessage {
+            phases[.imessage] = .live
+            persist()
+            return
+        }
+        if connectionIDs[platform] == nil { await reconcile() }
+        apply(platform, .statusEvent("connected"))   // optimistic → live
+        if let id = connectionIDs[platform] { try? await client.stopBackfill(id: id) }
+    }
+
     /// Re-run the deep 2-month history import for a live backend platform — for
     /// accounts connected before the deeper window shipped. Shows backfilling
     /// progress via the normal status events. (iMessage is always full, so no-op.)

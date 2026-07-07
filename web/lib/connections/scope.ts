@@ -19,7 +19,8 @@ export function backfillScope(): BackfillScope {
   if ((process.env.OSMO_BACKFILL_SCOPE ?? "").toLowerCase() === "demo") {
     return { sinceMs: 15 * 24 * 60 * 60 * 1000, maxConversations: 5 };
   }
-  return { sinceMs: 60 * 24 * 60 * 60 * 1000, maxConversations: null };
+  // 1 month for now (demo phase) — was 60d. Bump back up when scaling past demos.
+  return { sinceMs: 30 * 24 * 60 * 60 * 1000, maxConversations: null };
 }
 
 /** A gate over conversation ids: admits ids already seen, and new ids until the

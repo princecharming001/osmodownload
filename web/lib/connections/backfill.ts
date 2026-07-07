@@ -75,6 +75,9 @@ export async function backfillConnection(opts: {
 
     let cursor: string | undefined;
     for (let pageNo = 0; pageNo < MAX_MESSAGE_PAGES; pageNo++) {
+      // User hit "Stop": the connection was flipped off "backfilling" — bail and
+      // keep whatever's imported so far.
+      if (store.connectionById(accountId)?.status !== "backfilling") break;
       const { messages, cursor: next } = await unipile.listMessages(accountId, cursor, cutoffISO);
       if (messages.length === 0) break;
 
@@ -129,7 +132,11 @@ export async function backfillConnection(opts: {
 
       // Progress by history depth covered (total is unknown), not page count.
       const progress = Math.min(0.95, (Date.now() - oldestMs) / scope.sinceMs);
-      store.setConnectionStatus(accountId, "backfilling", progress);
+      // Don't re-arm "backfilling" if the user stopped mid-page (would defeat the
+      // loop-top bail on the next iteration).
+      if (store.connectionById(accountId)?.status === "backfilling") {
+        store.setConnectionStatus(accountId, "backfilling", progress);
+      }
       publish(deviceId, { type: "backfill.progress", platform, progress });
       if (seq > 0) publish(deviceId, { type: "sync.dirty", seq });
 

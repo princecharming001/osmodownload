@@ -54,7 +54,14 @@ struct ConnectionRow: View {
                     }
                 }
                 Spacer()
-                if importFraction == nil { actions }
+                if importFraction == nil {
+                    actions
+                } else {
+                    // Mid-import: let the user bail out of a long/stuck load.
+                    Button("Stop") { model.stopImport(platform) }
+                        .font(DS.Typography.captionEm).buttonStyle(.plain)
+                        .foregroundStyle(DS.Colors.muted)
+                }
             }
             if let fraction = importFraction {
                 ProgressView(value: fraction)

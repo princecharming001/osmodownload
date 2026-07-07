@@ -42,6 +42,8 @@ export async function backfillX(deviceId: string, connectionId: string, accessTo
     let paginationToken: string | undefined;
     let fetched = 0;
     while (fetched < MAX_EVENTS) {
+      // User hit "Stop": the connection was flipped off "backfilling" — bail.
+      if (store.connectionById(connectionId)?.status !== "backfilling") break;
       const q = new URLSearchParams({
         "dm_event.fields": "id,text,event_type,created_at,sender_id,dm_conversation_id",
         "expansions": "sender_id",
