@@ -14,7 +14,7 @@ services:
     region: oregon
     buildCommand: npm ci && npm run build
     startCommand: npm run start
-    autoDeploy: false        # deploy on explicit push only (matches the "never auto-push" rule)
+    autoDeploy: true         # push to osmodownload main → Render redeploys the backend automatically
     envVars:
       # --- non-secret config (safe to keep in the blueprint) ---
       - key: NODE_ENV

@@ -29,9 +29,9 @@ public struct VerifiedEntitlement: Equatable, Sendable {
 
 public enum EntitlementVerifier {
     /// The bundled Ed25519 public key (JWK `x`, base64url). MUST match the
-    /// server's `OSMO_LICENSE_PUBLIC_X`. This is the DEV key — swap it for your
-    /// production public key at launch (the private half stays on the server).
-    public static let publicKeyX = "4Y5MSU2cbOXlRE91mcLFmYtT1jfj6_b7tpvDynKkljI"
+    /// server's `OSMO_LICENSE_PUBLIC_X`. PRODUCTION key (generated 2026-07-06);
+    /// the private half lives only in the server env (OSMO_LICENSE_PRIVATE_D).
+    public static let publicKeyX = "lRI-n0RMoS_ErgsdnnS5hjIWEDJ8ZkhhOCZL2DU5F0k"
 
     private struct Payload: Codable {
         var v: Int

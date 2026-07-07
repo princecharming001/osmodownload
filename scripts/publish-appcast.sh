@@ -23,7 +23,9 @@ SRC_ZIP="${2:-.build/release/Osmo-notarized.zip}"
 
 REPO="princecharming001/leftonread"
 TAG="v${VERSION}"
-SITE_REPO="/Users/home/URAP - Lead - Levine/leftonread"
+# CI overrides this to a fresh checkout of the leftonread repo; locally it's the
+# working copy on disk.
+SITE_REPO="${OSMO_SITE_REPO:-/Users/home/URAP - Lead - Levine/leftonread}"
 DL_PREFIX="https://github.com/${REPO}/releases/download/${TAG}/"
 
 # Locate Sparkle's generate_appcast (built into the SPM artifacts).
@@ -36,7 +38,13 @@ ZIP_NAME="Osmo-${VERSION}.zip"
 cp "$SRC_ZIP" "$STAGE/$ZIP_NAME"
 
 echo "→ generating + EdDSA-signing appcast (download base: $DL_PREFIX)…"
-"$GA" --download-url-prefix "$DL_PREFIX" "$STAGE"
+# Locally the EdDSA private key comes from the login Keychain. In CI there's no
+# Keychain entry, so SPARKLE_ED_KEY_FILE points at a file holding the private key.
+if [ -n "${SPARKLE_ED_KEY_FILE:-}" ]; then
+  "$GA" --ed-key-file "$SPARKLE_ED_KEY_FILE" --download-url-prefix "$DL_PREFIX" "$STAGE"
+else
+  "$GA" --download-url-prefix "$DL_PREFIX" "$STAGE"
+fi
 [ -f "$STAGE/appcast.xml" ] || { echo "✗ generate_appcast did not produce appcast.xml"; exit 1; }
 
 cp "$STAGE/appcast.xml" "$SITE_REPO/appcast.xml"
