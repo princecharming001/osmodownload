@@ -22,8 +22,10 @@ struct ConnectionsView: View {
                         }
                     }
                 }
-                ForEach(Platform.allCases, id: \.self) { platform in
-                    ConnectionRow(platform: platform)
+                VStack(spacing: 0) {
+                    ForEach(Platform.allCases, id: \.self) { platform in
+                        ConnectionRow(platform: platform)
+                    }
                 }
             }
             .padding(DS.Space.xl)
@@ -38,27 +40,31 @@ struct ConnectionRow: View {
     let platform: Platform
 
     var body: some View {
-        Card {
-            VStack(spacing: DS.Space.s) {
-                HStack(spacing: DS.Space.m) {
-                    PlatformLogo(platform, size: 26)
-                        .frame(width: 28)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(platform.displayName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
-                        HStack(spacing: DS.Space.xs) {
-                            StatusDot(importFraction != nil ? .active : dotState)
-                            Text(subtitle).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
-                        }
+        // Transparent row (no card fill) so the brand logos read cleanly; a
+        // hairline separates rows instead of a background tile.
+        VStack(spacing: DS.Space.s) {
+            HStack(spacing: DS.Space.m) {
+                PlatformLogo(platform, size: 26)
+                    .frame(width: 28)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(platform.displayName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
+                    HStack(spacing: DS.Space.xs) {
+                        StatusDot(importFraction != nil ? .active : dotState)
+                        Text(subtitle).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
                     }
-                    Spacer()
-                    if importFraction == nil { actions }
                 }
-                if let fraction = importFraction {
-                    ProgressView(value: fraction)
-                        .tint(DS.Colors.accent)
-                        .transition(.opacity)
-                }
+                Spacer()
+                if importFraction == nil { actions }
             }
+            if let fraction = importFraction {
+                ProgressView(value: fraction)
+                    .tint(DS.Colors.accent)
+                    .transition(.opacity)
+            }
+        }
+        .padding(.vertical, DS.Space.m)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(DS.Colors.hairlineSoft).frame(height: 1)
         }
         .animation(DS.Motion.standard, value: importFraction)
     }
