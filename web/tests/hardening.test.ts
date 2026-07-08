@@ -6,6 +6,7 @@ import { NextRequest } from "next/server";
 import { resetStoreForTests } from "@/lib/connections/memoryStore";
 import { resetAccountsForTests, getAccounts } from "@/lib/accounts/store";
 import { resetSpendForTests } from "@/lib/license/spendBreaker";
+import { validateLicenseKey } from "@/lib/license/entitlement";
 import { POST as register } from "@/app/api/device/register/route";
 import { POST as suggest } from "@/app/api/suggest/route";
 import { POST as authRequest } from "@/app/api/auth/request/route";
@@ -113,6 +114,20 @@ describe("rate limiting (shared substrate)", () => {
     let last = 200;
     for (let i = 0; i < 31; i++) last = (await register(ipReq())).status;
     expect(last).toBe(429);
+  });
+});
+
+describe("mandatory auth + paywall integrity", () => {
+  it("suggest requires a device token once a real key is set (no open relay)", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    const res = await suggest(npost("/api/suggest", { systemCore: "x", userTurn: "Them: hi" })); // no token
+    expect(res.status).toBe(401);
+  });
+
+  it("mock OSMO- license is rejected in production, accepted in dev", () => {
+    expect(validateLicenseKey("OSMO-DEV-PRO").valid).toBe(true);
+    process.env.OSMO_ENV = "production";
+    expect(validateLicenseKey("OSMO-DEV-PRO").valid).toBe(false);
   });
 });
 

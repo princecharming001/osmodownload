@@ -3,7 +3,7 @@ import { getStore } from "@/lib/connections/memoryStore";
 import { getAccounts } from "@/lib/accounts/store";
 import { resolveTier } from "@/lib/license/entitlement";
 import { checkAndConsume } from "@/lib/license/quota";
-import { DEFAULT_MODEL, isModelAllowed } from "@/lib/config/runtime";
+import { DEFAULT_MODEL, isModelAllowed, isProduction } from "@/lib/config/runtime";
 import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
 import { checkSafety } from "@/lib/safety";
 
@@ -31,7 +31,11 @@ export async function POST(req: NextRequest) {
   // token is validated against a registered device — a raw "Bearer " prefix is
   // NOT enough, or anyone could burn the server-side Anthropic key.
   const auth = req.headers.get("authorization") ?? "";
-  if (process.env.OSMO_REQUIRE_AUTH === "1") {
+  // Require a valid device token whenever there's a real bill to protect (a key
+  // is set) or in production — not only behind an opt-in flag. Otherwise a single
+  // unset env var turns this into an open, unmetered Anthropic relay.
+  const mustAuth = isProduction() || !!process.env.ANTHROPIC_API_KEY || process.env.OSMO_REQUIRE_AUTH === "1";
+  if (mustAuth) {
     const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
     if (!token || !getStore().deviceByToken(token)) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });

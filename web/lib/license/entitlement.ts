@@ -4,6 +4,7 @@
 
 import type { LicenseRecord } from "../connections/memoryStore";
 import { signEntitlement, type EntitlementPayload, type SignedEntitlement } from "./sign";
+import { isProduction } from "../config/runtime";
 
 export const TRIAL_DAYS = 14;
 /** How long a signed entitlement stays valid offline before the app must
@@ -44,6 +45,9 @@ export function buildSignedEntitlement(deviceId: string, rec: LicenseRecord, now
     in here — the routes never change. */
 export function validateLicenseKey(key: string): { valid: boolean; plan: string | null } {
   const trimmed = key.trim().toUpperCase();
-  if (trimmed.startsWith("OSMO-")) return { valid: true, plan: "com.osmo.pro.monthly" };
+  // Mock acceptance is DEV-ONLY — a bare `OSMO-` prefix must never grant Pro in
+  // production (that was the paywall-bypass finding). Real validation (Stripe
+  // subscription / license server) wires in here; the routes never change.
+  if (!isProduction() && trimmed.startsWith("OSMO-")) return { valid: true, plan: "com.osmo.pro.monthly" };
   return { valid: false, plan: null };
 }
