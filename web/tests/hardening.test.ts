@@ -4,7 +4,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 import { resetStoreForTests } from "@/lib/connections/memoryStore";
-import { resetAccountsForTests } from "@/lib/accounts/store";
+import { resetAccountsForTests, getAccounts } from "@/lib/accounts/store";
+import { resetSpendForTests } from "@/lib/license/spendBreaker";
 import { POST as register } from "@/app/api/device/register/route";
 import { POST as suggest } from "@/app/api/suggest/route";
 import { POST as authRequest } from "@/app/api/auth/request/route";
@@ -40,13 +41,18 @@ async function registered(): Promise<string> {
   const body = await (await register()).json();
   return body.deviceToken as string;
 }
+async function registeredWithId(): Promise<{ token: string; deviceId: string }> {
+  const body = await (await register()).json();
+  return { token: body.deviceToken, deviceId: body.deviceId };
+}
 
-beforeEach(() => { resetStoreForTests(); resetAccountsForTests(); });
+beforeEach(() => { resetStoreForTests(); resetAccountsForTests(); resetSpendForTests(); });
 afterEach(() => {
   delete process.env.OSMO_ENV;
   delete process.env.RESEND_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.OSMO_ALLOWED_MODELS;
+  delete process.env.OSMO_ANTHROPIC_DAILY_MAX_CALLS;
   vi.unstubAllGlobals();
 });
 
@@ -88,6 +94,26 @@ describe("magic link — the verify URL is never leaked in the body", () => {
     const res = await authRequest(post("/api/auth/request", { email: "u@example.com" }));
     expect(res.status).toBe(500);
     expect((await res.json()).verifyUrl).toBeUndefined();
+  });
+});
+
+describe("anthropic spend circuit-breaker", () => {
+  it("degrades to a marked mock once the daily call budget is hit", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    process.env.OSMO_ANTHROPIC_DAILY_MAX_CALLS = "2";
+    // Fake a successful Anthropic response so calls count without real network.
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response(JSON.stringify({ content: [{ type: "text", text: "a\nb\nc" }] }),
+        { status: 200, headers: { "content-type": "application/json" } })));
+    const { token, deviceId } = await registeredWithId();
+    await getAccounts().setSubscriptionForDevice(deviceId, { subscriptionActive: true }); // Pro → quota never blocks
+
+    const call = () => suggest(npost("/api/suggest", { systemCore: "x", userTurn: "Them: hi" }, token));
+    expect((await (await call()).json()).mock).toBeUndefined();   // 1st real
+    expect((await (await call()).json()).mock).toBeUndefined();   // 2nd real (budget=2)
+    const third = await (await call()).json();                    // 3rd → tripped
+    expect(third.mock).toBe(true);
+    expect(third.degraded).toBe("daily_budget");
   });
 });
 

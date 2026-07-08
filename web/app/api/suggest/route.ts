@@ -4,6 +4,7 @@ import { getAccounts } from "@/lib/accounts/store";
 import { resolveTier } from "@/lib/license/entitlement";
 import { checkAndConsume } from "@/lib/license/quota";
 import { DEFAULT_MODEL, isModelAllowed } from "@/lib/config/runtime";
+import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
 
 // The thin AI proxy. Holds the Anthropic key server-side (never in the Mac app —
 // a shipped binary's key is trivially extractable), marks the psychology core as
@@ -80,6 +81,16 @@ export async function POST(req: NextRequest) {
       );
     }
   }
+
+  // Aggregate spend backstop — before any real call. Once the rolling day/month
+  // budget is hit we serve the deterministic mock (clearly marked) instead of
+  // burning the key. Alert stands in for paging the operator.
+  const breaker = breakerTripped();
+  if (breaker.tripped) {
+    console.error(`[spend-breaker] tripped: ${breaker.reason} — serving degraded mock`);
+    return NextResponse.json({ text: mockTakes(userTurn), mock: true, degraded: breaker.reason });
+  }
+  recordModelCall();
 
   const anthropicBody = {
     model,
