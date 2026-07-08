@@ -41,12 +41,12 @@ create table if not exists osmo_subscriptions (
   primary key (owner_type, owner_id)
 );
 
--- Free-tier quota usage (per device, week bucket). week_start is epoch ms.
+-- Free-tier quota usage: ONE row per device (PK device_id); week_start (epoch ms)
+-- + count, reset when the week rolls over.
 create table if not exists osmo_usage (
-  device_id  text not null,
+  device_id  text primary key,
   week_start bigint not null,
-  count      integer not null default 0,
-  primary key (device_id, week_start)
+  count      integer not null default 0
 );
 
 create table if not exists osmo_magic_links (

@@ -3,6 +3,7 @@
 // from a client that lies about its remaining drafts. Pro/trial are unlimited.
 
 import type { ConnectionsStore } from "../connections/memoryStore";
+import type { AccountsStore } from "../accounts/store";
 
 /** Must match the Swift `Entitlements.freeDraftsPerWeek`. */
 export const FREE_DRAFTS_PER_WEEK = 15;
@@ -35,4 +36,20 @@ export function checkAndConsume(store: ConnectionsStore, deviceId: string, nowMs
 
   const next = store.bumpUsage(deviceId, ws);
   return { allowed: true, remaining: Math.max(0, FREE_DRAFTS_PER_WEEK - next.count) };
+}
+
+/** Durable variant — the weekly counter lives in the accounts store (osmo_usage
+    on Supabase when live), so it survives restart/redeploy. This is the path
+    /api/suggest uses. */
+export async function checkAndConsumeDurable(
+  accounts: AccountsStore, deviceId: string, nowMs: number, unlimited: boolean,
+): Promise<QuotaResult> {
+  if (unlimited) return { allowed: true, remaining: null };
+
+  const ws = weekStart(nowMs);
+  const used = await accounts.usageCount(deviceId, ws);
+  if (used >= FREE_DRAFTS_PER_WEEK) return { allowed: false, remaining: 0 };
+
+  const next = await accounts.bumpUsage(deviceId, ws);
+  return { allowed: true, remaining: Math.max(0, FREE_DRAFTS_PER_WEEK - next) };
 }

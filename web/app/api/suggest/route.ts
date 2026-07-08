@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getStore } from "@/lib/connections/memoryStore";
 import { getAccounts } from "@/lib/accounts/store";
 import { resolveTier } from "@/lib/license/entitlement";
-import { checkAndConsume } from "@/lib/license/quota";
+import { checkAndConsumeDurable } from "@/lib/license/quota";
 import { DEFAULT_MODEL, isModelAllowed, isProduction } from "@/lib/config/runtime";
 import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
 import { checkSafety } from "@/lib/safety";
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest) {
     // usage counter stays in the sync store.
     const sub = await getAccounts().subscriptionForDevice(device.id);
     const { tier } = resolveTier(sub, Date.now());
-    const quota = checkAndConsume(getStore(), device.id, Date.now(), tier !== "free");
+    const quota = await checkAndConsumeDurable(getAccounts(), device.id, Date.now(), tier !== "free");
     if (!quota.allowed) {
       return NextResponse.json(
         { error: "quota_exceeded", remaining: 0 },

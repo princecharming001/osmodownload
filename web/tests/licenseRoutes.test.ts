@@ -124,7 +124,7 @@ describe("suggest quota enforcement", () => {
     const { token, deviceId } = await registered();
     // Exhaust the week without hitting the model.
     const ws = weekStart(Date.now());
-    for (let i = 0; i < FREE_DRAFTS_PER_WEEK; i++) getStore().bumpUsage(deviceId, ws);
+    for (let i = 0; i < FREE_DRAFTS_PER_WEEK; i++) await getAccounts().bumpUsage(deviceId, ws);
 
     const res = await suggest(nreq("/api/suggest", token, { systemCore: "x", userTurn: "Them: hi" }));
     expect(res.status).toBe(429);
@@ -136,7 +136,7 @@ describe("suggest quota enforcement", () => {
     const { token, deviceId } = await registered();
     await getAccounts().setSubscriptionForDevice(deviceId, { subscriptionActive: true });
     const ws = weekStart(Date.now());
-    for (let i = 0; i < FREE_DRAFTS_PER_WEEK + 3; i++) getStore().bumpUsage(deviceId, ws);
+    for (let i = 0; i < FREE_DRAFTS_PER_WEEK + 3; i++) await getAccounts().bumpUsage(deviceId, ws);
     // Over the free cap, but Pro → quota passes. (It then tries the model; with a
     // fake key the upstream fetch fails → 502, which still proves quota didn't 429.)
     const res = await suggest(nreq("/api/suggest", token, { systemCore: "x", userTurn: "Them: hi" }));

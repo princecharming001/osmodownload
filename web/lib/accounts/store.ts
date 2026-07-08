@@ -75,6 +75,11 @@ export interface AccountsStore {
   webSessionUser(token: string): Promise<AccountUser | null>;
   deleteWebSession(token: string): Promise<void>;
 
+  // free-tier quota usage — durable per-device week bucket (osmo_usage), so the
+  // count survives restart/redeploy instead of resetting to zero.
+  usageCount(deviceId: string, weekStart: number): Promise<number>;
+  bumpUsage(deviceId: string, weekStart: number): Promise<number>;
+
   // deletion
   purgeByDevice(deviceId: string): Promise<void>;
 }
@@ -93,9 +98,10 @@ interface Mem {
   subs: Map<string, Subscription>;                 // `${ownerType}:${ownerId}` → sub (deviceId filled per-call)
   magic: Map<string, MagicLinkRow>;                // token → link
   sessions: Map<string, WebSessionRow>;            // token → session
+  usage: Map<string, number>;                      // `${deviceId}:${weekStart}` → count
 }
 function freshMem(): Mem {
-  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map() };
+  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map() };
 }
 
 class MemoryAccountsStore implements AccountsStore {
@@ -198,6 +204,16 @@ class MemoryAccountsStore implements AccountsStore {
   }
   async deleteWebSession(token: string) { this.m.sessions.delete(token); }
 
+  async usageCount(deviceId: string, weekStart: number): Promise<number> {
+    return this.m.usage.get(`${deviceId}:${weekStart}`) ?? 0;
+  }
+  async bumpUsage(deviceId: string, weekStart: number): Promise<number> {
+    const key = `${deviceId}:${weekStart}`;
+    const next = (this.m.usage.get(key) ?? 0) + 1;
+    this.m.usage.set(key, next);
+    return next;
+  }
+
   async purgeByDevice(deviceId: string): Promise<void> {
     const dev = this.m.devices.get(deviceId);
     if (dev?.userId) {
@@ -209,6 +225,7 @@ class MemoryAccountsStore implements AccountsStore {
     }
     this.m.subs.delete(`device:${deviceId}`);
     this.m.devices.delete(deviceId);
+    for (const k of [...this.m.usage.keys()]) if (k.startsWith(`${deviceId}:`)) this.m.usage.delete(k);
   }
 }
 
@@ -359,6 +376,23 @@ class SupabaseAccountsStore implements AccountsStore {
     await this.sb.from("osmo_web_sessions").delete().eq("token", token);
   }
 
+  // osmo_usage is ONE row per device (PK device_id): week_start + count, reset
+  // when the week rolls over.
+  async usageCount(deviceId: string, weekStart: number): Promise<number> {
+    const { data } = await this.sb.from("osmo_usage").select("week_start,count")
+      .eq("device_id", deviceId).maybeSingle();
+    if (!data || Number(data.week_start) !== weekStart) return 0; // new week / device → 0
+    return data.count ?? 0;
+  }
+  async bumpUsage(deviceId: string, weekStart: number): Promise<number> {
+    // Read-modify-write with the service role. (An atomic SQL increment is the
+    // production hardening; fine for the free-tier counter at current volume.)
+    const next = (await this.usageCount(deviceId, weekStart)) + 1;
+    await this.sb.from("osmo_usage")
+      .upsert({ device_id: deviceId, week_start: weekStart, count: next }, { onConflict: "device_id" });
+    return next;
+  }
+
   async purgeByDevice(deviceId: string): Promise<void> {
     const dev = await this.deviceById(deviceId);
     if (dev?.userId) {
@@ -369,6 +403,7 @@ class SupabaseAccountsStore implements AccountsStore {
     }
     await this.sb.from("osmo_subscriptions").delete().eq("owner_type", "device").eq("owner_id", deviceId);
     await this.sb.from("osmo_devices").delete().eq("id", deviceId);
+    await this.sb.from("osmo_usage").delete().eq("device_id", deviceId);
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
