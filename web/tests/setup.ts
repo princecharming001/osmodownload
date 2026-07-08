@@ -3,8 +3,10 @@
 import { beforeEach } from "vitest";
 import { resetRateLimitForTests } from "@/lib/rateLimit";
 import { resetSendIdempotencyForTests } from "@/lib/connections/sendIdempotency";
+import { resetMetricsForTests } from "@/lib/obs";
 
 beforeEach(() => {
   resetRateLimitForTests();
   resetSendIdempotencyForTests();
+  resetMetricsForTests();
 });

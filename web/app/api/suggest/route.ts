@@ -7,6 +7,7 @@ import { DEFAULT_MODEL, isModelAllowed, isProduction } from "@/lib/config/runtim
 import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
 import { checkSafety } from "@/lib/safety";
 import { flag } from "@/lib/config/flags";
+import { metric, log } from "@/lib/obs";
 
 // The thin AI proxy. Holds the Anthropic key server-side (never in the Mac app —
 // a shipped binary's key is trivially extractable), marks the psychology core as
@@ -91,6 +92,7 @@ export async function POST(req: NextRequest) {
     unlimited = resolveTier(sub, Date.now()).tier !== "free";
     const peek = await peekQuotaDurable(getAccounts(), device.id, Date.now(), unlimited);
     if (!peek.allowed) {
+      metric("draft.quota_exceeded");
       return NextResponse.json(
         { error: "quota_exceeded", remaining: 0 },
         { status: 429, headers: { "x-osmo-drafts-remaining": "0" } },
@@ -103,7 +105,8 @@ export async function POST(req: NextRequest) {
   // burning the key. Alert stands in for paging the operator.
   const breaker = breakerTripped();
   if (breaker.tripped) {
-    console.error(`[spend-breaker] tripped: ${breaker.reason} — serving degraded mock`);
+    metric("draft.spend_breaker_trip");
+    log("error", "spend_breaker_tripped", { reason: breaker.reason });
     return NextResponse.json({ text: mockTakes(userTurn), mock: true, degraded: breaker.reason });
   }
   recordModelCall();
@@ -124,9 +127,13 @@ export async function POST(req: NextRequest) {
   try {
     res = await callAnthropic(anthropicBody, key);
   } catch {
+    metric("draft.upstream_error");
+    log("error", "anthropic_timeout");
     return NextResponse.json({ error: "upstream_timeout" }, { status: 502 }); // no credit consumed
   }
   if (!res.ok) {
+    metric("draft.upstream_error");
+    log("error", "anthropic_upstream", { status: res.status });
     return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 }); // no credit consumed
   }
   const data = (await res.json()) as { content?: { type: string; text?: string }[] };
@@ -135,6 +142,7 @@ export async function POST(req: NextRequest) {
     .map((b) => b.text ?? "")
     .join("\n")
     .trim();
+  metric("draft.ok");
 
   // Consume the free-tier credit ONLY now that we have a real draft (consume-on-success).
   let remaining: number | null = null;
