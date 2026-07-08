@@ -67,10 +67,32 @@ function declaredColumns(sql: string, table: string): Set<string> {
   return cols;
 }
 
+// 0-B durable state (Appendix C) — key columns per table.
+const DURABLE_CONTRACT: Record<string, string[]> = {
+  osmo_oplog: ["device_id", "seq", "native_key", "content_hash", "payload"],
+  osmo_oplog_seq: ["device_id", "next_seq"],
+  osmo_oauth_tokens: ["device_id", "platform", "tokens", "obtained_at"],
+  osmo_connections: ["id", "device_id", "platform", "status"],
+  osmo_pending_links: ["link_id", "device_id", "platform", "code_verifier", "used"],
+  osmo_quota_counters: ["account_id", "week_start", "count"],
+  osmo_rate_limits: ["bucket_key", "count", "reset_at"],
+  osmo_spend_counters: ["period_key", "count"],
+  osmo_send_outbox: ["idempotency_key", "device_id", "status", "attempts", "message"],
+  osmo_events: ["id", "device_id", "seq", "type"],
+  osmo_processed_events: ["event_id", "source"],
+  osmo_promo_codes: ["code", "kind", "value", "max_uses", "used_count"],
+  osmo_promo_redemptions: ["code", "account_id"],
+  osmo_intel_cache: ["account_id", "thread_id", "last_message_id", "intel"],
+  osmo_enrichment_cache: ["cache_key", "device_id", "source"],
+  osmo_precomputed_draft: ["account_id", "thread_id", "draftset", "lineage_id"],
+  osmo_config_registry: ["id", "registry"],
+  osmo_feedback: ["id", "message", "meta"],
+};
+
 describe("db schema drift guard", () => {
   const sql = allMigrationSQL();
 
-  for (const [table, cols] of Object.entries(CONTRACT)) {
+  for (const [table, cols] of Object.entries({ ...CONTRACT, ...DURABLE_CONTRACT })) {
     it(`${table} declares every column the store uses`, () => {
       const declared = declaredColumns(sql, table);
       expect(declared.size, `no CREATE TABLE ${table} found in migrations`).toBeGreaterThan(0);
