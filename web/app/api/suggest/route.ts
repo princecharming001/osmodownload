@@ -6,6 +6,7 @@ import { checkAndConsume } from "@/lib/license/quota";
 import { DEFAULT_MODEL, isModelAllowed, isProduction } from "@/lib/config/runtime";
 import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
 import { checkSafety } from "@/lib/safety";
+import { flag } from "@/lib/config/flags";
 
 // The thin AI proxy. Holds the Anthropic key server-side (never in the Mac app —
 // a shipped binary's key is trivially extractable), marks the psychology core as
@@ -40,6 +41,12 @@ export async function POST(req: NextRequest) {
     if (!token || !getStore().deviceByToken(token)) {
       return NextResponse.json({ error: "unauthorized" }, { status: 401 });
     }
+  }
+
+  // Server-enforced kill-switch — a client-only flag check wouldn't stop a direct
+  // caller from burning the key while drafting is meant to be off.
+  if (!flag("aiDrafting")) {
+    return NextResponse.json({ error: "ai_disabled" }, { status: 503 });
   }
 
   let body: Body;

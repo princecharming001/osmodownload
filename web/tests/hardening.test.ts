@@ -54,6 +54,7 @@ afterEach(() => {
   delete process.env.ANTHROPIC_API_KEY;
   delete process.env.OSMO_ALLOWED_MODELS;
   delete process.env.OSMO_ANTHROPIC_DAILY_MAX_CALLS;
+  delete process.env.OSMO_FLAGS;
   vi.unstubAllGlobals();
 });
 
@@ -128,6 +129,14 @@ describe("mandatory auth + paywall integrity", () => {
     expect(validateLicenseKey("OSMO-DEV-PRO").valid).toBe(true);
     process.env.OSMO_ENV = "production";
     expect(validateLicenseKey("OSMO-DEV-PRO").valid).toBe(false);
+  });
+
+  it("the aiDrafting kill-switch is enforced server-side (503)", async () => {
+    process.env.OSMO_FLAGS = '{"aiDrafting":false}';
+    const token = await registered();
+    const res = await suggest(npost("/api/suggest", { systemCore: "x", userTurn: "Them: hi" }, token));
+    expect(res.status).toBe(503);
+    expect((await res.json()).error).toBe("ai_disabled");
   });
 });
 
