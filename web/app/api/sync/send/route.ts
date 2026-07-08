@@ -9,15 +9,23 @@ import { publish } from "@/lib/connections/events";
 import { getUnipile } from "@/lib/unipile/client";
 import { sendGmail, sendSlack, sendX } from "@/lib/oauth/send";
 import { isLiveOAuth } from "@/lib/oauth/providers";
+import { recallSend, rememberSend } from "@/lib/connections/sendIdempotency";
 import type { SendRequest, SendResponse, WireMessage } from "@/lib/connections/types";
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const device = requireDevice(req);
     const body = await req.json().catch(() => ({})) as Partial<SendRequest>;
-    const { platform, platformThreadID, text } = body;
+    const { platform, platformThreadID, text, idempotencyKey } = body;
     if (!platform || !platformThreadID || !text?.trim()) {
       return Response.json({ error: "platform, platformThreadID, text required" }, { status: 400 });
+    }
+
+    // Idempotent retry: if we already completed this exact send, return the same
+    // message rather than delivering a duplicate to the recipient.
+    if (idempotencyKey) {
+      const prior = recallSend(device.id, idempotencyKey);
+      if (prior) return Response.json({ message: prior } satisfies SendResponse);
     }
 
     const store = getStore();
@@ -62,6 +70,7 @@ export async function POST(req: Request): Promise<Response> {
     const seq = store.appendRows(device.id, { messages: [message] });
     store.recordOutbound(device.id, message);
     if (seq > 0) publish(device.id, { type: "sync.dirty", seq });
+    if (idempotencyKey) rememberSend(device.id, idempotencyKey, message);
 
     const res: SendResponse = { message };
     return Response.json(res);

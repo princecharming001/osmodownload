@@ -146,5 +146,5 @@ export type OsmoEvent =
 export interface RegisterResponse { deviceId: string; deviceToken: string; mode: "mock" | "live" }
 export interface ConnectLinkResponse { url: string; linkId: string; mode: "mock" | "unipile" | "oauth" }
 export interface AccountsResponse { connections: Omit<Connection, "deviceId">[] }
-export interface SendRequest { platform: Platform; platformThreadID: string; text: string }
+export interface SendRequest { platform: Platform; platformThreadID: string; text: string; idempotencyKey?: string }
 export interface SendResponse { message: WireMessage }

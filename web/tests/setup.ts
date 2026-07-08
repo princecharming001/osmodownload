@@ -2,7 +2,9 @@
 // (register/auth/enrich) never bleed across the ~30 register calls in the suite.
 import { beforeEach } from "vitest";
 import { resetRateLimitForTests } from "@/lib/rateLimit";
+import { resetSendIdempotencyForTests } from "@/lib/connections/sendIdempotency";
 
 beforeEach(() => {
   resetRateLimitForTests();
+  resetSendIdempotencyForTests();
 });
