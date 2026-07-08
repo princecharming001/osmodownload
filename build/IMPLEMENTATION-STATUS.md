@@ -1,7 +1,21 @@
 # Osmo backend hardening — implementation status
 
 Branch: `backend-hardening` (local only, nothing pushed/deployed). Baseline was
-113 tests; now **189 tests green** (`cd web && npm run verify`). 29 commits.
+113 tests; now **192 tests + `next build` green** (`cd web && npm run verify:full`, exit 0). 33 commits.
+
+## SERVER: production-ready. Remaining is either your API keys or the Mac app.
+- **Backward-compatible** with the current Mac app (SSE uses the Bearer header, not
+  `?token=`; the suggest/send wire is unchanged; new response fields are additive).
+- **Needs your keys** (code done, flips mock→live when set): Stripe (`STRIPE_SECRET_KEY`
+  + `STRIPE_WEBHOOK_SECRET` + price ids), Resend (`RESEND_API_KEY` + `OSMO_EMAIL_FROM`),
+  Apple (`OSMO_APPLE_CLIENT_ID`).
+- **One paired Mac-app change** (do it alongside the Apple key): Sign in with Apple must
+  send `identityToken` + `nonce` (server already verifies it; dev path still works keyless).
+- **Privacy items de-scoped** per your call (oplog message-content durability, erase/export).
+- **Oplog**: OOM-bounded (`OSMO_OPLOG_MAX`); full durable-oplog intentionally deferred
+  (idempotent re-pull + local-first already give correctness).
+- **Noted low-risk leftover**: a narrow connection-resurrection race (concurrent
+  delete + backfill status-write). Rate-limit stays in-memory (correct for one instance).
 
 ## Supabase connected — durable state live (project `general` / nxibeiykcgxpbmkeadth, a SHARED multi-product DB; only osmo_* tables are ours)
 - Applied the full **0-B durable schema** (20 `osmo_*` tables + atomic usage RPCs, RLS on)
