@@ -80,7 +80,10 @@ export interface AccountsStore {
   // free-tier quota usage — durable per-device week bucket (osmo_usage), so the
   // count survives restart/redeploy instead of resetting to zero.
   usageCount(deviceId: string, weekStart: number): Promise<number>;
+  /** Atomic reserve: +1 (reset on a new week); returns the new count. */
   bumpUsage(deviceId: string, weekStart: number): Promise<number>;
+  /** Atomic refund: -1 (never below 0), used when an upstream call fails. */
+  refundUsage(deviceId: string, weekStart: number): Promise<number>;
 
   // durable OAuth tokens (osmo_oauth_tokens) so connections survive redeploy.
   oauthTokens(deviceId: string, platform: string): Promise<Record<string, unknown> | null>;
@@ -225,6 +228,12 @@ class MemoryAccountsStore implements AccountsStore {
   async bumpUsage(deviceId: string, weekStart: number): Promise<number> {
     const key = `${deviceId}:${weekStart}`;
     const next = (this.m.usage.get(key) ?? 0) + 1;
+    this.m.usage.set(key, next);
+    return next;
+  }
+  async refundUsage(deviceId: string, weekStart: number): Promise<number> {
+    const key = `${deviceId}:${weekStart}`;
+    const next = Math.max(0, (this.m.usage.get(key) ?? 0) - 1);
     this.m.usage.set(key, next);
     return next;
   }
@@ -416,12 +425,14 @@ class SupabaseAccountsStore implements AccountsStore {
     return data.count ?? 0;
   }
   async bumpUsage(deviceId: string, weekStart: number): Promise<number> {
-    // Read-modify-write with the service role. (An atomic SQL increment is the
-    // production hardening; fine for the free-tier counter at current volume.)
-    const next = (await this.usageCount(deviceId, weekStart)) + 1;
-    await this.sb.from("osmo_usage")
-      .upsert({ device_id: deviceId, week_start: weekStart, count: next }, { onConflict: "device_id" });
-    return next;
+    // Atomic, race-safe reserve via the osmo_bump_usage RPC (single row-locked
+    // statement — no read-modify-write lost-update, holds across instances).
+    const { data } = await this.sb.rpc("osmo_bump_usage", { p_device_id: deviceId, p_week_start: weekStart });
+    return (data as number) ?? 0;
+  }
+  async refundUsage(deviceId: string, weekStart: number): Promise<number> {
+    const { data } = await this.sb.rpc("osmo_refund_usage", { p_device_id: deviceId, p_week_start: weekStart });
+    return (data as number) ?? 0;
   }
   async oauthTokens(deviceId: string, platform: string): Promise<Record<string, unknown> | null> {
     const { data } = await this.sb.from("osmo_oauth_tokens").select("tokens")

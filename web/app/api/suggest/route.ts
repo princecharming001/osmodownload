@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveDevice } from "@/lib/connections/auth";
 import { getAccounts } from "@/lib/accounts/store";
 import { resolveTier } from "@/lib/license/entitlement";
-import { peekQuotaDurable, consumeQuotaDurable } from "@/lib/license/quota";
+import { reserveQuotaDurable, refundQuotaDurable } from "@/lib/license/quota";
 import { DEFAULT_MODEL, isModelAllowed, isProduction } from "@/lib/config/runtime";
 import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
 import { checkSafety } from "@/lib/safety";
@@ -83,21 +83,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text: mockTakes(userTurn), mock: true });
   }
 
-  // Server-enforced free-tier quota — PEEK before the call (a free device over its
-  // weekly cap gets 429). We consume the credit only AFTER a successful draft
-  // below, so an upstream failure never burns a draft. Pro/trial are unlimited.
+  // Free-tier quota: compute Pro/trial (unlimited) up front; we RESERVE the credit
+  // atomically right before the model call (race-safe) and refund it if the call
+  // fails — so an upstream failure never burns a draft AND concurrent requests
+  // can't exceed the weekly cap.
   let unlimited = false;
   if (device) {
     const sub = await getAccounts().subscriptionForDevice(device.id);
     unlimited = resolveTier(sub, Date.now()).tier !== "free";
-    const peek = await peekQuotaDurable(getAccounts(), device.id, Date.now(), unlimited);
-    if (!peek.allowed) {
-      metric("draft.quota_exceeded");
-      return NextResponse.json(
-        { error: "quota_exceeded", remaining: 0 },
-        { status: 429, headers: { "x-osmo-drafts-remaining": "0" } },
-      );
-    }
   }
 
   // Aggregate spend backstop — before any real call. Once the rolling day/month
@@ -109,7 +102,23 @@ export async function POST(req: NextRequest) {
     log("error", "spend_breaker_tripped", { reason: breaker.reason });
     return NextResponse.json({ text: mockTakes(userTurn), mock: true, degraded: breaker.reason });
   }
-  // (recordModelCall now fires per real attempt inside callAnthropic — retries bill too.)
+
+  // Atomically reserve one free-tier draft (429 if over the weekly cap).
+  let remaining: number | null = null;
+  if (device) {
+    const reserved = await reserveQuotaDurable(getAccounts(), device.id, Date.now(), unlimited);
+    if (!reserved.allowed) {
+      metric("draft.quota_exceeded");
+      return NextResponse.json(
+        { error: "quota_exceeded", remaining: 0 },
+        { status: 429, headers: { "x-osmo-drafts-remaining": "0" } },
+      );
+    }
+    remaining = reserved.remaining;
+  }
+  const refund = async (): Promise<void> => {
+    if (device && !unlimited) await refundQuotaDurable(getAccounts(), device.id, Date.now());
+  };
 
   const anthropicBody = {
     model,
@@ -127,14 +136,16 @@ export async function POST(req: NextRequest) {
   try {
     res = await callAnthropic(anthropicBody, key);
   } catch {
+    await refund();
     metric("draft.upstream_error");
     log("error", "anthropic_timeout");
-    return NextResponse.json({ error: "upstream_timeout" }, { status: 502 }); // no credit consumed
+    return NextResponse.json({ error: "upstream_timeout" }, { status: 502 });
   }
   if (!res.ok) {
+    await refund();
     metric("draft.upstream_error");
     log("error", "anthropic_upstream", { status: res.status });
-    return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 }); // no credit consumed
+    return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 });
   }
   const data = (await res.json()) as { content?: { type: string; text?: string }[] };
   const text = (data.content ?? [])
@@ -143,16 +154,13 @@ export async function POST(req: NextRequest) {
     .join("\n")
     .trim();
   if (!text) {
+    await refund();
     metric("draft.empty");
-    return NextResponse.json({ text: "" }); // successful-but-empty: no credit consumed
+    return NextResponse.json({ text: "" }); // successful-but-empty: reservation refunded
   }
   metric("draft.ok");
 
-  // Consume the free-tier credit ONLY now that we have a real, non-empty draft.
-  let remaining: number | null = null;
-  if (device && !unlimited) remaining = await consumeQuotaDurable(getAccounts(), device.id, Date.now());
-
-  // We return only the text; nothing is persisted.
+  // Success — keep the reservation. Nothing is persisted beyond the counter.
   return remaining === null
     ? NextResponse.json({ text })
     : NextResponse.json({ text }, { headers: { "x-osmo-drafts-remaining": String(remaining) } });

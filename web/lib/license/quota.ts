@@ -54,20 +54,24 @@ export async function checkAndConsumeDurable(
   return { allowed: true, remaining: Math.max(0, FREE_DRAFTS_PER_WEEK - next) };
 }
 
-/** Peek the quota WITHOUT consuming — the interactive path checks this BEFORE
-    the model call so a draft that never gets produced (upstream failure) can't
-    burn a credit. Pair with consumeQuotaDurable() after a successful generation. */
-export async function peekQuotaDurable(
+/** Atomically RESERVE one draft before the model call — race-safe (the counter
+    increment is a single row-locked DB op), so concurrent requests can't exceed
+    the cap. Returns allowed=false (refunding the over-reservation) when over.
+    Pair with refundQuotaDurable() on failure (consume-on-success). */
+export async function reserveQuotaDurable(
   accounts: AccountsStore, deviceId: string, nowMs: number, unlimited: boolean,
 ): Promise<QuotaResult> {
   if (unlimited) return { allowed: true, remaining: null };
-  const used = await accounts.usageCount(deviceId, weekStart(nowMs));
-  if (used >= FREE_DRAFTS_PER_WEEK) return { allowed: false, remaining: 0 };
-  return { allowed: true, remaining: FREE_DRAFTS_PER_WEEK - used };
+  const ws = weekStart(nowMs);
+  const count = await accounts.bumpUsage(deviceId, ws);
+  if (count > FREE_DRAFTS_PER_WEEK) {
+    await accounts.refundUsage(deviceId, ws); // undo the over-reservation
+    return { allowed: false, remaining: 0 };
+  }
+  return { allowed: true, remaining: Math.max(0, FREE_DRAFTS_PER_WEEK - count) };
 }
 
-/** Consume one draft AFTER a successful generation (consume-on-success). */
-export async function consumeQuotaDurable(accounts: AccountsStore, deviceId: string, nowMs: number): Promise<number> {
-  const next = await accounts.bumpUsage(deviceId, weekStart(nowMs));
-  return Math.max(0, FREE_DRAFTS_PER_WEEK - next);
+/** Give back a reserved draft when the model call fails. */
+export async function refundQuotaDurable(accounts: AccountsStore, deviceId: string, nowMs: number): Promise<void> {
+  await accounts.refundUsage(deviceId, weekStart(nowMs));
 }
