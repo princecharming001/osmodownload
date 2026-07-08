@@ -20,6 +20,7 @@ const CONTRACT: Record<string, string[]> = {
   ],
   osmo_magic_links: ["token", "email", "expires_at", "used"],
   osmo_web_sessions: ["token", "user_id", "created_at"],
+  osmo_usage: ["device_id", "week_start", "count"],
 };
 
 function allMigrationSQL(): string {
@@ -74,7 +75,6 @@ const DURABLE_CONTRACT: Record<string, string[]> = {
   osmo_oauth_tokens: ["device_id", "platform", "tokens", "obtained_at"],
   osmo_connections: ["id", "device_id", "platform", "status"],
   osmo_pending_links: ["link_id", "device_id", "platform", "code_verifier", "used"],
-  osmo_quota_counters: ["account_id", "week_start", "count"],
   osmo_rate_limits: ["bucket_key", "count", "reset_at"],
   osmo_spend_counters: ["period_key", "count"],
   osmo_send_outbox: ["idempotency_key", "device_id", "status", "attempts", "message"],

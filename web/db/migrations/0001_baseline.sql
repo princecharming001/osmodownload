@@ -20,6 +20,7 @@ create table if not exists osmo_devices (
   id           text primary key,                 -- "dev-<uuid>"
   token        text not null,
   user_id      uuid references osmo_users(id) on delete set null,
+  label        text,
   created_at   timestamptz not null default now(),
   last_seen_at timestamptz
 );
@@ -27,14 +28,25 @@ create index if not exists osmo_devices_user_id_idx on osmo_devices(user_id);
 create index if not exists osmo_devices_token_idx on osmo_devices(token);
 
 create table if not exists osmo_subscriptions (
-  owner_type          text not null check (owner_type in ('user','device')),
-  owner_id            text not null,             -- user uuid (as text) or device id
-  license_key         text,
-  subscription_active boolean not null default false,
-  plan                text,
-  trial_started_at    timestamptz,
-  updated_at          timestamptz not null default now(),
+  id                     uuid not null default gen_random_uuid(),
+  owner_type             text not null check (owner_type in ('user','device')),
+  owner_id               text not null,          -- user uuid (as text) or device id
+  license_key            text,
+  subscription_active    boolean not null default false,
+  plan                   text,
+  trial_started_at       timestamptz,
+  stripe_customer_id     text,
+  stripe_subscription_id text,
+  updated_at             timestamptz not null default now(),
   primary key (owner_type, owner_id)
+);
+
+-- Free-tier quota usage (per device, week bucket). week_start is epoch ms.
+create table if not exists osmo_usage (
+  device_id  text not null,
+  week_start bigint not null,
+  count      integer not null default 0,
+  primary key (device_id, week_start)
 );
 
 create table if not exists osmo_magic_links (

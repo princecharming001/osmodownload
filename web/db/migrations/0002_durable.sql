@@ -57,14 +57,9 @@ create table if not exists osmo_pending_links (
   expires_at    timestamptz
 );
 
--- Per-account quota (week-bucket) — D2/0-A.
-create table if not exists osmo_quota_counters (
-  account_id text not null,
-  week_start text not null,
-  count      integer not null default 0,
-  updated_at timestamptz not null default now(),
-  primary key (account_id, week_start)
-);
+-- NOTE: quota already has a durable home — the existing osmo_usage table
+-- (device_id, week_start bigint, count), created in 0001. The store-swap wires
+-- quota to THAT table. A per-account rollup (D2) is a later evolution of it.
 
 -- Shared rate-limit buckets — D0.
 create table if not exists osmo_rate_limits (
@@ -195,7 +190,7 @@ declare t text;
 begin
   for t in select unnest(array[
     'osmo_oplog','osmo_oplog_seq','osmo_oauth_tokens','osmo_connections','osmo_pending_links',
-    'osmo_quota_counters','osmo_rate_limits','osmo_spend_counters','osmo_send_outbox','osmo_events',
+    'osmo_rate_limits','osmo_spend_counters','osmo_send_outbox','osmo_events',
     'osmo_processed_events','osmo_promo_codes','osmo_promo_redemptions','osmo_intel_cache',
     'osmo_enrichment_cache','osmo_precomputed_draft','osmo_config_registry','osmo_status_banner',
     'osmo_release_info','osmo_feedback'])
