@@ -280,7 +280,7 @@ class MemoryAccountsStore implements AccountsStore {
 // Supabase (real Postgres) — same interface, activated when the key is present.
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
-class SupabaseAccountsStore implements AccountsStore {
+export class SupabaseAccountsStore implements AccountsStore {
   constructor(private sb: any) {}
 
   private mapUser = (r: any): AccountUser => ({ id: r.id, email: r.email, appleUserID: r.apple_user_id ?? null, displayName: r.display_name ?? null, createdAt: r.created_at });
