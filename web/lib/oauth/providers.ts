@@ -138,3 +138,21 @@ export async function refreshXToken(refreshToken: string): Promise<unknown> {
   if (!res.ok) throw new Error(`x token refresh → ${res.status}`);
   return res.json();
 }
+
+/** Refresh an expired Google (Gmail) access token. Returns a new token bundle
+    ({ access_token, expires_in, ... }); Google omits refresh_token on refresh so
+    the caller keeps the original. */
+export async function refreshGoogleToken(refreshToken: string): Promise<unknown> {
+  const res = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: refreshToken,
+      client_id: process.env.GOOGLE_CLIENT_ID!,
+      client_secret: process.env.GOOGLE_CLIENT_SECRET!,
+    }),
+  });
+  if (!res.ok) throw new Error(`google token refresh → ${res.status}`);
+  return res.json();
+}

@@ -9,6 +9,7 @@ import { publish } from "@/lib/connections/events";
 import { getUnipile } from "@/lib/unipile/client";
 import { sendGmail, sendSlack, sendX } from "@/lib/oauth/send";
 import { isLiveOAuth } from "@/lib/oauth/providers";
+import { freshOAuthToken } from "@/lib/oauth/tokens";
 import { recallSend, rememberSend } from "@/lib/connections/sendIdempotency";
 import type { SendRequest, SendResponse, WireMessage } from "@/lib/connections/types";
 
@@ -41,11 +42,11 @@ export async function POST(req: Request): Promise<Response> {
     let sent: { messageId: string };
     try {
       if (platform === "gmail" && isLiveOAuth("gmail")) {
-        sent = await sendGmail(store.oauthTokens(device.id, "gmail"), platformThreadID, text);
+        sent = await sendGmail(await freshOAuthToken(device.id, "gmail"), platformThreadID, text);
       } else if (platform === "slack" && isLiveOAuth("slack")) {
-        sent = await sendSlack(store.oauthTokens(device.id, "slack"), platformThreadID, text);
+        sent = await sendSlack(await freshOAuthToken(device.id, "slack"), platformThreadID, text);
       } else if (platform === "x" && isLiveOAuth("x")) {
-        sent = await sendX(store.oauthTokens(device.id, "x"), platformThreadID, text);
+        sent = await sendX(await freshOAuthToken(device.id, "x"), platformThreadID, text);
       } else {
         sent = await getUnipile().sendMessage(connection.id, platformThreadID, text);
       }
