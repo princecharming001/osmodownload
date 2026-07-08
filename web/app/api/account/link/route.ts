@@ -8,18 +8,39 @@
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { getAccounts } from "@/lib/accounts/store";
 import { buildSignedEntitlement } from "@/lib/license/entitlement";
+import { verifyAppleIdentityToken } from "@/lib/auth/appleVerify";
+import { isProduction } from "@/lib/config/runtime";
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const device = requireDevice(req);
-    const body = await req.json().catch(() => ({})) as { appleUserID?: string; email?: string; fullName?: string };
-    const appleUserID = (body.appleUserID ?? "").toString().trim();
+    const body = await req.json().catch(() => ({})) as {
+      appleUserID?: string; email?: string; fullName?: string; identityToken?: string; nonce?: string;
+    };
+
+    // Derive the Apple identity from a VERIFIED token — never a client-supplied
+    // appleUserID (that was the account-takeover hole). The bare-field path is
+    // dev-only; production requires a real Apple-signed identity token.
+    let appleUserID = "";
+    let email: string | null = null;
+    const clientId = process.env.OSMO_APPLE_CLIENT_ID;
+    if (body.identityToken && clientId) {
+      const id = await verifyAppleIdentityToken(body.identityToken, { clientId, nonce: body.nonce });
+      if (!id) return Response.json({ error: "invalid apple token" }, { status: 401 });
+      appleUserID = id.sub;
+      email = id.email;                                    // trust only the token
+    } else if (!isProduction()) {
+      appleUserID = (body.appleUserID ?? "").toString().trim();
+      email = body.email?.trim() || null;
+    } else {
+      return Response.json({ error: "identity token required" }, { status: 401 });
+    }
     if (!appleUserID) return Response.json({ error: "appleUserID required" }, { status: 400 });
 
     const accounts = getAccounts();
     const user = await accounts.findOrCreateUserByApple(
       appleUserID,
-      body.email?.trim() || null,
+      email,
       body.fullName?.trim() || null,
     );
     if (!user) {
