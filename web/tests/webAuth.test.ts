@@ -72,10 +72,10 @@ describe("auth routes", () => {
     expect(res.status).toBe(400);
   });
 
-  it("mock mode (no RESEND_API_KEY) returns the verify URL directly", async () => {
+  it("dev mode (no provider, not prod) returns the verify URL directly for local testing", async () => {
     const res = await authRequest(jreq("/api/auth/request", { email: "a@b.com" }));
     const body = await res.json();
-    expect(body.mode).toBe("mock");
+    expect(body.mode).toBe("dev");
     expect(body.verifyUrl).toContain("/api/auth/verify?token=");
   });
 

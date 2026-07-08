@@ -5,10 +5,12 @@
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { emitNow } from "@/lib/unipile/mock";
 import { isLiveUnipile } from "@/lib/unipile/client";
+import { isProduction } from "@/lib/config/runtime";
 import type { Platform } from "@/lib/connections/types";
 
 export async function POST(req: Request): Promise<Response> {
-  if (isLiveUnipile()) return Response.json({ error: "not found" }, { status: 404 });
+  // Dev E2E surface — unreachable in production (would let any device inject inbound messages).
+  if (isLiveUnipile() || isProduction()) return Response.json({ error: "not found" }, { status: 404 });
   try {
     const device = requireDevice(req);
     const body = await req.json().catch(() => ({}));

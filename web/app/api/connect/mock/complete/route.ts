@@ -6,8 +6,11 @@ import { getStore } from "@/lib/connections/memoryStore";
 import { completeMockConnect } from "@/lib/unipile/mock";
 import { isLiveUnipile } from "@/lib/unipile/client";
 import { isLiveOAuth } from "@/lib/oauth/providers";
+import { isProduction } from "@/lib/config/runtime";
 
 export async function POST(req: Request): Promise<Response> {
+  // Mock connect wizard — unreachable in production.
+  if (isProduction()) return Response.json({ error: "not found" }, { status: 404 });
   const body = await req.json().catch(() => ({}));
   const linkId = body.linkId as string | undefined;
   if (!linkId) return Response.json({ error: "linkId required" }, { status: 400 });

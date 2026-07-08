@@ -4,9 +4,12 @@
 // Pro in production.
 
 import { getAccounts } from "@/lib/accounts/store";
+import { isProduction } from "@/lib/config/runtime";
 
 export async function GET(req: Request): Promise<Response> {
-  if (process.env.STRIPE_SECRET_KEY) {
+  // Hard gate: never reachable in production (nor once real Stripe is present),
+  // regardless of provider config — this route grants Pro with no auth.
+  if (process.env.STRIPE_SECRET_KEY || isProduction()) {
     return new Response("Not available in live mode.", { status: 404 });
   }
   const url = new URL(req.url);

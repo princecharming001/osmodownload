@@ -1,10 +1,14 @@
 // POST /api/auth/request { email } — mints a 15-minute single-use magic link.
-// Live mode (RESEND_API_KEY set) sends it by email. Keyless/dev mode has
-// nowhere to deliver an email, so it returns the verify URL directly in the
-// response — same "mock" convention as /api/checkout/session — so the login
-// flow is exercisable end to end before an email provider is wired in.
+//
+// The verify URL is a bearer credential: whoever holds it can sign in as `email`.
+// So it is delivered by EMAIL and never returned in the response body when a mail
+// provider is configured. Only in local dev (no provider, not production) is the
+// link returned inline, so the flow stays exercisable before email is wired up.
+// In production with no provider we fail CLOSED rather than leak.
 
 import { getAccounts } from "@/lib/accounts/store";
+import { sendMagicLink } from "@/lib/email/resend";
+import { isProduction } from "@/lib/config/runtime";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -20,9 +24,17 @@ export async function POST(req: Request): Promise<Response> {
   const verifyUrl = `${origin}/api/auth/verify?token=${link.token}`;
 
   if (process.env.RESEND_API_KEY) {
-    // TODO(live): send `verifyUrl` to `email` via Resend (or chosen provider)
-    // and return { ok: true, mode: "sent" } WITHOUT the link in the response.
+    const sent = await sendMagicLink(email, verifyUrl);
+    if (!sent) return Response.json({ error: "email_failed" }, { status: 502 });
+    // Never leak the link in the body once we can email it.
+    return Response.json({ ok: true, mode: "sent" });
   }
 
-  return Response.json({ ok: true, mode: process.env.RESEND_API_KEY ? "sent" : "mock", verifyUrl });
+  if (isProduction()) {
+    // No mail provider in production — do not expose the login token.
+    return Response.json({ error: "email_not_configured" }, { status: 500 });
+  }
+
+  // Local dev only: surface the link so the login flow is testable.
+  return Response.json({ ok: true, mode: "dev", verifyUrl });
 }

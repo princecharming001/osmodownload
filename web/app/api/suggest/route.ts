@@ -3,6 +3,7 @@ import { getStore } from "@/lib/connections/memoryStore";
 import { getAccounts } from "@/lib/accounts/store";
 import { resolveTier } from "@/lib/license/entitlement";
 import { checkAndConsume } from "@/lib/license/quota";
+import { DEFAULT_MODEL, isModelAllowed } from "@/lib/config/runtime";
 
 // The thin AI proxy. Holds the Anthropic key server-side (never in the Mac app —
 // a shipped binary's key is trivially extractable), marks the psychology core as
@@ -43,9 +44,14 @@ export async function POST(req: NextRequest) {
   }
   const systemCore = body.systemCore ?? "";
   const userTurn = body.userTurn ?? "";
-  const model = body.model ?? "claude-sonnet-5";
+  const model = body.model ?? DEFAULT_MODEL;
   if (!systemCore || !userTurn) {
     return NextResponse.json({ error: "missing prompt" }, { status: 400 });
+  }
+  // Server owns model selection — a client cannot force an arbitrary (expensive)
+  // model onto the server-side key.
+  if (!isModelAllowed(model)) {
+    return NextResponse.json({ error: "model_not_allowed", model }, { status: 400 });
   }
 
   const key = process.env.ANTHROPIC_API_KEY;
