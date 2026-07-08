@@ -108,12 +108,19 @@ describe("auth routes", () => {
     const token = extractCookie(verifyRes);
 
     const logoutReq = new Request(`${BASE}/api/auth/logout`, {
-      method: "POST", headers: { cookie: `${SESSION_COOKIE}=${token}` },
+      method: "POST", headers: { cookie: `${SESSION_COOKIE}=${token}`, origin: BASE },
     });
     expect(readSessionToken(logoutReq)).toBe(token);
 
     const logoutRes = await authLogout(logoutReq);
     expect((await logoutRes.json()).ok).toBe(true);
     expect(await getAccounts().webSessionUser(token)).toBeNull();
+  });
+
+  it("logout without a matching Origin is rejected (CSRF)", async () => {
+    const res = await authLogout(new Request(`${BASE}/api/auth/logout`, {
+      method: "POST", headers: { cookie: `${SESSION_COOKIE}=whatever`, origin: "https://evil.example.com" },
+    }));
+    expect(res.status).toBe(403);
   });
 });
