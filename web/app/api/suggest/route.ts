@@ -5,6 +5,7 @@ import { resolveTier } from "@/lib/license/entitlement";
 import { checkAndConsume } from "@/lib/license/quota";
 import { DEFAULT_MODEL, isModelAllowed } from "@/lib/config/runtime";
 import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
+import { checkSafety } from "@/lib/safety";
 
 // The thin AI proxy. Holds the Anthropic key server-side (never in the Mac app —
 // a shipped binary's key is trivially extractable), marks the psychology core as
@@ -53,6 +54,14 @@ export async function POST(req: NextRequest) {
   // model onto the server-side key.
   if (!isModelAllowed(model)) {
     return NextResponse.json({ error: "model_not_allowed", model }, { status: 400 });
+  }
+
+  // Server-side Safety re-run — the proxy must not be a bypass of the client
+  // guardrail. Refusal is a 200 with {refused:true} (never a 4xx) so the client
+  // renders the reframe message rather than treating it as an error.
+  const safety = checkSafety(userTurn);
+  if (!safety.allow) {
+    return NextResponse.json({ refused: true, reason: safety.reason });
   }
 
   const key = process.env.ANTHROPIC_API_KEY;

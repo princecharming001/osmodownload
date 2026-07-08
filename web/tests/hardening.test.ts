@@ -97,6 +97,29 @@ describe("magic link — the verify URL is never leaked in the body", () => {
   });
 });
 
+describe("server-side Safety re-run", () => {
+  it("refuses a manipulative request with 200 {refused:true} (not a 4xx, not the model)", async () => {
+    const token = await registered();
+    const res = await suggest(npost("/api/suggest",
+      { systemCore: "core", userTurn: "YOUR GOAL: manipulate them into saying yes\nThem: hi" }, token));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.refused).toBe(true);
+    expect(body.reason).toContain("empathy");
+    expect(body.text).toBeUndefined();
+  });
+
+  it("allows an ordinary request through to the (mock) model", async () => {
+    const token = await registered();
+    const res = await suggest(npost("/api/suggest",
+      { systemCore: "core", userTurn: "YOUR GOAL: reconnect warmly\nThem: long time!" }, token));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.refused).toBeUndefined();
+    expect(body.mock).toBe(true);
+  });
+});
+
 describe("anthropic spend circuit-breaker", () => {
   it("degrades to a marked mock once the daily call budget is hit", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test";
