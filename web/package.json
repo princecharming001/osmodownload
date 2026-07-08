@@ -8,7 +8,11 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "test": "vitest run"
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "verify": "tsc --noEmit && vitest run",
+    "verify:full": "npm run verify && next build",
+    "db:migrate": "node db/apply.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.110.0",
