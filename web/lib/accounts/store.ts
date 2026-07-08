@@ -99,6 +99,11 @@ export interface AccountsStore {
   // time an event id is seen (process it), false on redelivery (dedup).
   markEventProcessed(eventId: string, source: string): Promise<boolean>;
 
+  // durable global Anthropic spend counters (osmo_spend_counters) so the daily/
+  // monthly cost cap survives redeploy. bumpSpend atomically +1 → new count.
+  bumpSpend(periodKey: string): Promise<number>;
+  getSpend(periodKey: string): Promise<number>;
+
   // deletion
   purgeByDevice(deviceId: string): Promise<void>;
 }
@@ -121,9 +126,10 @@ interface Mem {
   oauth: Map<string, Record<string, unknown>>;     // `${deviceId}:${platform}` → tokens
   conns: Map<string, Connection>;                  // connection id → record
   processed: Set<string>;                           // `${source}:${eventId}` webhook dedup
+  spend: Map<string, number>;                       // periodKey → global spend count
 }
 function freshMem(): Mem {
-  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map(), oauth: new Map(), conns: new Map(), processed: new Set() };
+  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map(), oauth: new Map(), conns: new Map(), processed: new Set(), spend: new Map() };
 }
 
 class MemoryAccountsStore implements AccountsStore {
@@ -259,6 +265,12 @@ class MemoryAccountsStore implements AccountsStore {
     this.m.processed.add(key);
     return true;
   }
+  async bumpSpend(periodKey: string): Promise<number> {
+    const next = (this.m.spend.get(periodKey) ?? 0) + 1;
+    this.m.spend.set(periodKey, next);
+    return next;
+  }
+  async getSpend(periodKey: string): Promise<number> { return this.m.spend.get(periodKey) ?? 0; }
 
   async purgeByDevice(deviceId: string): Promise<void> {
     const dev = this.m.devices.get(deviceId);
@@ -480,6 +492,14 @@ export class SupabaseAccountsStore implements AccountsStore {
       .upsert({ event_id: eventId, source }, { onConflict: "event_id", ignoreDuplicates: true })
       .select("event_id");
     return (data?.length ?? 0) > 0;
+  }
+  async bumpSpend(periodKey: string): Promise<number> {
+    const { data } = await this.sb.rpc("osmo_bump_spend", { p_key: periodKey });
+    return (data as number) ?? 0;
+  }
+  async getSpend(periodKey: string): Promise<number> {
+    const { data } = await this.sb.from("osmo_spend_counters").select("count").eq("period_key", periodKey).maybeSingle();
+    return (data?.count as number) ?? 0;
   }
 
   async purgeByDevice(deviceId: string): Promise<void> {

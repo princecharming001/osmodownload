@@ -218,6 +218,25 @@ describe("server-side Safety re-run", () => {
 });
 
 describe("anthropic spend circuit-breaker", () => {
+  const anthropicOk = () => new Response(
+    JSON.stringify({ content: [{ type: "text", text: "a\nb\nc" }] }),
+    { status: 200, headers: { "content-type": "application/json" } });
+
+  it("the daily spend cap survives a redeploy (durable rehydrate)", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    process.env.OSMO_ANTHROPIC_DAILY_MAX_CALLS = "3";
+    vi.stubGlobal("fetch", vi.fn(anthropicOk));
+    const { token, deviceId } = await registeredWithId();
+    await getAccounts().setSubscriptionForDevice(deviceId, { subscriptionActive: true }); // Pro → no quota noise
+    const call = () => suggest(npost("/api/suggest", { systemCore: "x", userTurn: "Them: hi" }, token));
+    await call(); await call(); await call();  // 3 real calls → durable spend day=3
+
+    resetSpendForTests();                        // simulate redeploy: in-memory counters gone, durable intact
+    const after = await (await call()).json();
+    expect(after.mock).toBe(true);
+    expect(after.degraded).toBe("daily_budget"); // rehydrated from durable → still tripped
+  });
+
   it("degrades to a marked mock once the daily call budget is hit", async () => {
     process.env.ANTHROPIC_API_KEY = "sk-test";
     process.env.OSMO_ANTHROPIC_DAILY_MAX_CALLS = "2";

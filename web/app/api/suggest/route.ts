@@ -4,7 +4,7 @@ import { getAccounts } from "@/lib/accounts/store";
 import { resolveTier } from "@/lib/license/entitlement";
 import { reserveQuotaDurable, refundQuotaDurable } from "@/lib/license/quota";
 import { DEFAULT_MODEL, isModelAllowed, isProduction } from "@/lib/config/runtime";
-import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
+import { breakerTripped, recordModelCall, ensureSpendLoaded } from "@/lib/license/spendBreaker";
 import { checkSafety } from "@/lib/safety";
 import { flag } from "@/lib/config/flags";
 import { metric, log } from "@/lib/obs";
@@ -95,7 +95,9 @@ export async function POST(req: NextRequest) {
 
   // Aggregate spend backstop — before any real call. Once the rolling day/month
   // budget is hit we serve the deterministic mock (clearly marked) instead of
-  // burning the key. Alert stands in for paging the operator.
+  // burning the key. Alert stands in for paging the operator. Rehydrate the
+  // durable counters first so a redeploy doesn't reset the cap.
+  await ensureSpendLoaded();
   const breaker = breakerTripped();
   if (breaker.tripped) {
     metric("draft.spend_breaker_trip");

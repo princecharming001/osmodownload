@@ -47,12 +47,19 @@ class Q {
 class FakeClient {
   constructor(private db: FakeDB) {}
   from(name: string) { return new Q(this.db, name); }
-  rpc(fn: string, args: { p_device_id: string; p_week_start: number }) {
+  rpc(fn: string, args: Record<string, string | number>) {
+    if (fn === "osmo_bump_spend") {
+      const t = this.db.t("osmo_spend_counters");
+      let row = t.find((r) => r.period_key === args.p_key) as { period_key: string; count: number } | undefined;
+      if (!row) { row = { period_key: args.p_key as string, count: 1 }; t.push(row); }
+      else row.count += 1;
+      return Promise.resolve({ data: row.count, error: null });
+    }
     const usage = this.db.t("osmo_usage");
     let row = usage.find((r) => r.device_id === args.p_device_id) as { device_id: string; week_start: number; count: number } | undefined;
     if (fn === "osmo_bump_usage") {
-      if (!row) { row = { device_id: args.p_device_id, week_start: args.p_week_start, count: 1 }; usage.push(row); }
-      else { row.count = row.week_start === args.p_week_start ? row.count + 1 : 1; row.week_start = args.p_week_start; }
+      if (!row) { row = { device_id: args.p_device_id as string, week_start: args.p_week_start as number, count: 1 }; usage.push(row); }
+      else { row.count = row.week_start === args.p_week_start ? row.count + 1 : 1; row.week_start = args.p_week_start as number; }
       return Promise.resolve({ data: row.count, error: null });
     }
     if (fn === "osmo_refund_usage") {
@@ -108,5 +115,12 @@ describe("SupabaseAccountsStore contract (durable code path)", () => {
   it("event idempotency: first true, redelivery false (ignoreDuplicates)", async () => {
     expect(await s.markEventProcessed("evt_1", "stripe")).toBe(true);
     expect(await s.markEventProcessed("evt_1", "stripe")).toBe(false);
+  });
+
+  it("spend counters: atomic bump + read-back", async () => {
+    expect(await s.bumpSpend("day:2026-07-08")).toBe(1);
+    expect(await s.bumpSpend("day:2026-07-08")).toBe(2);
+    expect(await s.getSpend("day:2026-07-08")).toBe(2);
+    expect(await s.getSpend("day:2026-07-09")).toBe(0);
   });
 });
