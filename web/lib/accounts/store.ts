@@ -52,6 +52,7 @@ export interface AccountsStore {
   // ephemeral token map for the message path)
   upsertDevice(id: string, token: string): Promise<AccountDevice>;
   deviceById(id: string): Promise<AccountDevice | null>;
+  deviceByToken(token: string): Promise<AccountDevice | null>;
   devicesForUser(userId: string): Promise<AccountDevice[]>;
   linkDeviceToUser(deviceId: string, userId: string): Promise<void>;
 
@@ -116,6 +117,7 @@ class MemoryAccountsStore implements AccountsStore {
     return dev;
   }
   async deviceById(id: string) { return this.m.devices.get(id) ?? null; }
+  async deviceByToken(token: string) { for (const d of this.m.devices.values()) if (d.token === token) return d; return null; }
   async devicesForUser(userId: string) { return [...this.m.devices.values()].filter(d => d.userId === userId); }
   async linkDeviceToUser(deviceId: string, userId: string) {
     const dev = this.m.devices.get(deviceId);
@@ -251,6 +253,10 @@ class SupabaseAccountsStore implements AccountsStore {
   }
   async deviceById(id: string): Promise<AccountDevice | null> {
     const { data } = await this.sb.from("osmo_devices").select("*").eq("id", id).maybeSingle();
+    return data ? this.mapDevice(data) : null;
+  }
+  async deviceByToken(token: string): Promise<AccountDevice | null> {
+    const { data } = await this.sb.from("osmo_devices").select("*").eq("token", token).maybeSingle();
     return data ? this.mapDevice(data) : null;
   }
   async devicesForUser(userId: string): Promise<AccountDevice[]> {

@@ -63,6 +63,8 @@ export interface WebSession {
 
 export interface ConnectionsStore {
   registerDevice(): Device;
+  /** Rehydrate a known (durable) device into the in-memory map after a restart. */
+  adoptDevice(id: string, token: string): Device;
   deviceByToken(token: string): Device | null;
   deviceById(id: string): Device | null;
 
@@ -164,6 +166,13 @@ class MemoryConnectionsStore implements ConnectionsStore {
       createdAt: new Date().toISOString(),
     };
     this.s.devices.set(device.token, device);
+    return device;
+  }
+  adoptDevice(id: string, token: string): Device {
+    const existing = this.s.devices.get(token);
+    if (existing) return existing;
+    const device: Device = { id, token, createdAt: new Date().toISOString() };
+    this.s.devices.set(token, device);
     return device;
   }
   deviceByToken(token: string) { return this.s.devices.get(token) ?? null; }

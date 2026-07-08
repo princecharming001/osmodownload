@@ -38,7 +38,7 @@ function binaryResponse(bytes: Buffer, mime: string | undefined): Response {
 
 export async function GET(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const url = new URL(req.url);
     const platform = url.searchParams.get("platform") as Platform | null;
     const messageRef = url.searchParams.get("messageRef");

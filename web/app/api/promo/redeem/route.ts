@@ -19,7 +19,7 @@ const CODES: Record<string, Promo> = {
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({})) as { code?: string };
     const code = (body.code ?? "").toString().trim().toUpperCase();
     const promo = CODES[code];

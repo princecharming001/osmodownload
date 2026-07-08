@@ -17,7 +17,7 @@ export { resetRateLimitForTests } from "@/lib/rateLimit";
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({})) as Partial<EnrichRequest>;
     const name = (body.name ?? "").trim().slice(0, 200);
     if (!name) {

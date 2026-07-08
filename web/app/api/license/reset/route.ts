@@ -11,7 +11,7 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json({ error: "not available in live mode" }, { status: 404 });
   }
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const accounts = getAccounts();
     const sub = await accounts.setSubscriptionForDevice(device.id, { subscriptionActive: false, plan: null, licenseKey: null, trialStartedAt: null });
     return Response.json(buildSignedEntitlement(device.id, sub, Date.now()));

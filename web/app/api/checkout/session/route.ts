@@ -9,7 +9,7 @@ import { createCheckoutSession, priceForPlan } from "@/lib/license/stripe";
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({})) as { plan?: string };
     const plan = typeof body.plan === "string" ? body.plan : "com.osmo.pro.monthly";
     const origin = process.env.PUBLIC_URL ?? new URL(req.url).origin;

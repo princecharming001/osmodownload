@@ -10,7 +10,7 @@ export async function GET(req: Request): Promise<Response> {
   // Dev E2E surface — unreachable in production.
   if (isLiveUnipile() || isProduction()) return Response.json({ error: "not found" }, { status: 404 });
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     return Response.json({ outbox: getStore().outbox(device.id) });
   } catch (e) {
     if (e instanceof AuthError) return unauthorized();

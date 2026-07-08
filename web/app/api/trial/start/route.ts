@@ -7,7 +7,7 @@ import { buildSignedEntitlement } from "@/lib/license/entitlement";
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const sub = await getAccounts().startTrialForDevice(device.id, Date.now());   // idempotent
     return Response.json(buildSignedEntitlement(device.id, sub, Date.now()));
   } catch (e) {

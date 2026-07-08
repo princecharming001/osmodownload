@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getStore } from "@/lib/connections/memoryStore";
+import { resolveDevice } from "@/lib/connections/auth";
 import { getAccounts } from "@/lib/accounts/store";
 import { resolveTier } from "@/lib/license/entitlement";
 import { checkAndConsumeDurable } from "@/lib/license/quota";
@@ -32,15 +32,16 @@ export async function POST(req: NextRequest) {
   // token is validated against a registered device — a raw "Bearer " prefix is
   // NOT enough, or anyone could burn the server-side Anthropic key.
   const auth = req.headers.get("authorization") ?? "";
+  const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+  // Resolve the device against the durable store (survives redeploys, so a
+  // returning device isn't forced to re-register).
+  const device = await resolveDevice(token);
   // Require a valid device token whenever there's a real bill to protect (a key
   // is set) or in production — not only behind an opt-in flag. Otherwise a single
   // unset env var turns this into an open, unmetered Anthropic relay.
   const mustAuth = isProduction() || !!process.env.ANTHROPIC_API_KEY || process.env.OSMO_REQUIRE_AUTH === "1";
-  if (mustAuth) {
-    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-    if (!token || !getStore().deviceByToken(token)) {
-      return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-    }
+  if (mustAuth && !device) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
   // Server-enforced kill-switch — a client-only flag check wouldn't stop a direct
@@ -85,12 +86,10 @@ export async function POST(req: NextRequest) {
   // (a key is set) AND we can identify the device. Pro/trial pass through
   // unlimited; a free device over its weekly cap gets 429 (the app also meters
   // locally, but this is the guard a lying client can't bypass).
-  const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : "";
-  const device = bearer ? getStore().deviceByToken(bearer) : null;
   if (device) {
     // Tier comes from the account subscription (so account-level Pro unlocks
     // unlimited even on a device whose ephemeral state was reset); the weekly
-    // usage counter stays in the sync store.
+    // usage counter is durable (osmo_usage).
     const sub = await getAccounts().subscriptionForDevice(device.id);
     const { tier } = resolveTier(sub, Date.now());
     const quota = await checkAndConsumeDurable(getAccounts(), device.id, Date.now(), tier !== "free");

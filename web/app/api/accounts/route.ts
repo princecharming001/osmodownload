@@ -54,7 +54,7 @@ async function adoptOrphanedAccounts(deviceId: string): Promise<void> {
 
 export async function GET(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     await adoptOrphanedAccounts(device.id);
     const connections = getStore().connections(device.id)
       .map(({ deviceId: _omit, ...rest }) => rest);
@@ -68,7 +68,7 @@ export async function GET(req: Request): Promise<Response> {
 
 export async function PATCH(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const id = new URL(req.url).searchParams.get("id") ?? "";
     const body = await req.json().catch(() => ({}));
     const action = body.action as string | undefined;
@@ -93,7 +93,7 @@ export async function PATCH(req: Request): Promise<Response> {
 
 export async function DELETE(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const id = new URL(req.url).searchParams.get("id") ?? "";
     const store = getStore();
     const conn = store.connectionById(id);

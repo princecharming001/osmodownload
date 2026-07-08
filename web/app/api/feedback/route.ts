@@ -7,7 +7,7 @@ import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({})) as { message?: string; meta?: string };
     const message = (body.message ?? "").toString().slice(0, 5000).trim();
     if (!message) return Response.json({ error: "empty" }, { status: 400 });

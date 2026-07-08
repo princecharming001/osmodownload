@@ -9,7 +9,7 @@ import { buildSignedEntitlement, validateLicenseKey } from "@/lib/license/entitl
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({})) as { licenseKey?: string };
     const accounts = getAccounts();
 

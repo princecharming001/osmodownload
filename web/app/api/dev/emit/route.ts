@@ -12,7 +12,7 @@ export async function POST(req: Request): Promise<Response> {
   // Dev E2E surface — unreachable in production (would let any device inject inbound messages).
   if (isLiveUnipile() || isProduction()) return Response.json({ error: "not found" }, { status: 404 });
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({}));
     const platform = body.platform as Platform | undefined;
     if (!platform) return Response.json({ error: "platform required" }, { status: 400 });

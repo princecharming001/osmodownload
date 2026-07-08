@@ -8,7 +8,7 @@ import { getAccounts } from "@/lib/accounts/store";
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     getStore().purgeDevice(device.id);            // ephemeral sync/message state
     await getAccounts().purgeByDevice(device.id); // durable account + subscription
     return Response.json({ ok: true });

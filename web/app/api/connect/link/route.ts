@@ -12,7 +12,7 @@ import { authURL, isLiveOAuth, makePkce } from "@/lib/oauth/providers";
 
 export async function POST(req: Request): Promise<Response> {
   let deviceId: string;
-  try { deviceId = requireDevice(req).id; }
+  try { deviceId = (await requireDevice(req)).id; }
   catch (e) { if (e instanceof AuthError) return unauthorized(); throw e; }
 
   const body = await req.json().catch(() => ({}));

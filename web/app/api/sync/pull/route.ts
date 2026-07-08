@@ -10,7 +10,7 @@ const MAX_LIMIT = 1000;
 
 export async function GET(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const url = new URL(req.url);
     const since = Number(url.searchParams.get("since") || "0");
     const limit = Math.min(Number(url.searchParams.get("limit") || "500"), MAX_LIMIT);

@@ -15,7 +15,7 @@ import type { SendRequest, SendResponse, WireMessage } from "@/lib/connections/t
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({})) as Partial<SendRequest>;
     const { platform, platformThreadID, text, idempotencyKey } = body;
     if (!platform || !platformThreadID || !text?.trim()) {

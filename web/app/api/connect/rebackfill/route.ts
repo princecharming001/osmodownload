@@ -11,7 +11,7 @@ import type { Platform } from "@/lib/connections/types";
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({})) as { platform?: Platform };
     const platform = body.platform;
     if (!platform) return Response.json({ error: "platform required" }, { status: 400 });

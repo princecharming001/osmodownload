@@ -6,6 +6,7 @@ import { NextRequest } from "next/server";
 import { resetStoreForTests } from "@/lib/connections/memoryStore";
 import { resetAccountsForTests, getAccounts } from "@/lib/accounts/store";
 import { resetSpendForTests } from "@/lib/license/spendBreaker";
+import { resolveDevice } from "@/lib/connections/auth";
 import { validateLicenseKey } from "@/lib/license/entitlement";
 import { POST as register } from "@/app/api/device/register/route";
 import { POST as suggest } from "@/app/api/suggest/route";
@@ -115,6 +116,16 @@ describe("rate limiting (shared substrate)", () => {
     let last = 200;
     for (let i = 0; i < 31; i++) last = (await register(ipReq())).status;
     expect(last).toBe(429);
+  });
+});
+
+describe("durable device token (survives redeploy)", () => {
+  it("resolves a device from the durable store after the in-memory store is wiped", async () => {
+    const { token, deviceId } = await registeredWithId();
+    resetStoreForTests();          // simulate a redeploy: in-memory sync state gone, durable accounts store intact
+    const device = await resolveDevice(token);
+    expect(device).not.toBeNull();
+    expect(device!.id).toBe(deviceId);
   });
 });
 

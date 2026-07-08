@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     return new Response(makeSSEStream(device.id), {
       headers: {
         "content-type": "text/event-stream",

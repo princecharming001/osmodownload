@@ -13,7 +13,7 @@ import { isProduction } from "@/lib/config/runtime";
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    const device = requireDevice(req);
+    const device = await requireDevice(req);
     const body = await req.json().catch(() => ({})) as {
       appleUserID?: string; email?: string; fullName?: string; identityToken?: string; nonce?: string;
     };
