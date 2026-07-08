@@ -1,7 +1,22 @@
 # Osmo backend hardening — implementation status
 
 Branch: `backend-hardening` (local only, nothing pushed/deployed). Baseline was
-113 tests; now **143 tests green** (`cd web && npm run verify`).
+113 tests; now **175 tests green** (`cd web && npm run verify`). 15 commits.
+
+## Also shipped (beyond the critical-security batch below)
+- **CSRF** origin-guard on cookie POSTs (logout, upgrade); **logout** teardown.
+- **Real Stripe Checkout** session creation (no SDK), app path `device:<id>` +
+  web path `user:<id>` (D13c); mock only in keyless dev.
+- **OAuth token refresh** (Gmail/X) with re-persist + connection-degrade on
+  failure — stops connections dying in ~1–2h.
+- **Signed config registry** `/api/config/registry` (Ed25519, separate key
+  domain; per-task model ids within the allowlist; tamper-tested).
+- **Send idempotency** key (no duplicate messages on retry).
+- **Server kill-switch** — `aiDrafting` enforced in `/api/suggest` (503).
+- **0-B durable schema** `db/migrations/0002_durable.sql` — all ~20 Appendix-C
+  tables (oplog, oauth_tokens, connections, pending_links w/ PKCE, quota,
+  rate_limits, spend, send_outbox, events, caches, registry, ops), drift-guarded.
+  Apply with `DATABASE_URL=… npm run db:migrate`.
 
 ## SHIPPED this session (11 commits, each tested)
 
