@@ -18,6 +18,7 @@
 // RLS-locked so anon/publishable keys can't touch them.
 
 import crypto from "node:crypto";
+import type { Connection } from "../connections/types";
 
 export interface AccountUser {
   id: string;
@@ -85,6 +86,12 @@ export interface AccountsStore {
   oauthTokens(deviceId: string, platform: string): Promise<Record<string, unknown> | null>;
   setOAuthTokens(deviceId: string, platform: string, tokens: Record<string, unknown>): Promise<void>;
 
+  // durable connection records (osmo_connections) so a device's connections
+  // survive redeploy (the in-memory set is empty after restart).
+  upsertConnection(c: Connection): Promise<void>;
+  connectionsForDevice(deviceId: string): Promise<Connection[]>;
+  deleteConnection(id: string): Promise<void>;
+
   // deletion
   purgeByDevice(deviceId: string): Promise<void>;
 }
@@ -105,9 +112,10 @@ interface Mem {
   sessions: Map<string, WebSessionRow>;            // token → session
   usage: Map<string, number>;                      // `${deviceId}:${weekStart}` → count
   oauth: Map<string, Record<string, unknown>>;     // `${deviceId}:${platform}` → tokens
+  conns: Map<string, Connection>;                  // connection id → record
 }
 function freshMem(): Mem {
-  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map(), oauth: new Map() };
+  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map(), oauth: new Map(), conns: new Map() };
 }
 
 class MemoryAccountsStore implements AccountsStore {
@@ -226,6 +234,11 @@ class MemoryAccountsStore implements AccountsStore {
   async setOAuthTokens(deviceId: string, platform: string, tokens: Record<string, unknown>): Promise<void> {
     this.m.oauth.set(`${deviceId}:${platform}`, tokens);
   }
+  async upsertConnection(c: Connection): Promise<void> { this.m.conns.set(c.id, { ...c }); }
+  async connectionsForDevice(deviceId: string): Promise<Connection[]> {
+    return [...this.m.conns.values()].filter((c) => c.deviceId === deviceId);
+  }
+  async deleteConnection(id: string): Promise<void> { this.m.conns.delete(id); }
 
   async purgeByDevice(deviceId: string): Promise<void> {
     const dev = this.m.devices.get(deviceId);
@@ -239,6 +252,7 @@ class MemoryAccountsStore implements AccountsStore {
     this.m.subs.delete(`device:${deviceId}`);
     this.m.devices.delete(deviceId);
     for (const k of [...this.m.usage.keys()]) if (k.startsWith(`${deviceId}:`)) this.m.usage.delete(k);
+    for (const [id, c] of [...this.m.conns]) if (c.deviceId === deviceId) this.m.conns.delete(id);
   }
 }
 
@@ -420,6 +434,23 @@ class SupabaseAccountsStore implements AccountsStore {
       { onConflict: "device_id,platform" },
     );
   }
+  async upsertConnection(c: Connection): Promise<void> {
+    await this.sb.from("osmo_connections").upsert({
+      id: c.id, device_id: c.deviceId, platform: c.platform, status: c.status,
+      display_name: c.displayName, backfill_progress: c.backfillProgress,
+      created_at: c.createdAt, updated_at: new Date().toISOString(),
+    }, { onConflict: "id" });
+  }
+  async connectionsForDevice(deviceId: string): Promise<Connection[]> {
+    const { data } = await this.sb.from("osmo_connections").select("*").eq("device_id", deviceId);
+    return (data ?? []).map((r: any): Connection => ({
+      id: r.id, deviceId: r.device_id, platform: r.platform, status: r.status,
+      displayName: r.display_name ?? "", backfillProgress: r.backfill_progress ?? 0, createdAt: r.created_at,
+    }));
+  }
+  async deleteConnection(id: string): Promise<void> {
+    await this.sb.from("osmo_connections").delete().eq("id", id);
+  }
 
   async purgeByDevice(deviceId: string): Promise<void> {
     const dev = await this.deviceById(deviceId);
@@ -432,6 +463,7 @@ class SupabaseAccountsStore implements AccountsStore {
     await this.sb.from("osmo_subscriptions").delete().eq("owner_type", "device").eq("owner_id", deviceId);
     await this.sb.from("osmo_devices").delete().eq("id", deviceId);
     await this.sb.from("osmo_usage").delete().eq("device_id", deviceId);
+    await this.sb.from("osmo_connections").delete().eq("device_id", deviceId);
   }
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */

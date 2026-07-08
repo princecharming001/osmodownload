@@ -4,6 +4,7 @@
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { getStore } from "@/lib/connections/memoryStore";
+import { ensureConnectionsLoaded } from "@/lib/connections/connectionsDurable";
 import { publish } from "@/lib/connections/events";
 import { stopDrip } from "@/lib/unipile/mock";
 import { accountIsHealthy, getUnipile } from "@/lib/unipile/client";
@@ -55,6 +56,7 @@ async function adoptOrphanedAccounts(deviceId: string): Promise<void> {
 export async function GET(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
+    await ensureConnectionsLoaded(device.id); // rehydrate durable connections after a redeploy
     await adoptOrphanedAccounts(device.id);
     const connections = getStore().connections(device.id)
       .map(({ deviceId: _omit, ...rest }) => rest);

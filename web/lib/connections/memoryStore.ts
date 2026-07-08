@@ -8,6 +8,7 @@
 // ingest make the full re-pull idempotent.
 
 import crypto from "node:crypto";
+import { getAccounts } from "../accounts/store";
 import type {
   Connection, ConnectionStatus, Device, OplogEntry, OplogKind, Platform,
   WireBatch, WireContact, WireMessage, WireThread,
@@ -74,6 +75,7 @@ export interface ConnectionsStore {
   peekPendingLink(linkId: string): PendingLink | null;
 
   addConnection(c: Connection): void;
+  hydrateConnection(c: Connection): void;
   connections(deviceId: string): Connection[];
   connectionById(id: string): Connection | null;
   setConnectionStatus(id: string, status: ConnectionStatus, progress?: number): void;
@@ -199,7 +201,13 @@ class MemoryConnectionsStore implements ConnectionsStore {
     return this.s.links.get(linkId) ?? null;
   }
 
-  addConnection(c: Connection) { this.s.connections.set(c.id, c); }
+  addConnection(c: Connection) {
+    this.s.connections.set(c.id, c);
+    void getAccounts().upsertConnection(c).catch(() => {}); // durable (fire-and-forget)
+  }
+  /** Load a connection into memory WITHOUT re-persisting it (used to rehydrate
+      from the durable store after a redeploy). */
+  hydrateConnection(c: Connection) { this.s.connections.set(c.id, c); }
   connections(deviceId: string) {
     return [...this.s.connections.values()].filter(c => c.deviceId === deviceId);
   }
@@ -207,10 +215,16 @@ class MemoryConnectionsStore implements ConnectionsStore {
   setConnectionStatus(id: string, status: ConnectionStatus, progress?: number) {
     const c = this.s.connections.get(id);
     if (!c) return;
+    const statusChanged = c.status !== status;
     c.status = status;
     if (progress !== undefined) c.backfillProgress = progress;
+    // Persist on status transitions only (not every backfill-progress tick).
+    if (statusChanged) void getAccounts().upsertConnection(c).catch(() => {});
   }
-  removeConnection(id: string) { this.s.connections.delete(id); }
+  removeConnection(id: string) {
+    this.s.connections.delete(id);
+    void getAccounts().deleteConnection(id).catch(() => {}); // durable
+  }
 
   appendRows(deviceId: string, rows: RowBundle): number {
     const oplog = this.s.oplogs.get(deviceId) ?? [];
