@@ -245,6 +245,14 @@ class MemoryConnectionsStore implements ConnectionsStore {
     for (const t of rows.threads ?? []) push("thread", t);
     for (const m of rows.messages ?? []) push("message", m);
 
+    // OOM guard: bound the retained window (the oplog holds full message payloads;
+    // on a long-lived instance it would grow without limit). The oldest entries
+    // have the lowest seqs and have long since been pulled by any live device, so
+    // evicting them is safe; a device that somehow pulls from below the retained
+    // window simply re-pulls from 0 (idempotent, local-first). Cap is generous.
+    const cap = Number(process.env.OSMO_OPLOG_MAX ?? 20000);
+    if (oplog.length > cap) oplog.splice(0, oplog.length - cap);
+
     this.s.oplogs.set(deviceId, oplog);
     this.s.dedup.set(deviceId, dedup);
     this.s.seqs.set(deviceId, seq);
