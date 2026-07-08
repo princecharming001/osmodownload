@@ -1,7 +1,20 @@
 # Osmo backend hardening — implementation status
 
 Branch: `backend-hardening` (local only, nothing pushed/deployed). Baseline was
-113 tests; now **175 tests green** (`cd web && npm run verify`). 15 commits.
+113 tests; now **176 tests green** (`cd web && npm run verify`). 19 commits.
+
+## Supabase now connected — durable state going live (project `general` / nxibeiykcgxpbmkeadth)
+- Applied the full **0-B durable schema** (20 new `osmo_*` tables, RLS on) via MCP;
+  reconciled the migrations to the real pre-existing schema (`osmo_usage` PK is
+  `device_id`; subscriptions already carry `stripe_*`).
+- **Store-swaps wired + verified against the live DB** (memory-first, durable
+  fallback/write-through, in-memory kept for tests):
+  1. **Quota** → `osmo_usage` (free-draft count survives redeploy).
+  2. **Device tokens** → `osmo_devices` (`requireDevice` async durable fallback —
+     the #1 finding: paying devices no longer orphaned on every deploy).
+  3. **OAuth tokens** → `osmo_oauth_tokens` (Gmail/Slack/X connections survive redeploy).
+- Remaining swaps: oplog (largest — hot sync path), connections, rate-limit/spend
+  counters (low priority — short windows).
 
 ## Also shipped (beyond the critical-security batch below)
 - **CSRF** origin-guard on cookie POSTs (logout, upgrade); **logout** teardown.
