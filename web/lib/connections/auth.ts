@@ -25,10 +25,11 @@ export async function resolveDevice(token: string): Promise<Device | null> {
 }
 
 function tokenFrom(req: Request): string {
+  // Bearer only — no ?token= query fallback. A token in the URL leaks into
+  // logs/Referer/history and now authenticates against the durable store, i.e.
+  // full account access. The Mac app's SSE client sets the Authorization header.
   const header = req.headers.get("authorization") ?? "";
-  return header.startsWith("Bearer ")
-    ? header.slice(7)
-    : new URL(req.url).searchParams.get("token") ?? ""; // SSE browser-debug fallback
+  return header.startsWith("Bearer ") ? header.slice(7) : "";
 }
 
 /** Extract + validate the device from a request. Throws AuthError on failure. */

@@ -53,7 +53,8 @@ create table if not exists osmo_magic_links (
   token      text primary key,
   email      text not null,
   expires_at timestamptz not null,
-  used       boolean not null default false
+  used       boolean not null default false,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists osmo_web_sessions (

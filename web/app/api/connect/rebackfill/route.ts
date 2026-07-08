@@ -5,6 +5,7 @@
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { getStore } from "@/lib/connections/memoryStore";
+import { ensureConnectionsLoaded } from "@/lib/connections/connectionsDurable";
 import { publish } from "@/lib/connections/events";
 import { backfillConnection } from "@/lib/connections/backfill";
 import type { Platform } from "@/lib/connections/types";
@@ -16,6 +17,7 @@ export async function POST(req: Request): Promise<Response> {
     const platform = body.platform;
     if (!platform) return Response.json({ error: "platform required" }, { status: 400 });
 
+    await ensureConnectionsLoaded(device.id); // rehydrate durable connections after a redeploy
     const conn = getStore().connections(device.id).find(c => c.platform === platform);
     if (!conn) return Response.json({ error: `no ${platform} connection` }, { status: 409 });
 

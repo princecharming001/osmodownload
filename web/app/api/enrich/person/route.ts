@@ -4,6 +4,7 @@
 // a per-device rate window. Keys never leave the server.
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
+import { ensureConnectionsLoaded } from "@/lib/connections/connectionsDurable";
 import { enrichPerson, type EnrichRequest } from "@/lib/enrich/person";
 import { rateLimit } from "@/lib/rateLimit";
 
@@ -32,6 +33,7 @@ export async function POST(req: Request): Promise<Response> {
       hints: (body.hints ?? []).slice(0, 5).map((h) => String(h).slice(0, 120)),
     };
     try {
+      await ensureConnectionsLoaded(device.id); // rehydrate durable connections (LinkedIn lookup) after a redeploy
       return Response.json(await enrichPerson(device.id, request));
     } catch {
       return Response.json({ error: "enrichment upstreams unavailable" }, { status: 502 });

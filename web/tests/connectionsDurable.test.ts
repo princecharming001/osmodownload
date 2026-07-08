@@ -8,7 +8,8 @@ import { resetEventsForTests } from "@/lib/connections/events";
 import { POST as register } from "@/app/api/device/register/route";
 import { POST as connectLink } from "@/app/api/connect/link/route";
 import { POST as mockComplete } from "@/app/api/connect/mock/complete/route";
-import { GET as accounts } from "@/app/api/accounts/route";
+import { GET as accounts, PATCH as patchAccounts } from "@/app/api/accounts/route";
+import { POST as send } from "@/app/api/sync/send/route";
 
 const BASE = "http://localhost:3000";
 function req(path: string, token?: string, body?: object): Request {
@@ -39,5 +40,26 @@ describe("connection durability", () => {
     expect(body.connections).toHaveLength(1);
     expect(body.connections[0].platform).toBe("linkedin");
     expect(body.connections[0].status).toBe("connected");
+  });
+
+  it("send + pause work after a redeploy without a prior /api/accounts warm-up", async () => {
+    const token = (await (await register()).json()).deviceToken as string;
+    const link = await (await connectLink(req("/api/connect/link", token, { platform: "linkedin" }))).json();
+    await mockComplete(req("/api/connect/mock/complete", undefined, { linkId: link.linkId }));
+    const conn = (await (await accounts(req("/api/accounts", token))).json()).connections[0];
+
+    // Redeploy, then hit a WRITE path directly (no GET first) — must rehydrate.
+    resetStoreForTests();
+    const sendRes = await send(req("/api/sync/send", token, {
+      platform: "linkedin", platformThreadID: "demo-li-chat-1", text: "hi",
+    }));
+    expect(sendRes.status).toBe(200); // not 409 "no live connection"
+
+    resetStoreForTests();
+    const patchRes = await patchAccounts(new Request(`${BASE}/api/accounts?id=${conn.id}`, {
+      method: "PATCH", headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+      body: JSON.stringify({ action: "pause" }),
+    }));
+    expect(patchRes.status).toBe(200); // not 404 "unknown connection"
   });
 });

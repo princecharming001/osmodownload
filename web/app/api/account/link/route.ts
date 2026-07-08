@@ -28,7 +28,9 @@ export async function POST(req: Request): Promise<Response> {
       const id = await verifyAppleIdentityToken(body.identityToken, { clientId, nonce: body.nonce });
       if (!id) return Response.json({ error: "invalid apple token" }, { status: 401 });
       appleUserID = id.sub;
-      email = id.email;                                    // trust only the token
+      // Trust only the token, and only a VERIFIED email — an unverified email must
+      // not auto-merge this device into someone else's existing account.
+      email = id.emailVerified ? id.email : null;
     } else if (!isProduction()) {
       appleUserID = (body.appleUserID ?? "").toString().trim();
       email = body.email?.trim() || null;

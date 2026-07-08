@@ -109,7 +109,7 @@ export async function POST(req: NextRequest) {
     log("error", "spend_breaker_tripped", { reason: breaker.reason });
     return NextResponse.json({ text: mockTakes(userTurn), mock: true, degraded: breaker.reason });
   }
-  recordModelCall();
+  // (recordModelCall now fires per real attempt inside callAnthropic — retries bill too.)
 
   const anthropicBody = {
     model,
@@ -142,9 +142,13 @@ export async function POST(req: NextRequest) {
     .map((b) => b.text ?? "")
     .join("\n")
     .trim();
+  if (!text) {
+    metric("draft.empty");
+    return NextResponse.json({ text: "" }); // successful-but-empty: no credit consumed
+  }
   metric("draft.ok");
 
-  // Consume the free-tier credit ONLY now that we have a real draft (consume-on-success).
+  // Consume the free-tier credit ONLY now that we have a real, non-empty draft.
   let remaining: number | null = null;
   if (device && !unlimited) remaining = await consumeQuotaDurable(getAccounts(), device.id, Date.now());
 
@@ -167,6 +171,7 @@ async function callAnthropic(body: unknown, key: string): Promise<Response> {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     try {
+      recordModelCall(); // every real upstream POST bills — count each attempt, not just the first
       const res = await fetch(ANTHROPIC_URL, {
         method: "POST",
         headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },

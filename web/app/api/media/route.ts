@@ -8,6 +8,7 @@
 // render.
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
+import { ensureConnectionsLoaded } from "@/lib/connections/connectionsDurable";
 import { getStore } from "@/lib/connections/memoryStore";
 import { getOAuthTokens } from "@/lib/oauth/oauthStore";
 import type { Platform } from "@/lib/connections/types";
@@ -49,6 +50,7 @@ export async function GET(req: Request): Promise<Response> {
       return Response.json({ error: "missing params" }, { status: 400 });
     }
 
+    await ensureConnectionsLoaded(device.id); // rehydrate durable connections after a redeploy
     const store = getStore();
     // The device must actually have a connection for this platform — a
     // request for a platform it never connected gets no data, live or mock.

@@ -4,6 +4,7 @@
 // a later pull re-delivering the same row dedups to a no-op (no temp IDs).
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
+import { ensureConnectionsLoaded } from "@/lib/connections/connectionsDurable";
 import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
 import { getUnipile } from "@/lib/unipile/client";
@@ -29,6 +30,7 @@ export async function POST(req: Request): Promise<Response> {
       if (prior) return Response.json({ message: prior } satisfies SendResponse);
     }
 
+    await ensureConnectionsLoaded(device.id); // rehydrate durable connections after a redeploy
     const store = getStore();
     const connection = store.connections(device.id)
       .find(c => c.platform === platform && (c.status === "connected" || c.status === "backfilling"));

@@ -74,6 +74,7 @@ export async function PATCH(req: Request): Promise<Response> {
     const id = new URL(req.url).searchParams.get("id") ?? "";
     const body = await req.json().catch(() => ({}));
     const action = body.action as string | undefined;
+    await ensureConnectionsLoaded(device.id); // rehydrate after redeploy before the lookup
     const store = getStore();
     const conn = store.connectionById(id);
     if (!conn || conn.deviceId !== device.id) {
@@ -97,6 +98,7 @@ export async function DELETE(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
     const id = new URL(req.url).searchParams.get("id") ?? "";
+    await ensureConnectionsLoaded(device.id); // rehydrate after redeploy before the lookup
     const store = getStore();
     const conn = store.connectionById(id);
     if (!conn || conn.deviceId !== device.id) {
