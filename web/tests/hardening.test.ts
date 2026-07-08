@@ -97,6 +97,25 @@ describe("magic link — the verify URL is never leaked in the body", () => {
   });
 });
 
+describe("rate limiting (shared substrate)", () => {
+  it("caps magic-link mints per email (6th within the window → 429)", async () => {
+    const email = "spam@example.com";
+    for (let i = 0; i < 5; i++) {
+      expect((await authRequest(post("/api/auth/request", { email }))).status).toBe(200);
+    }
+    expect((await authRequest(post("/api/auth/request", { email }))).status).toBe(429);
+  });
+
+  it("caps device registration per IP", async () => {
+    const ipReq = () => new Request(`${BASE}/api/device/register`, {
+      method: "POST", headers: { "x-forwarded-for": "1.2.3.4" },
+    });
+    let last = 200;
+    for (let i = 0; i < 31; i++) last = (await register(ipReq())).status;
+    expect(last).toBe(429);
+  });
+});
+
 describe("server-side Safety re-run", () => {
   it("refuses a manipulative request with 200 {refused:true} (not a 4xx, not the model)", async () => {
     const token = await registered();

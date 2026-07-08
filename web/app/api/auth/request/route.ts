@@ -9,6 +9,7 @@
 import { getAccounts } from "@/lib/accounts/store";
 import { sendMagicLink } from "@/lib/email/resend";
 import { isProduction } from "@/lib/config/runtime";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -17,6 +18,14 @@ export async function POST(req: Request): Promise<Response> {
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!EMAIL_RE.test(email)) {
     return Response.json({ error: "Enter a valid email address." }, { status: 400 });
+  }
+
+  // Anti-abuse: cap magic-link mints per email and per IP (stops email-bombing
+  // and link enumeration on this unauthenticated endpoint).
+  const perEmail = rateLimit(`auth:email:${email}`, 5, 15 * 60_000);
+  const perIp = rateLimit(`auth:ip:${clientIp(req)}`, 20, 60 * 60_000);
+  if (!perEmail.ok || !perIp.ok) {
+    return Response.json({ error: "rate_limited" }, { status: 429 });
   }
 
   const link = await getAccounts().createMagicLink(email, Date.now());

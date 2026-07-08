@@ -5,27 +5,15 @@
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { enrichPerson, type EnrichRequest } from "@/lib/enrich/person";
+import { rateLimit } from "@/lib/rateLimit";
 
-// Sliding-window rate limit: enrichment fans out to two paid upstreams, so a
-// person-page-flipping spree must not turn into an API bill. Module-level is
-// fine — this is per-process defense, not accounting.
-const windows = new Map<string, number[]>();
+// Enrichment fans out to two paid upstreams, so a person-page-flipping spree
+// must not turn into an API bill. Uses the shared rate-limit substrate.
 const WINDOW_MS = 60_000;
 const MAX_PER_WINDOW = 10;
 
-function rateLimited(deviceId: string): boolean {
-  const now = Date.now();
-  const hits = (windows.get(deviceId) ?? []).filter((t) => now - t < WINDOW_MS);
-  if (hits.length >= MAX_PER_WINDOW) { windows.set(deviceId, hits); return true; }
-  hits.push(now);
-  windows.set(deviceId, hits);
-  return false;
-}
-
-/** Test-only reset (mirrors resetStoreForTests). */
-export function resetRateLimitForTests(): void {
-  windows.clear();
-}
+// Re-exported so existing tests that reset the enrich limiter keep working.
+export { resetRateLimitForTests } from "@/lib/rateLimit";
 
 export async function POST(req: Request): Promise<Response> {
   try {
@@ -35,7 +23,7 @@ export async function POST(req: Request): Promise<Response> {
     if (!name) {
       return Response.json({ error: "name required" }, { status: 400 });
     }
-    if (rateLimited(device.id)) {
+    if (!rateLimit(`enrich:${device.id}`, MAX_PER_WINDOW, WINDOW_MS).ok) {
       return Response.json({ error: "rate limited" }, { status: 429 });
     }
     const request: EnrichRequest = {
