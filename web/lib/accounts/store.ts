@@ -95,6 +95,10 @@ export interface AccountsStore {
   connectionsForDevice(deviceId: string): Promise<Connection[]>;
   deleteConnection(id: string): Promise<void>;
 
+  // durable webhook idempotency (osmo_processed_events): returns true the FIRST
+  // time an event id is seen (process it), false on redelivery (dedup).
+  markEventProcessed(eventId: string, source: string): Promise<boolean>;
+
   // deletion
   purgeByDevice(deviceId: string): Promise<void>;
 }
@@ -116,9 +120,10 @@ interface Mem {
   usage: Map<string, number>;                      // `${deviceId}:${weekStart}` → count
   oauth: Map<string, Record<string, unknown>>;     // `${deviceId}:${platform}` → tokens
   conns: Map<string, Connection>;                  // connection id → record
+  processed: Set<string>;                           // `${source}:${eventId}` webhook dedup
 }
 function freshMem(): Mem {
-  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map(), oauth: new Map(), conns: new Map() };
+  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map(), oauth: new Map(), conns: new Map(), processed: new Set() };
 }
 
 class MemoryAccountsStore implements AccountsStore {
@@ -248,6 +253,12 @@ class MemoryAccountsStore implements AccountsStore {
     return [...this.m.conns.values()].filter((c) => c.deviceId === deviceId);
   }
   async deleteConnection(id: string): Promise<void> { this.m.conns.delete(id); }
+  async markEventProcessed(eventId: string, source: string): Promise<boolean> {
+    const key = `${source}:${eventId}`;
+    if (this.m.processed.has(key)) return false;
+    this.m.processed.add(key);
+    return true;
+  }
 
   async purgeByDevice(deviceId: string): Promise<void> {
     const dev = this.m.devices.get(deviceId);
@@ -461,6 +472,14 @@ class SupabaseAccountsStore implements AccountsStore {
   }
   async deleteConnection(id: string): Promise<void> {
     await this.sb.from("osmo_connections").delete().eq("id", id);
+  }
+  async markEventProcessed(eventId: string, source: string): Promise<boolean> {
+    // INSERT ... ON CONFLICT DO NOTHING; a returned row means it was newly
+    // inserted (first delivery), empty means a duplicate.
+    const { data } = await this.sb.from("osmo_processed_events")
+      .upsert({ event_id: eventId, source }, { onConflict: "event_id", ignoreDuplicates: true })
+      .select("event_id");
+    return (data?.length ?? 0) > 0;
   }
 
   async purgeByDevice(deviceId: string): Promise<void> {

@@ -13,10 +13,6 @@
 import { getAccounts } from "@/lib/accounts/store";
 import { verifyStripeSignature } from "@/lib/license/stripeSig";
 
-// Event-id idempotency (Stripe redelivers). Per-process for now; moves to a
-// durable processed-events table under 0-B.
-const seen = new Set<string>();
-
 export async function POST(req: Request): Promise<Response> {
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   const raw = await req.text();
@@ -29,9 +25,10 @@ export async function POST(req: Request): Promise<Response> {
   let event: { id?: string; type?: string; data?: { object?: Record<string, unknown> } };
   try { event = JSON.parse(raw); } catch { return Response.json({ error: "bad payload" }, { status: 400 }); }
 
+  // Durable idempotency (osmo_processed_events) — dedups across restart + instances.
   if (event.id) {
-    if (seen.has(event.id)) return Response.json({ ok: true, dedup: true });
-    seen.add(event.id);
+    const fresh = await getAccounts().markEventProcessed(event.id, "stripe");
+    if (!fresh) return Response.json({ ok: true, dedup: true });
   }
 
   const obj = event.data?.object ?? {};
