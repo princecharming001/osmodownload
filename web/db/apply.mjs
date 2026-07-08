@@ -9,12 +9,29 @@
 // Usage:  DATABASE_URL=postgres://... node db/apply.mjs
 //   (Supabase → Project Settings → Database → Connection string / "URI".)
 
-import { readdirSync, readFileSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const migrationsDir = join(here, "migrations");
+
+// Load web/.env.local (Next.js auto-loads it for the app, but this plain-node
+// runner doesn't). Only fills vars not already set in the environment.
+(function loadEnvLocal() {
+  const envPath = join(here, "..", ".env.local");
+  if (!existsSync(envPath)) return;
+  for (const line of readFileSync(envPath, "utf8").split("\n")) {
+    const m = /^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/.exec(line);
+    if (!m) continue;
+    const key = m[1];
+    let val = m[2].trim();
+    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+      val = val.slice(1, -1);
+    }
+    if (process.env[key] === undefined) process.env[key] = val;
+  }
+})();
 
 function migrationFiles() {
   return readdirSync(migrationsDir).filter((f) => f.endsWith(".sql")).sort();
