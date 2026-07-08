@@ -8,6 +8,7 @@
 import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
 import { exchangeXCode, isLiveOAuth } from "@/lib/oauth/providers";
+import { putOAuthTokens } from "@/lib/oauth/oauthStore";
 import { backfillX } from "@/lib/oauth/xBackfill";
 import type { Connection } from "@/lib/connections/types";
 
@@ -30,7 +31,7 @@ export async function GET(req: Request): Promise<Response> {
 
   try {
     const tokens = await exchangeXCode(code, link.codeVerifier) as { access_token?: string };
-    store.setOAuthTokens(link.deviceId, "x", tokens);
+    await putOAuthTokens(link.deviceId, "x", tokens as Record<string, unknown>);
     const connection: Connection = {
       id: `x-${link.deviceId.slice(-8)}`,
       deviceId: link.deviceId,

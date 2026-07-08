@@ -3,8 +3,8 @@
 // result. Closes the "tokens never refreshed → Gmail dies ~1h, X ~2h" finding.
 // Gmail + X refresh; Slack user tokens don't expire by default.
 
-import { getStore } from "@/lib/connections/memoryStore";
 import { markConnectionDegraded } from "@/lib/connections/degrade";
+import { getOAuthTokens, putOAuthTokens } from "./oauthStore";
 import { refreshXToken, refreshGoogleToken } from "./providers";
 import type { Platform } from "@/lib/connections/types";
 
@@ -17,8 +17,7 @@ export async function freshOAuthToken(
   platform: Platform,
   now: number = Date.now(),
 ): Promise<Bundle> {
-  const store = getStore();
-  const bundle = (store.oauthTokens(deviceId, platform) ?? {}) as Bundle;
+  const bundle = ((await getOAuthTokens(deviceId, platform)) ?? {}) as Bundle;
   const obtainedAt = typeof bundle.obtained_at === "number" ? bundle.obtained_at : 0;
   const ttlMs = typeof bundle.expires_in === "number" ? bundle.expires_in * 1000 : Infinity;
   const expiresAt = obtainedAt + ttlMs;
@@ -35,7 +34,7 @@ export async function freshOAuthToken(
       obtained_at: now,
       refresh_token: refreshed.refresh_token ?? bundle.refresh_token, // Google omits it on refresh
     };
-    store.setOAuthTokens(deviceId, platform, merged);
+    await putOAuthTokens(deviceId, platform, merged);
     return merged;
   } catch {
     // Refresh failed (revoked / expired refresh token) — flag the connection so

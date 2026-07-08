@@ -9,6 +9,7 @@
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { getStore } from "@/lib/connections/memoryStore";
+import { getOAuthTokens } from "@/lib/oauth/oauthStore";
 import type { Platform } from "@/lib/connections/types";
 import { getUnipile, isLiveUnipile } from "@/lib/unipile/client";
 
@@ -54,7 +55,7 @@ export async function GET(req: Request): Promise<Response> {
     const connection = store.connections(device.id).find((c) => c.platform === platform);
 
     if (platform === "gmail") {
-      const tokens = store.oauthTokens(device.id, "gmail") as { access_token?: string } | null;
+      const tokens = await getOAuthTokens(device.id, "gmail") as { access_token?: string } | null;
       if (!connection || !tokens?.access_token) return placeholder();
       const res = await fetch(
         `https://gmail.googleapis.com/gmail/v1/users/me/messages/${encodeURIComponent(messageRef)}/attachments/${encodeURIComponent(attachmentRef)}`,
@@ -67,7 +68,7 @@ export async function GET(req: Request): Promise<Response> {
     }
 
     if (platform === "slack") {
-      const tokens = store.oauthTokens(device.id, "slack") as { access_token?: string } | null;
+      const tokens = await getOAuthTokens(device.id, "slack") as { access_token?: string } | null;
       if (!connection || !tokens?.access_token) return placeholder();
       let target: URL;
       try {

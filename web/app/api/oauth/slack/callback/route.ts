@@ -4,6 +4,7 @@
 import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
 import { exchangeSlackCode, isLiveOAuth } from "@/lib/oauth/providers";
+import { putOAuthTokens } from "@/lib/oauth/oauthStore";
 import { backfillSlack } from "@/lib/oauth/slackBackfill";
 import type { Connection } from "@/lib/connections/types";
 
@@ -30,7 +31,7 @@ export async function GET(req: Request): Promise<Response> {
       authed_user?: { access_token?: string; id?: string };
       team?: { id?: string };
     };
-    store.setOAuthTokens(link.deviceId, "slack", tokens);
+    await putOAuthTokens(link.deviceId, "slack", tokens as Record<string, unknown>);
     const connection: Connection = {
       id: `slack-${link.deviceId.slice(-8)}`,
       deviceId: link.deviceId,

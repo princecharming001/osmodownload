@@ -81,6 +81,10 @@ export interface AccountsStore {
   usageCount(deviceId: string, weekStart: number): Promise<number>;
   bumpUsage(deviceId: string, weekStart: number): Promise<number>;
 
+  // durable OAuth tokens (osmo_oauth_tokens) so connections survive redeploy.
+  oauthTokens(deviceId: string, platform: string): Promise<Record<string, unknown> | null>;
+  setOAuthTokens(deviceId: string, platform: string, tokens: Record<string, unknown>): Promise<void>;
+
   // deletion
   purgeByDevice(deviceId: string): Promise<void>;
 }
@@ -100,9 +104,10 @@ interface Mem {
   magic: Map<string, MagicLinkRow>;                // token → link
   sessions: Map<string, WebSessionRow>;            // token → session
   usage: Map<string, number>;                      // `${deviceId}:${weekStart}` → count
+  oauth: Map<string, Record<string, unknown>>;     // `${deviceId}:${platform}` → tokens
 }
 function freshMem(): Mem {
-  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map() };
+  return { users: new Map(), devices: new Map(), subs: new Map(), magic: new Map(), sessions: new Map(), usage: new Map(), oauth: new Map() };
 }
 
 class MemoryAccountsStore implements AccountsStore {
@@ -214,6 +219,12 @@ class MemoryAccountsStore implements AccountsStore {
     const next = (this.m.usage.get(key) ?? 0) + 1;
     this.m.usage.set(key, next);
     return next;
+  }
+  async oauthTokens(deviceId: string, platform: string): Promise<Record<string, unknown> | null> {
+    return this.m.oauth.get(`${deviceId}:${platform}`) ?? null;
+  }
+  async setOAuthTokens(deviceId: string, platform: string, tokens: Record<string, unknown>): Promise<void> {
+    this.m.oauth.set(`${deviceId}:${platform}`, tokens);
   }
 
   async purgeByDevice(deviceId: string): Promise<void> {
@@ -397,6 +408,17 @@ class SupabaseAccountsStore implements AccountsStore {
     await this.sb.from("osmo_usage")
       .upsert({ device_id: deviceId, week_start: weekStart, count: next }, { onConflict: "device_id" });
     return next;
+  }
+  async oauthTokens(deviceId: string, platform: string): Promise<Record<string, unknown> | null> {
+    const { data } = await this.sb.from("osmo_oauth_tokens").select("tokens")
+      .eq("device_id", deviceId).eq("platform", platform).maybeSingle();
+    return (data?.tokens as Record<string, unknown>) ?? null;
+  }
+  async setOAuthTokens(deviceId: string, platform: string, tokens: Record<string, unknown>): Promise<void> {
+    await this.sb.from("osmo_oauth_tokens").upsert(
+      { device_id: deviceId, platform, tokens, updated_at: new Date().toISOString() },
+      { onConflict: "device_id,platform" },
+    );
   }
 
   async purgeByDevice(deviceId: string): Promise<void> {
