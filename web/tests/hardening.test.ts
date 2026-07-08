@@ -8,6 +8,7 @@ import { resetAccountsForTests, getAccounts } from "@/lib/accounts/store";
 import { resetSpendForTests } from "@/lib/license/spendBreaker";
 import { resolveDevice } from "@/lib/connections/auth";
 import { validateLicenseKey } from "@/lib/license/entitlement";
+import { weekStart, FREE_DRAFTS_PER_WEEK } from "@/lib/license/quota";
 import { POST as register } from "@/app/api/device/register/route";
 import { POST as suggest } from "@/app/api/suggest/route";
 import { POST as authRequest } from "@/app/api/auth/request/route";
@@ -56,7 +57,49 @@ afterEach(() => {
   delete process.env.OSMO_ALLOWED_MODELS;
   delete process.env.OSMO_ANTHROPIC_DAILY_MAX_CALLS;
   delete process.env.OSMO_FLAGS;
+  delete process.env.OSMO_ANTHROPIC_RETRY_MS;
   vi.unstubAllGlobals();
+});
+
+describe("interactive resilience (retry + consume-on-success)", () => {
+  const anthropicOk = () => new Response(
+    JSON.stringify({ content: [{ type: "text", text: "a\nb\nc" }] }),
+    { status: 200, headers: { "content-type": "application/json" } });
+
+  it("a failed upstream does NOT consume a free-tier credit", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    process.env.OSMO_ANTHROPIC_RETRY_MS = "1";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("bad", { status: 400 }))); // non-retryable → 502
+    const { token, deviceId } = await registeredWithId();
+    const res = await suggest(npost("/api/suggest", { systemCore: "x", userTurn: "Them: hi" }, token));
+    expect(res.status).toBe(502);
+    expect(await getAccounts().usageCount(deviceId, weekStart(Date.now()))).toBe(0);
+  });
+
+  it("a successful draft consumes exactly one credit and reports remaining", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    vi.stubGlobal("fetch", vi.fn(anthropicOk));
+    const { token, deviceId } = await registeredWithId();
+    const res = await suggest(npost("/api/suggest", { systemCore: "x", userTurn: "Them: hi" }, token));
+    expect(res.status).toBe(200);
+    expect((await res.json()).text).toContain("a");
+    expect(res.headers.get("x-osmo-drafts-remaining")).toBe(String(FREE_DRAFTS_PER_WEEK - 1));
+    expect(await getAccounts().usageCount(deviceId, weekStart(Date.now()))).toBe(1);
+  });
+
+  it("retries a transient 529 then succeeds", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    process.env.OSMO_ANTHROPIC_RETRY_MS = "1";
+    let n = 0;
+    vi.stubGlobal("fetch", vi.fn(async () => {
+      n++;
+      return n < 3 ? new Response("overloaded", { status: 529 }) : anthropicOk();
+    }));
+    const { token } = await registeredWithId();
+    const res = await suggest(npost("/api/suggest", { systemCore: "x", userTurn: "Them: hi" }, token));
+    expect(res.status).toBe(200);
+    expect(n).toBe(3);
+  });
 });
 
 describe("suggest — server-side model allowlist", () => {

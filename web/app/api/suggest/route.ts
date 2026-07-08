@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { resolveDevice } from "@/lib/connections/auth";
 import { getAccounts } from "@/lib/accounts/store";
 import { resolveTier } from "@/lib/license/entitlement";
-import { checkAndConsumeDurable } from "@/lib/license/quota";
+import { peekQuotaDurable, consumeQuotaDurable } from "@/lib/license/quota";
 import { DEFAULT_MODEL, isModelAllowed, isProduction } from "@/lib/config/runtime";
 import { breakerTripped, recordModelCall } from "@/lib/license/spendBreaker";
 import { checkSafety } from "@/lib/safety";
@@ -82,18 +82,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ text: mockTakes(userTurn), mock: true });
   }
 
-  // Server-enforced free-tier quota — only when there's a real bill to protect
-  // (a key is set) AND we can identify the device. Pro/trial pass through
-  // unlimited; a free device over its weekly cap gets 429 (the app also meters
-  // locally, but this is the guard a lying client can't bypass).
+  // Server-enforced free-tier quota — PEEK before the call (a free device over its
+  // weekly cap gets 429). We consume the credit only AFTER a successful draft
+  // below, so an upstream failure never burns a draft. Pro/trial are unlimited.
+  let unlimited = false;
   if (device) {
-    // Tier comes from the account subscription (so account-level Pro unlocks
-    // unlimited even on a device whose ephemeral state was reset); the weekly
-    // usage counter is durable (osmo_usage).
     const sub = await getAccounts().subscriptionForDevice(device.id);
-    const { tier } = resolveTier(sub, Date.now());
-    const quota = await checkAndConsumeDurable(getAccounts(), device.id, Date.now(), tier !== "free");
-    if (!quota.allowed) {
+    unlimited = resolveTier(sub, Date.now()).tier !== "free";
+    const peek = await peekQuotaDurable(getAccounts(), device.id, Date.now(), unlimited);
+    if (!peek.allowed) {
       return NextResponse.json(
         { error: "quota_exceeded", remaining: 0 },
         { status: 429, headers: { "x-osmo-drafts-remaining": "0" } },
@@ -121,18 +118,16 @@ export async function POST(req: NextRequest) {
     messages: [{ role: "user", content: userTurn }],
   };
 
-  const res = await fetch(ANTHROPIC_URL, {
-    method: "POST",
-    headers: {
-      "x-api-key": key,
-      "anthropic-version": "2023-06-01",
-      "content-type": "application/json",
-    },
-    body: JSON.stringify(anthropicBody),
-  });
-
+  // Bounded retry + timeout: a transient Anthropic 429/500/529 or a slow response
+  // shouldn't become a hard user-facing failure.
+  let res: Response;
+  try {
+    res = await callAnthropic(anthropicBody, key);
+  } catch {
+    return NextResponse.json({ error: "upstream_timeout" }, { status: 502 }); // no credit consumed
+  }
   if (!res.ok) {
-    return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 });
+    return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 }); // no credit consumed
   }
   const data = (await res.json()) as { content?: { type: string; text?: string }[] };
   const text = (data.content ?? [])
@@ -140,8 +135,46 @@ export async function POST(req: NextRequest) {
     .map((b) => b.text ?? "")
     .join("\n")
     .trim();
+
+  // Consume the free-tier credit ONLY now that we have a real draft (consume-on-success).
+  let remaining: number | null = null;
+  if (device && !unlimited) remaining = await consumeQuotaDurable(getAccounts(), device.id, Date.now());
+
   // We return only the text; nothing is persisted.
-  return NextResponse.json({ text });
+  return remaining === null
+    ? NextResponse.json({ text })
+    : NextResponse.json({ text }, { headers: { "x-osmo-drafts-remaining": String(remaining) } });
+}
+
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 529]);
+
+/** POST to Anthropic with a request timeout and bounded exponential-backoff
+    retries on transient (429/5xx) statuses and network errors. */
+async function callAnthropic(body: unknown, key: string): Promise<Response> {
+  const baseMs = Number(process.env.OSMO_ANTHROPIC_RETRY_MS ?? 400);
+  const timeoutMs = Number(process.env.OSMO_ANTHROPIC_TIMEOUT_MS ?? 30_000);
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, baseMs * 2 ** (attempt - 1)));
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+      const res = await fetch(ANTHROPIC_URL, {
+        method: "POST",
+        headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+      clearTimeout(timer);
+      if (res.ok || !RETRYABLE_STATUS.has(res.status) || attempt === 2) return res;
+      await res.arrayBuffer().catch(() => {}); // drain the retryable body before looping
+    } catch (e) {
+      clearTimeout(timer);
+      lastErr = e;
+      if (attempt === 2) throw e;
+    }
+  }
+  throw lastErr ?? new Error("anthropic call failed");
 }
 
 function mockTakes(userTurn: string): string {

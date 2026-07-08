@@ -53,3 +53,21 @@ export async function checkAndConsumeDurable(
   const next = await accounts.bumpUsage(deviceId, ws);
   return { allowed: true, remaining: Math.max(0, FREE_DRAFTS_PER_WEEK - next) };
 }
+
+/** Peek the quota WITHOUT consuming — the interactive path checks this BEFORE
+    the model call so a draft that never gets produced (upstream failure) can't
+    burn a credit. Pair with consumeQuotaDurable() after a successful generation. */
+export async function peekQuotaDurable(
+  accounts: AccountsStore, deviceId: string, nowMs: number, unlimited: boolean,
+): Promise<QuotaResult> {
+  if (unlimited) return { allowed: true, remaining: null };
+  const used = await accounts.usageCount(deviceId, weekStart(nowMs));
+  if (used >= FREE_DRAFTS_PER_WEEK) return { allowed: false, remaining: 0 };
+  return { allowed: true, remaining: FREE_DRAFTS_PER_WEEK - used };
+}
+
+/** Consume one draft AFTER a successful generation (consume-on-success). */
+export async function consumeQuotaDurable(accounts: AccountsStore, deviceId: string, nowMs: number): Promise<number> {
+  const next = await accounts.bumpUsage(deviceId, weekStart(nowMs));
+  return Math.max(0, FREE_DRAFTS_PER_WEEK - next);
+}
