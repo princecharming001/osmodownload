@@ -1,20 +1,36 @@
 # Osmo backend hardening — implementation status
 
 Branch: `backend-hardening` (local only, nothing pushed/deployed). Baseline was
-113 tests; now **176 tests green** (`cd web && npm run verify`). 19 commits.
+113 tests; now **189 tests green** (`cd web && npm run verify`). 29 commits.
 
-## Supabase now connected — durable state going live (project `general` / nxibeiykcgxpbmkeadth)
-- Applied the full **0-B durable schema** (20 new `osmo_*` tables, RLS on) via MCP;
-  reconciled the migrations to the real pre-existing schema (`osmo_usage` PK is
-  `device_id`; subscriptions already carry `stripe_*`).
-- **Store-swaps wired + verified against the live DB** (memory-first, durable
-  fallback/write-through, in-memory kept for tests):
-  1. **Quota** → `osmo_usage` (free-draft count survives redeploy).
-  2. **Device tokens** → `osmo_devices` (`requireDevice` async durable fallback —
-     the #1 finding: paying devices no longer orphaned on every deploy).
-  3. **OAuth tokens** → `osmo_oauth_tokens` (Gmail/Slack/X connections survive redeploy).
-- Remaining swaps: oplog (largest — hot sync path), connections, rate-limit/spend
-  counters (low priority — short windows).
+## Supabase connected — durable state live (project `general` / nxibeiykcgxpbmkeadth, a SHARED multi-product DB; only osmo_* tables are ours)
+- Applied the full **0-B durable schema** (20 `osmo_*` tables + atomic usage RPCs, RLS on)
+  via MCP; migrations reconciled to the real pre-existing schema.
+- **Store-swaps live-verified** (memory-first, durable write-through, in-memory kept for tests):
+  1. **Quota** → `osmo_usage`, now via **atomic `osmo_bump/refund_usage` RPCs** (race-safe;
+     reserve-before-call + refund-on-failure — verified against the live DB).
+  2. **Device tokens** → `osmo_devices` (async durable fallback — paying devices no longer
+     orphaned on every deploy).
+  3. **OAuth tokens** → `osmo_oauth_tokens`.
+  4. **Connections** → `osmo_connections`, rehydrated on ALL read/write paths (accounts
+     GET/PATCH/DELETE, send, rebackfill, media, enrich).
+  5. **Stripe webhook idempotency** → `osmo_processed_events` (durable dedup).
+- Remaining swap: oplog (largest — hot sync path + a privacy call: it holds message
+  content, so persisting to a shared DB needs a deliberate decision). rate-limit/spend
+  counters deferred → Redis (hot-path, not per-request Postgres).
+
+## Adversarial review (2-session handoff) — 22 findings, 17 confirmed; all HIGH fixed
+Fixed: connection rehydration on every read path (was 404/409 post-redeploy) · atomic
+race-safe quota · durable Stripe idempotency · `?token=` query-auth removed · Apple
+`emailVerified` enforced · spend breaker counts per retry · no credit on empty-200 ·
+`osmo_magic_links.created_at` · a fake-Supabase contract test that exercises the real
+durable class. Remaining (noted, low-risk): connection-resurrection race on concurrent
+delete+backfill-write; durable backfill-progress not persisted; a couple of test-infra gaps.
+
+## Takeover additions (this session)
+- **M6 interactive resilience**: retry/backoff + timeout on the Anthropic call.
+- **Observability**: `lib/obs.ts` structured logs + counters; `/api/health` DB-readiness
+  probe + metrics snapshot (`draft.ok / upstream_error / quota_exceeded / spend_breaker_trip`).
 
 ## Also shipped (beyond the critical-security batch below)
 - **CSRF** origin-guard on cookie POSTs (logout, upgrade); **logout** teardown.
