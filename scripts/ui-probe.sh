@@ -26,6 +26,8 @@ fi
 echo "→ relaunching $APP_NAME…"
 pkill -x "$APP_NAME" >/dev/null 2>&1
 sleep 1
+# Suppress browser-opens for connect links during the probe (self-expiring).
+defaults write com.osmo.app uiProbeSuppressBrowserUntil -float "$(python3 -c 'import time;print(time.time()+900)')" 2>/dev/null
 open "$APP_PATH"
 
 # Wait for the process + a window to exist before probing.

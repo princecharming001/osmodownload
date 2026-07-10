@@ -14,7 +14,12 @@ export class AuthError extends Error {
 /** Resolve a device token: in-memory map first, then the durable osmo_devices
     table. After a restart/redeploy the in-memory map is empty, but the token
     persists durably — recognising it (and rehydrating the map) stops the app
-    being forced to re-register, which would orphan its subscription. */
+    being forced to re-register, which would orphan its subscription.
+
+    A durable-store READ FAILURE is deliberately allowed to propagate (it is
+    never caught and converted to null/AuthError here): "store down" must
+    surface as a 5xx the app retries, not a 401 that makes it re-register as a
+    fresh device and orphan its Pro/connections. */
 export async function resolveDevice(token: string): Promise<Device | null> {
   if (!token) return null;
   const store = getStore();

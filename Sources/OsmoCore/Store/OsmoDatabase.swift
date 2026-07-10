@@ -290,6 +290,19 @@ public enum OsmoDatabase {
                           on: "message_attachment", columns: ["messageID"])
         }
 
+        // Indexes for the outbound-reciprocity scan (`outboundCounterpartyHandles`)
+        // — it runs on every snapshot rebuild (~0.5s cadence during an import) and
+        // both of its legs were full message-table scans: the sender join needs
+        // message(senderContactID), and the "did I ever write in this thread"
+        // EXISTS probe needs message(threadID, isFromMe). The v1 index on
+        // message(threadID, sentAt) doesn't cover the isFromMe test.
+        migrator.registerMigration("v13-outbound-reciprocity-indexes") { db in
+            try db.create(index: "idx_message_sender",
+                          on: "message", columns: ["senderContactID"])
+            try db.create(index: "idx_message_thread_fromme",
+                          on: "message", columns: ["threadID", "isFromMe"])
+        }
+
         return migrator
     }
 }

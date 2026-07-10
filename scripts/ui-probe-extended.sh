@@ -44,6 +44,8 @@ fi
 echo "→ relaunching $APP_NAME…"
 pkill -x "$APP_NAME" >/dev/null 2>&1
 sleep 1
+# Suppress browser-opens for connect links during the probe (self-expiring).
+defaults write com.osmo.app uiProbeSuppressBrowserUntil -float "$(python3 -c 'import time;print(time.time()+900)')" 2>/dev/null
 # Reset the backend sync cursor. The gate boots a FRESH in-memory mock server
 # each run (oplog restarts at seq 1), but the app persists its cursor across
 # sessions — a stale high cursor (e.g. 702 from a prior real/gate server) makes

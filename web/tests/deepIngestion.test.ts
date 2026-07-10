@@ -183,4 +183,70 @@ describe("gmail backfill — deep thread fetch", () => {
     expect(getStore().connectionById("gconn")?.status).toBe("connected");
     expect(getStore().connectionById("gconn")?.lastSyncAt).toBeTruthy();
   });
+
+  it("MY OWN messages never poison the sticky automated flag (thread stays deep-fetch eligible)", async () => {
+    process.env.OSMO_DEEP_FETCH_CONVERSATIONS = "1";
+    const device = getStore().registerDevice();
+    getStore().addConnection(connection("gconn", device.id, "gmail"));
+
+    const b64 = (s: string) => Buffer.from(s, "utf-8").toString("base64url");
+    const full = (id: string, tid: string, from: string, subject: string) => ({
+      id, threadId: tid, internalDate: String(Date.now()), snippet: "…",
+      payload: {
+        mimeType: "text/plain",
+        headers: [{ name: "From", value: from }, { name: "Subject", value: subject }],
+        body: { data: b64("body text") },
+      },
+    });
+
+    const deepCalls: string[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.endsWith("/profile")) return json({ emailAddress: "me@self.com" });
+      const thread = u.match(/\/threads\/([^/?]+)/);
+      if (thread) {
+        deepCalls.push(thread[1]);
+        return json({ messages: [full(`deep-${thread[1]}`, thread[1], "Client <client@corp.com>", "re: numbers")] });
+      }
+      // The only sweep message is MINE, with a subject that trips the
+      // templated-subject signal ("Invoice for June" from a non-personal domain).
+      if (u.includes("/messages/m1")) return json(full("m1", "tMine", "Me <me@self.com>", "Invoice for June"));
+      if (u.includes("/messages?")) return json({ messages: [{ id: "m1", threadId: "tMine" }] });
+      return json({});
+    }));
+
+    await backfillGmail(device.id, "gconn", "tok");
+    // My own "Invoice…" message must not flag the thread — it stays in the deep pass.
+    expect(deepCalls).toEqual(["tMine"]);
+    const pulled = getStore().pull(device.id, 0, 1000);
+    expect(pulled.threads.find((t) => t.platformThreadID === "tMine")?.automatedHint).not.toBe(true);
+  });
+});
+
+describe("gmail backfill — non-200 responses abort instead of importing garbage", () => {
+  it("a non-200 /profile aborts the backfill: no rows appended, connection degraded", async () => {
+    const device = getStore().registerDevice();
+    getStore().addConnection(connection("gconn", device.id, "gmail"));
+    vi.stubGlobal("fetch", vi.fn(async (url: RequestInfo | URL) => {
+      const u = String(url);
+      if (u.endsWith("/profile")) return new Response(JSON.stringify({ error: { code: 500 } }), { status: 500 });
+      return new Response(JSON.stringify({ messages: [{ id: "m1", threadId: "t1" }] }), { status: 200 });
+    }));
+
+    await backfillGmail(device.id, "gconn", "tok");
+    const pulled = getStore().pull(device.id, 0, 1000);
+    expect(pulled.messages).toHaveLength(0);
+    expect(getStore().connectionById("gconn")?.status).toBe("degraded");
+  });
+
+  it("a 200 /profile with no email address also aborts (isFromMe would flip everywhere)", async () => {
+    const device = getStore().registerDevice();
+    getStore().addConnection(connection("gconn", device.id, "gmail"));
+    vi.stubGlobal("fetch", vi.fn(async () =>
+      new Response("{}", { status: 200, headers: { "content-type": "application/json" } })));
+
+    await backfillGmail(device.id, "gconn", "tok");
+    expect(getStore().pull(device.id, 0, 1000).messages).toHaveLength(0);
+    expect(getStore().connectionById("gconn")?.status).toBe("degraded");
+  });
 });

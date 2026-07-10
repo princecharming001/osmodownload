@@ -2,10 +2,15 @@ import Foundation
 
 /// One readable snippet line out of a raw message body — pure string pipeline,
 /// no I/O. Flattens control chars/newlines (the same posture as the inbox's
-/// `previewLine`), strips the event-platform boilerplate that made queue cards
-/// read like calendar exports ("You've got a spot at  Poker Night  Tuesday,
-/// July 14 7:00 PM - 11:00 PM PDT  Location:…"), collapses whitespace, and
-/// clamps on a word boundary. Normal human texts pass through unchanged.
+/// `previewLine`), collapses whitespace, and clamps on a word boundary. Normal
+/// human texts pass through unchanged.
+///
+/// With `stripBoilerplate: true` it also kills the event-platform debris that
+/// made queue cards read like calendar exports ("You've got a spot at  Poker
+/// Night  Tuesday, July 14 7:00 PM - 11:00 PM PDT  Location:…"). That mode is
+/// OPT-IN, for automated content only: on a friend's "Location: my place, come
+/// around back" those same regexes would truncate a real message, so
+/// human-classified surfaces (queue rows, inbox previews) use the default.
 public enum SnippetCleaner {
 
     /// Boilerplate kill-list, applied to the flattened single-line text.
@@ -28,7 +33,8 @@ public enum SnippetCleaner {
         #"(?i)\byou(?:'re| are) receiving this (?:email|message)\b.*$"#,
     ]
 
-    public static func clean(_ raw: String, maxLength: Int = 80) -> String {
+    public static func clean(_ raw: String, maxLength: Int = 80,
+                             stripBoilerplate: Bool = false) -> String {
         // 1. Flatten: newlines and control characters become spaces (mirrors the
         //    inbox preview's posture — never a raw control-char blob).
         let flattened = raw
@@ -37,11 +43,13 @@ public enum SnippetCleaner {
             .components(separatedBy: .controlCharacters).joined(separator: " ")
             .trimmingCharacters(in: .whitespaces)
 
-        // 2. Strip boilerplate.
+        // 2. Strip boilerplate — opt-in, automated content only (see above).
         var cleaned = flattened
-        for pattern in killPatterns {
-            guard let regex = try? Regex(pattern) else { continue }
-            cleaned = cleaned.replacing(regex, with: " ")
+        if stripBoilerplate {
+            for pattern in killPatterns {
+                guard let regex = try? Regex(pattern) else { continue }
+                cleaned = cleaned.replacing(regex, with: " ")
+            }
         }
 
         // 3. Collapse whitespace.

@@ -84,6 +84,17 @@ describe("SupabaseAccountsStore contract (durable code path)", () => {
     expect(await s.deviceByToken("nope")).toBeNull();
   });
 
+  it("device reads THROW on a query error — a store outage must never read as 'unknown token'", async () => {
+    const q = {
+      select: () => q, eq: () => q,
+      maybeSingle: async () => ({ data: null, error: { message: "fetch failed" } }),
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const failing = new SupabaseAccountsStore({ from: () => q } as any);
+    await expect(failing.deviceByToken("tok-1")).rejects.toThrow("device store unavailable");
+    await expect(failing.deviceById("dev-1")).rejects.toThrow("device store unavailable");
+  });
+
   it("subscriptions: device sub round-trips with snake_case columns", async () => {
     await s.upsertDevice("dev-2", "tok-2");
     await s.setSubscriptionForDevice("dev-2", { subscriptionActive: true, plan: "com.osmo.pro.monthly", licenseKey: "STRIPE" });

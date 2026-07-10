@@ -380,20 +380,27 @@ public final class OsmoStore: @unchecked Sendable {
         }
     }
 
-    /// Normalized handles of every non-me contact in any thread the user has
-    /// actually sent a message in — cross-thread outbound reciprocity for the
-    /// human classifier ("have I EVER written to this sender?"). One query per
-    /// snapshot rebuild; keys use the same `HandleNormalizer` as the caller.
+    /// Normalized handles of every non-me contact in a NON-GROUP thread the user
+    /// has actually sent a message in — cross-thread outbound reciprocity for the
+    /// human classifier ("have I EVER written to this sender?"). Group threads
+    /// are excluded: writing into a group is not correspondence with every
+    /// co-member (a newsletter-ish sender who shares a group with you must not
+    /// inherit reciprocity). One query per snapshot rebuild, kept cheap by the
+    /// v13 indexes (message.senderContactID + message(threadID, isFromMe));
+    /// keys use the same `HandleNormalizer` as the caller.
     public func outboundCounterpartyHandles() throws -> Set<String> {
         try dbQueue.read { db in
             let handles = try String.fetchAll(db, sql: """
                 SELECT DISTINCT contact.handle FROM contact
                 JOIN message ON message.senderContactID = contact.id
+                JOIN thread ON thread.id = message.threadID
                 WHERE contact.isMe = 0 AND contact.deletedAt IS NULL
                   AND message.deletedAt IS NULL
-                  AND message.threadID IN (
-                    SELECT DISTINCT threadID FROM message
-                    WHERE isFromMe = 1 AND deletedAt IS NULL
+                  AND thread.isGroup = 0 AND thread.deletedAt IS NULL
+                  AND EXISTS (
+                    SELECT 1 FROM message mine
+                    WHERE mine.threadID = message.threadID
+                      AND mine.isFromMe = 1 AND mine.deletedAt IS NULL
                   )
                 """)
             return Set(handles.map { HandleNormalizer.normalize($0).value })

@@ -124,18 +124,31 @@ const AUTOMATED_LOCALPART_MARKERS = [
   "notification", "notify", "alert", "newsletter", "mailer-daemon", "automated",
 ];
 
-/** Service localparts matched EXACTLY on the collapsed (dots/dashes/underscores
-    removed) localpart — exact, never substring, so "hi" can't swallow "hillary". */
-export const AUTOMATED_LOCALPART_EXACT = new Set([
-  "events", "event", "registration", "register", "team", "hello", "hi", "hey",
-  "success", "support", "help", "billing", "receipts", "receipt", "orders",
-  "order", "invites", "invite", "invitations", "calendar", "welcome",
-  "community", "members", "membership", "info", "contact", "sales",
-  "marketing", "careers", "jobs", "offers", "promotions", "promo", "rewards",
-  "feedback", "survey", "digest", "reminders", "reminder", "admin",
-  "accounts", "account", "security", "verify", "verification", "confirm",
-  "confirmation", "invoices", "invoice", "booking", "bookings",
-  "reservations", "news", "press",
+/** Unambiguous machine-mailbox localparts matched EXACTLY on the collapsed
+    (dots/dashes/underscores removed) localpart — exact, never substring, so
+    "hi" can't swallow "hillary". A hit here is decisive: no human mails
+    personally from receipts@ or verification@. */
+export const HARD_LOCALPART_EXACT = new Set([
+  "notifications", "billing", "receipts", "receipt", "orders", "order",
+  "invoices", "invoice", "verify", "verification", "confirm", "confirmation",
+  "security", "reminders", "reminder", "digest", "bookings", "booking",
+  "reservations", "promotions", "promo", "offers", "rewards", "marketing",
+  "newsletter", "news", "admin", "accounts", "account", "registration",
+  "register", "invites", "invite", "invitations", "calendar", "updates",
+  "alerts",
+]);
+
+/** Plausibly-HUMAN service localparts — a founder really does mail personally
+    from hello@theirname.com, and events@ can be a person organizing one. A
+    soft hit alone must NEVER flag; it only flags alongside a second machine
+    signal (bulk header, ESP domain, sending-subdomain prefix, or a templated
+    subject from a non-personal domain) — and every one of those second signals
+    is already decisive on its own below, so this set intentionally carries no
+    independent weight. Kept exported so the hard/soft split is explicit. */
+export const SOFT_LOCALPART_EXACT = new Set([
+  "hello", "hi", "hey", "team", "info", "contact", "press", "sales",
+  "careers", "jobs", "community", "members", "membership", "welcome",
+  "feedback", "survey", "success", "support", "help", "events", "event",
 ]);
 
 /** Sending-infrastructure first labels ("mail.instagram.com", "e.paypal.com").
@@ -146,12 +159,20 @@ const AUTOMATED_SUBDOMAIN_LABELS = new Set([
 ]);
 
 /** Free personal-mail domains — a templated-looking subject from one of these
-    stays human (mom really does write "Your photos from the lake"). */
+    stays human (mom really does write "Your photos from the lake"). Mirrors
+    the Swift classifier's list. */
 const PERSONAL_MAIL_DOMAINS = new Set([
-  "gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com",
-  "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com",
+  "gmail.com", "googlemail.com", "yahoo.com", "yahoo.co.uk", "outlook.com",
+  "hotmail.com", "icloud.com", "me.com", "mac.com", "aol.com", "hey.com",
+  "fastmail.com", "fastmail.fm", "proton.me", "protonmail.com",
   "live.com", "msn.com",
 ]);
+
+/** Personal-mail check, suffix-tolerant for Yahoo's ccTLD zoo (yahoo.de,
+    yahoo.com.au, …). */
+function isPersonalMailDomain(domain: string): boolean {
+  return PERSONAL_MAIL_DOMAINS.has(domain) || domain.startsWith("yahoo.");
+}
 
 const TEMPLATED_SUBJECT_RES = [
   /^(your|welcome to|verify|confirm|reset|receipt|invoice|order|registration|reminder|action required|invitation|you're invited|thanks for|get started|complete your|activate|new sign.?in|security alert)\b/i,
@@ -207,13 +228,17 @@ export function automatedSignals(headers: GmailHeader[], fromEmail: string | nul
     const domain = (at >= 0 ? fromEmail.slice(at + 1) : "").toLowerCase();
     const collapsed = localpart.toLowerCase().replace(/[._-]/g, "");
     if (AUTOMATED_LOCALPART_MARKERS.some((marker) => collapsed.includes(marker))) return true;
-    if (AUTOMATED_LOCALPART_EXACT.has(collapsed)) return true;
+    if (HARD_LOCALPART_EXACT.has(collapsed)) return true;
     if (AUTOMATED_SENDER_DOMAINS.has(domain)) return true;
+    // Second-signal class — each decisive on its own, which also covers the
+    // "SOFT localpart + second signal" combination (SOFT_LOCALPART_EXACT).
     if (isESPDomain(domain)) return true;
     const labels = domain.split(".");
     if (labels.length >= 3 && AUTOMATED_SUBDOMAIN_LABELS.has(labels[0])) return true;
     // Templated subject from a non-personal domain → transactional template.
-    if (subject && !PERSONAL_MAIL_DOMAINS.has(domain) && templatedSubject(subject)) return true;
+    if (subject && !isPersonalMailDomain(domain) && templatedSubject(subject)) return true;
+    // A lone SOFT localpart (hello@/team@/events@…) deliberately falls
+    // through to "human" — see SOFT_LOCALPART_EXACT.
   }
   return false;
 }
@@ -289,13 +314,20 @@ export function normalizeGmailMessage(msg: GmailFullMessage, myEmail: string): N
 }
 
 /** GET a Gmail API URL as JSON, waiting out one 429 (Retry-After honoured,
-    capped at 30s) so a quota blip mid-import degrades to a pause, not a failure. */
+    capped at 30s) so a quota blip mid-import degrades to a pause, not a failure.
+    Throws on any other non-200 — parsing an error body as if it were the
+    payload would silently import garbage (an empty /profile flips EVERY
+    message to isFromMe:false). */
 async function gmailGet(url: string, auth: Record<string, string>): Promise<Record<string, unknown>> {
   let res = await fetch(url, { headers: auth });
   if (res.status === 429) {
     const seconds = Number(res.headers.get("retry-after") ?? "1");
     await new Promise((r) => setTimeout(r, Math.min(Math.max(seconds || 1, 1), 30) * 1000));
     res = await fetch(url, { headers: auth });
+  }
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`gmail GET → ${res.status}: ${body.slice(0, 200)}`);
   }
   return res.json() as Promise<Record<string, unknown>>;
 }
@@ -307,9 +339,12 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
   const maxMessages = envInt("OSMO_GMAIL_MAX_MESSAGES", MAX_MESSAGES_DEFAULT);
 
   try {
-    // Who am I (to mark isFromMe)?
+    // Who am I (to mark isFromMe)? An empty/missing profile email would make
+    // the user their own counterparty on every imported message — abort into
+    // the degraded pathway below rather than import garbage.
     const profile = await gmailGet(`${api}/profile`, auth);
     const myEmail = String(profile.emailAddress ?? "").toLowerCase();
+    if (!myEmail) throw new Error("gmail profile returned no email address");
 
     // Page (id, threadId) pairs — messages.list already returns both, so the
     // demo/scope gate runs BEFORE the heavier per-message fetch (quota win
@@ -342,7 +377,12 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
     const lastActivityByThread = new Map<string, number>();
 
     const collect = (norm: NormalizedGmailMessage) => {
-      automatedByThread.set(norm.threadId, (automatedByThread.get(norm.threadId) ?? false) || norm.automated);
+      // The user's OWN messages never feed the sticky flag — someone mailing
+      // from hello@their-domain.com (or writing "Invoice for June") would
+      // otherwise flag their own active threads and knock them out of the
+      // deep-history pass below.
+      const automated = norm.automated && !norm.message.isFromMe;
+      automatedByThread.set(norm.threadId, (automatedByThread.get(norm.threadId) ?? false) || automated);
       lastActivityByThread.set(norm.threadId, Math.max(lastActivityByThread.get(norm.threadId) ?? 0, norm.sentAtMs));
       if (norm.contact) contacts.set(norm.contact.handle, norm.contact);
       threads.set(norm.threadId, norm.thread);

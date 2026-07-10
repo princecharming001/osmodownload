@@ -583,6 +583,7 @@ final class AppModel: ObservableObject {
     private var lastImportReload = Date.distantPast
 
     private func startRealtime() {
+
         // Pausing/disconnecting iMessage stops the chat.db poller; resuming
         // restarts it. Driven off the connection phase so the button "sticks".
         connections.$phases
@@ -791,7 +792,15 @@ final class AppModel: ObservableObject {
         Task {
             do {
                 let url = try await connections.beginConnect(platform)
-                NSWorkspace.shared.open(url)
+                // The AX probe harness (scripts/ui-probe*) exercises the
+                // Connect→linking→Cancel cycle headlessly; opening the real
+                // browser there spams tabs and steals focus. The flag is a
+                // TIMESTAMP so it can never wedge real connects: it expires on
+                // its own even if a killed probe never cleans up.
+                let suppressUntil = UserDefaults.standard.double(forKey: "uiProbeSuppressBrowserUntil")
+                if Date().timeIntervalSince1970 >= suppressUntil {
+                    NSWorkspace.shared.open(url)
+                }
             } catch {
                 toast = "Couldn't start the \(platform.displayName) connection."
             }
@@ -911,6 +920,12 @@ final class AppModel: ObservableObject {
         reload()
     }
 
+    /// Per-platform message counts for the Connections subtitles. Cached here
+    /// because ConnectionRow re-renders constantly under AX/accessibility load —
+    /// a SQLCipher COUNT per row per render starves the main thread (the
+    /// "Connect click takes minutes to reflect" wedge).
+    @Published private(set) var messageCountByPlatform: [Platform: Int] = [:]
+
     func reload() {
         let snoozed = (try? store.snoozedThreadIDs()) ?? []
         // Load ALL threads (the default 500 cap silently dropped older threads —
@@ -919,6 +934,9 @@ final class AppModel: ObservableObject {
         threads = ((try? store.threads(limit: 20000)) ?? []).filter { !snoozed.contains($0.id) }
         if demoMode { threads = DemoScope.trim(threads) }
         projects = (try? store.activeProjects()) ?? []
+        messageCountByPlatform = Dictionary(uniqueKeysWithValues: Platform.allCases.map {
+            ($0, (try? store.messageCount(platform: $0)) ?? 0)
+        })
         // Persisted public profiles, loaded BEFORE people are built so list
         // subtitles + the Ask directory read them with zero network. Fetches
         // stay on-view only — no post-sync stampede.

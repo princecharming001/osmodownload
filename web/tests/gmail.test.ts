@@ -132,12 +132,37 @@ describe("automatedSignals — bulk/automated sender detection", () => {
     expect(automatedSignals([], "somebody@mail.com")).toBe(false);   // real mailbox provider
   });
 
-  it("service localparts match EXACTLY on the collapsed localpart — \"hi\" never swallows \"hillary\"", () => {
-    expect(automatedSignals([], "events@pokernight.com")).toBe(true);
-    expect(automatedSignals([], "hi@influencerapp.io")).toBe(true);
+  it("HARD localparts match EXACTLY on the collapsed localpart — \"hi\" never swallows \"hillary\"", () => {
     expect(automatedSignals([], "re-gist.er@fest.com")).toBe(true);  // collapsed = "register"
+    expect(automatedSignals([], "receipts@shopfront.com")).toBe(true);
     expect(automatedSignals([], "hillary@gmail.com")).toBe(false);
     expect(automatedSignals([], "hillary@somecorp.com")).toBe(false);
+  });
+
+  it("SOFT localparts (hello/hi/team/events…) never flag alone — a founder mails personally from hello@", () => {
+    expect(automatedSignals([], "hello@founderdomain.com", "quick question")).toBe(false);
+    expect(automatedSignals([], "hi@influencerapp.io")).toBe(false);
+    expect(automatedSignals([], "events@pokernight.com")).toBe(false);
+    expect(automatedSignals([], "team@smallstudio.dev", "coffee next week?")).toBe(false);
+  });
+
+  it("SOFT localpart + a second machine signal flags", () => {
+    // soft + templated subject from a non-personal domain
+    expect(automatedSignals([], "team@notion.so", "Your workspace is ready")).toBe(true);
+    expect(automatedSignals([], "events@pokernight.com", "Registration approved for Poker Night")).toBe(true);
+    // soft + ESP sending domain
+    expect(automatedSignals([], "hello@substack.com")).toBe(true);
+    // soft + sending-subdomain prefix
+    expect(automatedSignals([], "hello@mail.someapp.com")).toBe(true);
+    // soft + bulk header
+    expect(automatedSignals(headers({ "List-Unsubscribe": "<mailto:u@x.com>" }), "hello@someapp.com")).toBe(true);
+  });
+
+  it("personal-mail domains match the Swift mirror — hey.com/fastmail/yahoo ccTLDs veto templated subjects", () => {
+    expect(automatedSignals([], "dave@hey.com", "Thanks for dinner last night")).toBe(false);
+    expect(automatedSignals([], "nan@yahoo.co.uk", "Your photos from the lake")).toBe(false);
+    expect(automatedSignals([], "kai@yahoo.com.au", "Your photos from the lake")).toBe(false);
+    expect(automatedSignals([], "sam@fastmail.fm", "Thanks for the ride")).toBe(false);
   });
 
   it("catches the two real leaks: templated subjects from corporate senders", () => {

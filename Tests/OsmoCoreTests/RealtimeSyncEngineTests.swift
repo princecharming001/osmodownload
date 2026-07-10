@@ -144,6 +144,45 @@ struct RealtimeSyncEngineTests {
         #expect(try store.messageCount() == 1)
     }
 
+    @Test("A stale cursor past the server's seq space resets and re-pulls (redeploy stall)")
+    func staleCursorResetsOnStreamChange() async throws {
+        let store = try OsmoStore.inMemory()
+        // First response: what a redeployed backend says to `since=702` — empty
+        // page, cursor echoed back, but maxSeq/epoch reveal a fresh seq space.
+        let stalled = #"{"contacts":[],"threads":[],"messages":[],"cursor":"702","hasMore":false,"epoch":"ep-B","maxSeq":3}"#
+        let client = makeClient(pullBodies: [stalled, Self.freshBatch()])
+        let cursors = MemoryCursorStore()
+        cursors.saveBackendCursor("702")     // minted under a previous boot
+        cursors.saveBackendEpoch("ep-A")
+        let engine = RealtimeSyncEngine(store: store, client: client, cursorStore: cursors,
+                                        iMessageDBPath: URL(fileURLWithPath: "/nonexistent"))
+
+        await engine.pullNow()
+        // The engine must detect the impossible cursor, restart from 0, and
+        // ingest the real batch — not silently accept the empty page forever.
+        #expect(try store.messageCount() == 1)
+        #expect(cursors.loadBackendCursor() == "3")
+        #expect(cursors.loadBackendEpoch() == "ep-B")
+    }
+
+    @Test("An unchanged epoch with a plausible cursor does NOT trigger a reset")
+    func healthyStreamDoesNotReset() async throws {
+        let store = try OsmoStore.inMemory()
+        // since==maxSeq is the caught-up steady state — must stay put.
+        let caughtUp = #"{"contacts":[],"threads":[],"messages":[],"cursor":"3","hasMore":false,"epoch":"ep-A","maxSeq":3}"#
+        let client = makeClient(pullBodies: [caughtUp, Self.freshBatch()])
+        let cursors = MemoryCursorStore()
+        cursors.saveBackendCursor("3")
+        cursors.saveBackendEpoch("ep-A")
+        let engine = RealtimeSyncEngine(store: store, client: client, cursorStore: cursors,
+                                        iMessageDBPath: URL(fileURLWithPath: "/nonexistent"))
+
+        await engine.pullNow()
+        // One request, no reset, nothing ingested (the second body stays unused).
+        #expect(try store.messageCount() == 0)
+        #expect(cursors.loadBackendCursor() == "3")
+    }
+
     @Test("Fresh inbound messages surface on the inbound stream exactly once")
     func inboundYields() async throws {
         let store = try OsmoStore.inMemory()

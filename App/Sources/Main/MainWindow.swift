@@ -189,7 +189,7 @@ struct MainWindow: View {
             case .inbox: InboxView()
             case .people: PeopleView()
             case .you: YouView()
-            case .connections: ConnectionsView()
+            case .connections: ConnectionsView(connections: model.connections)
             }
         }
     }

@@ -76,7 +76,7 @@ struct OsmoStoreTests {
         #expect(try store.search("delete").isEmpty)
     }
 
-    @Test("outboundCounterpartyHandles: normalized non-me senders from threads you've written in")
+    @Test("outboundCounterpartyHandles: normalized non-me senders from non-group threads you've written in")
     func outboundCounterpartyHandles() throws {
         let store = try newStore()
         let contact = { (handle: String, isMe: Bool) -> OsmoContact in
@@ -87,7 +87,8 @@ struct OsmoStoreTests {
         let me = contact("me@self.test", true)
         let bob = contact("+1 (555) 123-4567", false)
         let carol = contact("+15559990000", false)
-        for c in [me, bob, carol] { try store.ingest(c) }
+        let dave = contact("+15558880000", false)
+        for c in [me, bob, carol, dave] { try store.ingest(c) }
 
         // Thread A: bob writes, the user replies → bob counts.
         let a = thread(.imessage, "chat-A"); try store.ingest(a)
@@ -110,9 +111,29 @@ struct OsmoStoreTests {
                                      senderContactID: carol.id, isFromMe: false, text: "one-way blast",
                                      sentAt: Date(timeIntervalSince1970: 1000)))
 
+        // Thread C: a GROUP the user wrote in — dave is a co-member the user
+        // never addressed directly, so group membership must NOT count as
+        // outbound correspondence.
+        let c = OsmoThread(id: OsmoThread.makeID(platform: .imessage, platformThreadID: "chat-C"),
+                           updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+                           platform: .imessage, platformThreadID: "chat-C",
+                           title: "Poker crew", isGroup: true)
+        try store.ingest(c)
+        try store.ingest(OsmoMessage(id: OsmoMessage.makeID(platform: .imessage, platformMessageID: "c1"),
+                                     updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+                                     platform: .imessage, platformMessageID: "c1", threadID: c.id,
+                                     senderContactID: dave.id, isFromMe: false, text: "who's in tonight",
+                                     sentAt: Date(timeIntervalSince1970: 1000)))
+        try store.ingest(OsmoMessage(id: OsmoMessage.makeID(platform: .imessage, platformMessageID: "c2"),
+                                     updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+                                     platform: .imessage, platformMessageID: "c2", threadID: c.id,
+                                     senderContactID: me.id, isFromMe: true, text: "count me in",
+                                     sentAt: Date(timeIntervalSince1970: 2000)))
+
         let handles = try store.outboundCounterpartyHandles()
         #expect(handles.contains("5551234567"))       // bob, phone-normalized last-10
         #expect(!handles.contains("5559990000"))      // carol: never replied to
+        #expect(!handles.contains("5558880000"))      // dave: only a group co-member
         #expect(!handles.contains("me@self.test"))    // own handle excluded
     }
 

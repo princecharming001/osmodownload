@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import GRDB
 @testable import OsmoCore
 
 @Suite("searchPeople — cross-platform person search")
@@ -141,5 +142,54 @@ struct ThreadHintsAndAutodraftMigrationTests {
         // The user edits — the default 2-arg call site, unchanged since before this feature.
         try store.saveDraft("actually let me rewrite this", forThread: threadID)
         #expect(try store.draftRecord(forThread: threadID)?.isAuto == false)
+    }
+}
+
+@Suite("v13 migration — outbound-reciprocity indexes")
+struct OutboundReciprocityIndexMigrationTests {
+    private func indexNames(_ dbQueue: DatabaseQueue) throws -> Set<String> {
+        try dbQueue.read { db in
+            Set(try String.fetchAll(
+                db, sql: "SELECT name FROM sqlite_master WHERE type = 'index'"))
+        }
+    }
+
+    @Test("A fresh store has both v13 indexes")
+    func freshStoreHasIndexes() throws {
+        let store = try OsmoStore.inMemory()
+        let names = try indexNames(store.dbQueue)
+        #expect(names.contains("idx_message_sender"))
+        #expect(names.contains("idx_message_thread_fromme"))
+    }
+
+    @Test("An EXISTING pre-v13 store (with data) upgrades cleanly and gains the indexes")
+    func existingStoreUpgrades() throws {
+        // Build a database stopped at v12 with rows already in it …
+        var config = Configuration()
+        config.foreignKeysEnabled = true
+        let queue = try DatabaseQueue(configuration: config)
+        try OsmoDatabase.migrator.migrate(queue, upTo: "v12-message-attachment")
+        #expect(!(try indexNames(queue).contains("idx_message_sender")))
+
+        let threadID = OsmoThread.makeID(platform: .imessage, platformThreadID: "t1")
+        try queue.write { db in
+            try OsmoThread(id: threadID, updatedAt: .distantPast, deviceSeq: 0,
+                          platform: .imessage, platformThreadID: "t1").save(db)
+            try OsmoMessage(id: OsmoMessage.makeID(platform: .imessage, platformMessageID: "m1"),
+                           updatedAt: .distantPast, deviceSeq: 0,
+                           platform: .imessage, platformMessageID: "m1", threadID: threadID,
+                           isFromMe: true, text: "hi", sentAt: Date()).save(db)
+        }
+
+        // … then a normal open (the full migrator) picks up v13 in place.
+        try OsmoDatabase.migrator.migrate(queue)
+        let names = try indexNames(queue)
+        #expect(names.contains("idx_message_sender"))
+        #expect(names.contains("idx_message_thread_fromme"))
+
+        // The store still works over the upgraded database (data survived).
+        let store = try OsmoStore(dbQueue: queue)
+        #expect(try store.messageCount() == 1)
+        #expect(try store.outboundCounterpartyHandles().isEmpty)   // no senders yet
     }
 }

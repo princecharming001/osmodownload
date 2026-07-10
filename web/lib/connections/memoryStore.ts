@@ -137,6 +137,7 @@ interface MemoryState {
   usage: Map<string, UsageWindow>;           // deviceId → weekly free-tier usage
   magicLinks: Map<string, MagicLink>;        // token → link
   webSessions: Map<string, WebSession>;      // token → session
+  epoch: string;                             // oplog sequence-space identity (per boot)
 }
 
 function freshState(): MemoryState {
@@ -146,6 +147,11 @@ function freshState(): MemoryState {
     oauth: new Map(), outboxes: new Map(),
     licenses: new Map(), usage: new Map(),
     magicLinks: new Map(), webSessions: new Map(),
+    // A fresh state means a fresh (empty) per-device seq space. Stamp it so
+    // clients can tell "this is a different stream" from "no new messages" —
+    // a persisted cursor from a previous boot would otherwise sit past our
+    // seq forever and the device would never receive another message.
+    epoch: `ep-${globalThis.crypto?.randomUUID?.() ?? Math.floor(Date.now())}`,
   };
 }
 
@@ -282,6 +288,8 @@ class MemoryConnectionsStore implements ConnectionsStore {
       contacts: [], threads: [], messages: [],
       cursor: String(page.length ? page[page.length - 1].seq : since),
       hasMore: false,
+      epoch: this.s.epoch,
+      maxSeq: this.s.seqs.get(deviceId) ?? 0,
     };
     for (const e of page) {
       if (e.kind === "contact") batch.contacts.push(e.row as WireContact);

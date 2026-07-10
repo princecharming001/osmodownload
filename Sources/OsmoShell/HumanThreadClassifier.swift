@@ -148,6 +148,12 @@ public enum HumanThreadClassifier {
         // the hard isAutomatedEmail list: the reciprocity override above already
         // rescued any sender the user actually replies to, so a real business at
         // hello@ / events@ you correspond with never reaches this scoring.
+        // A sender who reads like a PERSON — human display name AND a person-
+        // style address (personal-mail domain, or a work address shaped like
+        // first.last / a name token). Shared by the R2 and R3 dampers below.
+        let humanNamed = s.counterpartyNames.contains(where: looksHumanName)
+        let personLike = humanNamed && (handles.contains(where: isPersonalMailDomain)
+            || handles.contains(where: { hasPersonalStyleLocalpart($0, names: s.counterpartyNames) }))
         // R1: a service/role localpart (events@, team@, billing@ …).
         let serviceLocalpart = handles.contains(where: isServiceLocalpart)
         if serviceLocalpart { add(2, "service email address") }
@@ -155,17 +161,22 @@ public enum HumanThreadClassifier {
         let espSender = handles.contains(where: isESPSenderDomain)
         if espSender { add(2, "bulk-mail platform") }
         // R2: never-corresponded one-way email — they write, you never have,
-        // anywhere. A first-contact human at a personal-mail domain with a real
-        // name stays at +1 (2 total with one-way: under the threshold).
+        // anywhere. A first-contact HUMAN stays at +1 (2 total with one-way:
+        // under the threshold) — personal-mail domain OR a corporate address
+        // that reads like a person (jordan.lee@acme-corp.com, "Jordan Lee").
+        // A recruiter/colleague/event contact writing from work is exactly the
+        // relationship this app exists for; pitchy text is still caught by the
+        // sales-pitch rules below, and service senders by their localpart.
         if s.platform == .gmail, !s.userReplied, !s.userEverMessagedSender, s.inboundCount >= 1 {
-            let personal = handles.contains(where: isPersonalMailDomain)
-            let humanNamed = s.counterpartyNames.contains(where: looksHumanName)
-            add((personal && humanNamed) ? 1 : 2, "no prior correspondence")
+            add(personLike ? 1 : 2, "no prior correspondence")
         }
         if let subject = s.subjectOrTitle?.lowercased(), !subject.isEmpty {
             // R3: a templated subject line ("Registration approved for…",
-            // "Your X is ready") — damped by casual markers inside the helper.
-            if looksTemplatedSubject(subject) { add(2, "templated subject") }
+            // "Your X is ready") — damped by casual markers inside the helper,
+            // and skipped entirely for a person-like sender: "Thanks for the
+            // intro!" from jane.doe@gmail.com is a human writing, while
+            // "Your workspace is ready" from team@notion.so still scores.
+            if !personLike, looksTemplatedSubject(subject) { add(2, "templated subject") }
             // R4: emoji in the subject only counts alongside a brand signal —
             // friends use emoji too.
             if containsEmoji(subject),
@@ -413,5 +424,26 @@ public enum HumanThreadClassifier {
             return true   // all-caps word like "AMZN", "VERIFY"
         }
         return false
+    }
+
+    /// A localpart that reads like a person rather than a mailbox function:
+    /// it contains a token of the sender's display name ("jordan.lee" for
+    /// "Jordan Lee"), or is a classic first[.-_]last shape. Used to keep a
+    /// human first contact writing from a work domain visible (R2 damping).
+    static func hasPersonalStyleLocalpart(_ handle: String, names: [String]) -> Bool {
+        guard let at = handle.firstIndex(of: "@") else { return false }
+        let localpart = handle[..<at].lowercased()
+        let tokens = localpart.split(whereSeparator: { ".-_".contains($0) })
+            .map(String.init).filter { $0.count >= 2 && $0.allSatisfy(\.isLetter) }
+        guard !tokens.isEmpty else { return false }
+        // Any display-name token appearing in the localpart ("jordan", "lee").
+        let nameTokens = names.flatMap { $0.lowercased().split(separator: " ").map(String.init) }
+            .filter { $0.count >= 3 }
+        if tokens.contains(where: { t in nameTokens.contains(where: { $0.hasPrefix(t) || t.hasPrefix($0) }) }) {
+            return true
+        }
+        // first.last / first_last with two clean alpha tokens — but never a
+        // mailbox function word (support.team@ must not read as a person).
+        return tokens.count == 2 && !tokens.contains(where: { serviceLocalparts.contains($0) })
     }
 }

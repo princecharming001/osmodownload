@@ -5,6 +5,15 @@ import OsmoCore
 /// The target of every empty-state CTA.
 struct ConnectionsView: View {
     @EnvironmentObject var model: AppModel
+    /// Observed DIRECTLY: ConnectionsManager is a nested ObservableObject —
+    /// SwiftUI does not observe through `model.connections.phases`, so without
+    /// this the page only re-renders when something else publishes (the
+    /// "Cancel/Connect click doesn't update the row" stale-state bug).
+    @ObservedObject private var connections: ConnectionsManager
+
+    init(connections: ConnectionsManager) {
+        self.connections = connections
+    }
 
     var body: some View {
         ScrollView {
@@ -24,7 +33,7 @@ struct ConnectionsView: View {
                 }
                 VStack(spacing: 0) {
                     ForEach(Platform.allCases, id: \.self) { platform in
-                        ConnectionRow(platform: platform)
+                        ConnectionRow(platform: platform, connections: connections)
                     }
                 }
             }
@@ -40,7 +49,13 @@ struct ConnectionsView: View {
 
 struct ConnectionRow: View {
     @EnvironmentObject var model: AppModel
+    @ObservedObject var connections: ConnectionsManager
     let platform: Platform
+
+    init(platform: Platform, connections: ConnectionsManager) {
+        self.platform = platform
+        self.connections = connections
+    }
 
     var body: some View {
         // Transparent row (no card fill) so the brand logos read cleanly; a
@@ -69,6 +84,7 @@ struct ConnectionRow: View {
             }
             if let fraction = importFraction {
                 ProgressView(value: fraction)
+                    .accessibilityHidden(true)
                     .tint(DS.Colors.accent)
                     .transition(.opacity)
             }
@@ -92,8 +108,8 @@ struct ConnectionRow: View {
         }
         if case .live = phase, messageCount > 0 {
             var s = "Connected · \(messageCount.formatted()) messages"
-            if let lastSync = model.connections.lastSyncByPlatform[platform] {
-                let rel = RelativeDateTimeFormatter().localizedString(for: lastSync, relativeTo: Date())
+            if let lastSync = connections.lastSyncByPlatform[platform] {
+                let rel = Self.relativeFormatter.localizedString(for: lastSync, relativeTo: Date())
                 s += " · synced \(rel)"
             }
             return s
@@ -101,11 +117,14 @@ struct ConnectionRow: View {
         return statusLabel
     }
 
+    /// One shared formatter — allocating per row per render is measurable churn.
+    private static let relativeFormatter = RelativeDateTimeFormatter()
+
     private var messageCount: Int {
-        (try? model.store.messageCount(platform: platform)) ?? 0
+        model.messageCountByPlatform[platform] ?? 0
     }
 
-    private var phase: ConnectionPhase { model.connections.phases[platform] ?? .notConnected }
+    private var phase: ConnectionPhase { connections.phases[platform] ?? .notConnected }
 
     @ViewBuilder private var actions: some View {
         if platform.comingSoon {
@@ -128,7 +147,11 @@ struct ConnectionRow: View {
             }
         case .linking:
             HStack(spacing: DS.Space.s) {
-                ProgressView().controlSize(.small)
+                // AX-hidden: an animating spinner in the accessibility tree
+                // forces constant node re-materialization (starves the main
+                // thread under AX walkers/VoiceOver); the status text already
+                // says "Waiting for authorization…".
+                ProgressView().controlSize(.small).accessibilityHidden(true)
                 Button("Cancel") { Task { await model.connections.cancelConnect(platform) } }
                     .font(DS.Typography.captionEm).buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
                     .accessibilityIdentifier("connections.cancel.\(platform.rawValue)")
@@ -139,7 +162,7 @@ struct ConnectionRow: View {
             }
         case .backfilling(let progress):
             HStack(spacing: DS.Space.s) {
-                ProgressView(value: progress).frame(width: 60)
+                ProgressView(value: progress).frame(width: 60).accessibilityHidden(true)
                 Text("\(Int(progress * 100))%").font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
             }
         case .live:

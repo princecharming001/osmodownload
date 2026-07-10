@@ -308,12 +308,19 @@ export class SupabaseAccountsStore implements AccountsStore {
       .select().single();
     return this.mapDevice(data);
   }
+  // Device reads must distinguish "no such row" (null) from "store down"
+  // (throw): a transient Supabase failure that read as "unknown token" would
+  // 401 a VALID device, and the app answers 401 by re-registering as a fresh
+  // device — orphaning its Pro subscription and connections. Throwing instead
+  // surfaces as a 5xx the app simply retries.
   async deviceById(id: string): Promise<AccountDevice | null> {
-    const { data } = await this.sb.from("osmo_devices").select("*").eq("id", id).maybeSingle();
+    const { data, error } = await this.sb.from("osmo_devices").select("*").eq("id", id).maybeSingle();
+    if (error) throw new Error("device store unavailable");
     return data ? this.mapDevice(data) : null;
   }
   async deviceByToken(token: string): Promise<AccountDevice | null> {
-    const { data } = await this.sb.from("osmo_devices").select("*").eq("token", token).maybeSingle();
+    const { data, error } = await this.sb.from("osmo_devices").select("*").eq("token", token).maybeSingle();
+    if (error) throw new Error("device store unavailable");
     return data ? this.mapDevice(data) : null;
   }
   async devicesForUser(userId: string): Promise<AccountDevice[]> {
@@ -551,4 +558,9 @@ export function getAccounts(): AccountsStore {
 export function resetAccountsForTests(): void {
   g.__osmoAccountsMem = freshMem();
   g.__osmoAccounts = new MemoryAccountsStore(g.__osmoAccountsMem);
+}
+
+/** Test-only: swap in a specific store instance (e.g. a failing Supabase fake). */
+export function setAccountsForTests(store: AccountsStore): void {
+  g.__osmoAccounts = store;
 }

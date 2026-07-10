@@ -141,6 +141,29 @@ describe("emit + send", () => {
     expect(box.outbox.map((m: { text: string }) => m.text)).toEqual(["edited reply!"]);
   });
 
+  it("two same-instant emits both land — ids come from a counter, not Date.now()", async () => {
+    process.env.OSMO_MOCK_DRIP_MS = "0";
+    const { token } = await registered();
+    const link = await (await connectLink(req("/api/connect/link", token, {
+      method: "POST", body: JSON.stringify({ platform: "linkedin" }),
+    }))).json();
+    await mockComplete(req("/api/connect/mock/complete", undefined, {
+      method: "POST", body: JSON.stringify({ linkId: link.linkId }),
+    }));
+    const seeded = await (await pull(req("/api/sync/pull?since=0", token))).json();
+
+    // Same millisecond, same text — the old Date.now()%100_000 index made these
+    // the same platformMessageID, and the oplog dedup swallowed the second.
+    const body = { platform: "linkedin", text: "double tap" };
+    await emit(req("/api/dev/emit", token, { method: "POST", body: JSON.stringify(body) }));
+    await emit(req("/api/dev/emit", token, { method: "POST", body: JSON.stringify(body) }));
+
+    const fresh = await (await pull(req(`/api/sync/pull?since=${seeded.cursor}`, token))).json();
+    const dups = fresh.messages.filter((m: { text: string }) => m.text === "double tap");
+    expect(dups).toHaveLength(2);
+    expect(new Set(dups.map((m: { platformMessageID: string }) => m.platformMessageID)).size).toBe(2);
+  });
+
   it("send without a live connection is 409", async () => {
     const { token } = await registered();
     const res = await send(req("/api/sync/send", token, {

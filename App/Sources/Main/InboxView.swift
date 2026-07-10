@@ -298,13 +298,12 @@ func threadTitle(_ thread: OsmoThread, members: [OsmoContact]) -> String {
 func previewLine(_ message: OsmoMessage?) -> String {
     guard let message else { return "No messages yet" }
     guard !message.text.isEmpty else { return "Attachment" }
-    let flattened = message.text
-        .replacingOccurrences(of: "\n", with: " ")
-        .replacingOccurrences(of: "\r", with: " ")
-        .components(separatedBy: .controlCharacters).joined(separator: " ")
-        .trimmingCharacters(in: .whitespaces)
+    // SnippetCleaner's DEFAULT path: flatten + collapse + word-boundary clamp
+    // only. Inbox previews show human-classified content, so the boilerplate
+    // kill-list must never run here ("Location: my place" is a friend talking).
+    let flattened = SnippetCleaner.clean(message.text, maxLength: 90)
     if flattened.isEmpty { return "Attachment" }
-    return flattened.count > 90 ? String(flattened.prefix(90)) + "…" : flattened
+    return flattened
 }
 
 /// Like `previewLine`, but names an attachment-only message by its media kind

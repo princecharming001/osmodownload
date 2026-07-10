@@ -25,6 +25,7 @@ const DRIP_DEFAULT_MS = 20_000;
 
 const g = globalThis as unknown as {
   __osmoDrips?: Map<string, { timer: ReturnType<typeof setInterval>; count: number }>;
+  __osmoEmitSeq?: number;
 };
 
 function drips() {
@@ -89,7 +90,12 @@ export function stopDrip(connectionId: string): void {
     `sender` swaps in a caller-chosen thread/person (see DripSender). */
 export function emitNow(deviceId: string, platform: Platform, text?: string, sender?: DripSender): number {
   const store = getStore();
-  const n = Date.now() % 100_000; // unique-enough drip index for dev emits
+  // Monotonic drip index: Date.now()%100_000 collided on same-ms double emits
+  // (the oplog dedup silently swallowed the second message) and wrapped every
+  // ~100s. Offset past the drip timer's small 0..k counts so the two id
+  // spaces (`…-drip-${n}`) can never overlap.
+  g.__osmoEmitSeq = (g.__osmoEmitSeq ?? 0) + 1;
+  const n = 100_000 + g.__osmoEmitSeq;
   const bundle = dripMessage(platform, n, text, sender);
   if (!bundle) return 0;
   const seq = store.appendRows(deviceId, bundle);

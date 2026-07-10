@@ -49,6 +49,28 @@ describe("memory store oplog", () => {
     expect(empty.messages).toHaveLength(0);
   });
 
+  it("pull stamps the oplog epoch + maxSeq so clients can detect a fresh seq space", () => {
+    const s = getStore();
+    const d = s.registerDevice();
+    s.appendRows(d.id, { messages: [msg("m1")] });
+
+    const a = s.pull(d.id, 0, 10);
+    expect(a.epoch).toBeTruthy();
+    expect(a.maxSeq).toBe(1);
+    // Stable within one boot…
+    expect(s.pull(d.id, 0, 10).epoch).toBe(a.epoch);
+    // …and a stale cursor's emptiness is distinguishable: maxSeq exposes that
+    // since=702 is past this stream entirely (the redeploy-stall signal).
+    const stalled = s.pull(d.id, 702, 10);
+    expect(stalled.messages).toEqual([]);
+    expect(stalled.maxSeq).toBe(1);
+
+    // A fresh store (≈ redeploy) mints a NEW epoch.
+    resetStoreForTests();
+    const d2 = getStore().registerDevice();
+    expect(getStore().pull(d2.id, 0, 10).epoch).not.toBe(a.epoch);
+  });
+
   it("pending links are single-use", () => {
     const s = getStore();
     const d = s.registerDevice();

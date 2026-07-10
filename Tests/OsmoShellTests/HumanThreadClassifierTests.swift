@@ -240,14 +240,62 @@ struct TransactionalEmailTests {
 
     @Test("userEverMessagedSender damps the never-corresponded rule")
     func everMessagedDampsR2() {
-        var s = S(platform: .gmail, counterpartyHandles: ["jordan@acmecorp.com"],
-                  counterpartyNames: ["Jordan"], userReplied: false,
+        // A generic (non-person-style) corporate sender — a person-shaped one is
+        // now damped to +1 by design (see the first-contact tests below).
+        var s = S(platform: .gmail, counterpartyHandles: ["billing-updates@acmecorp.com"],
+                  counterpartyNames: ["Acme Corp"], userReplied: false,
                   inboundTexts: ["following up on the contract"], inboundCount: 1)
-        // Corporate one-way email you never wrote to → hidden (+2 R2, +1 one-way).
+        // Generic one-way email you never wrote to → hidden (+2 R2, +1 one-way).
         #expect(!HumanThreadClassifier.classify(s).isLikelyHuman)
         // …but you HAVE written to them in another thread → shown.
         s.userEverMessagedSender = true
         #expect(HumanThreadClassifier.classify(s).isLikelyHuman)
+    }
+
+    @Test("A first-contact human writing from a WORK address stays visible (person-style localpart)")
+    func firstContactHumanWorkAddress() {
+        // jordan.lee@acme-corp.com, "Jordan Lee" — a recruiter/colleague/event
+        // contact writing from work is exactly the relationship this app is for.
+        let v = HumanThreadClassifier.classify(S(
+            platform: .gmail, counterpartyHandles: ["jordan.lee@acme-corp.com"],
+            counterpartyNames: ["Jordan Lee"], userReplied: false,
+            inboundTexts: ["great meeting you at the summit — coffee next week?"],
+            inboundCount: 1))
+        #expect(v.isLikelyHuman)
+        #expect(v.score == 2)   // R2 damped to +1, one-way +1 — under threshold
+    }
+
+    @Test("A templated-looking subject from a person-like sender does NOT score (R3 damper)")
+    func templatedSubjectDampedForPersonLikeSender() {
+        // "Thanks for the intro!" trips the templated-subject anchor, but the
+        // sender is a human at a personal-mail domain — a machine subject rule
+        // must not hide a person's first email.
+        let v = HumanThreadClassifier.classify(S(
+            platform: .gmail, counterpartyHandles: ["jane.doe@gmail.com"],
+            counterpartyNames: ["Jane Doe"], userReplied: false,
+            inboundTexts: ["Thanks so much for introducing me to Priya!"], inboundCount: 1,
+            subjectOrTitle: "Thanks for the intro!"))
+        #expect(v.isLikelyHuman)
+    }
+
+    @Test("The same templated subject from a service sender still scores → hidden")
+    func templatedSubjectStillCatchesServiceSenders() {
+        let v = HumanThreadClassifier.classify(S(
+            platform: .gmail, counterpartyHandles: ["team@notion.so"],
+            counterpartyNames: ["Notion"], userReplied: false,
+            inboundTexts: ["Your workspace is ready — jump in."], inboundCount: 1,
+            subjectOrTitle: "Your workspace is ready ✨"))
+        #expect(!v.isLikelyHuman)
+    }
+
+    @Test("Two-token localparts made of service words are NOT person-style")
+    func serviceWordLocalpartNotPersonal() {
+        // support.team@ is a mailbox function, not a first.last human shape.
+        #expect(!HumanThreadClassifier.hasPersonalStyleLocalpart(
+            "support.team@vendor.com", names: ["Vendor"]))
+        // …while an actual first.last stays person-style.
+        #expect(HumanThreadClassifier.hasPersonalStyleLocalpart(
+            "jordan.lee@acme-corp.com", names: ["Jordan Lee"]))
     }
 
     @Test("Service localparts match EXACTLY on the collapsed localpart: hi@ yes, hillary@ no")

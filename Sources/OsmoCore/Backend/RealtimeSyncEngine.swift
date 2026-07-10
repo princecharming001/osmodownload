@@ -6,11 +6,25 @@ public protocol CursorStoring: Sendable {
     func saveBackendCursor(_ cursor: String)
     func loadChatDBRowID() -> Int64
     func saveChatDBRowID(_ rowID: Int64)
+    /// The oplog epoch the cursor was minted under ("" = unknown/legacy).
+    func loadBackendEpoch() -> String
+    func saveBackendEpoch(_ epoch: String)
+}
+
+/// Epoch persistence is additive — pre-existing conformers keep compiling and
+/// simply never trigger an epoch reset (same behavior as before the field).
+public extension CursorStoring {
+    func loadBackendEpoch() -> String { "" }
+    func saveBackendEpoch(_ epoch: String) {}
 }
 
 /// JSON-file cursor store (Application Support, next to the config).
 public struct FileCursorStore: CursorStoring {
-    private struct State: Codable { var backendCursor: String; var chatDBRowID: Int64 }
+    private struct State: Codable {
+        var backendCursor: String
+        var chatDBRowID: Int64
+        var backendEpoch: String?   // optional: decode-tolerant of pre-epoch files
+    }
     private let url: URL
     public init(url: URL) { self.url = url }
 
@@ -33,6 +47,10 @@ public struct FileCursorStore: CursorStoring {
     public func saveChatDBRowID(_ rowID: Int64) {
         var s = load(); s.chatDBRowID = rowID; save(s)
     }
+    public func loadBackendEpoch() -> String { load().backendEpoch ?? "" }
+    public func saveBackendEpoch(_ epoch: String) {
+        var s = load(); s.backendEpoch = epoch; save(s)
+    }
 }
 
 /// In-memory cursors for tests.
@@ -40,11 +58,14 @@ public final class MemoryCursorStore: CursorStoring, @unchecked Sendable {
     private let lock = NSLock()
     private var cursor = ""
     private var rowID: Int64 = 0
+    private var epoch = ""
     public init() {}
     public func loadBackendCursor() -> String { lock.lock(); defer { lock.unlock() }; return cursor }
     public func saveBackendCursor(_ c: String) { lock.lock(); defer { lock.unlock() }; cursor = c }
     public func loadChatDBRowID() -> Int64 { lock.lock(); defer { lock.unlock() }; return rowID }
     public func saveChatDBRowID(_ r: Int64) { lock.lock(); defer { lock.unlock() }; rowID = r }
+    public func loadBackendEpoch() -> String { lock.lock(); defer { lock.unlock() }; return epoch }
+    public func saveBackendEpoch(_ e: String) { lock.lock(); defer { lock.unlock() }; epoch = e }
 }
 
 /// The resident sync daemon — three source loops into one ingest path:
@@ -209,6 +230,7 @@ public actor RealtimeSyncEngine {
     public func pullNow() async {
         var cursor = cursorStore.loadBackendCursor()
         var wroteAny = false
+        var streamChecked = false
 
         while true {
             guard let wire = try? await client.pull(since: cursor) else {
@@ -217,6 +239,26 @@ public actor RealtimeSyncEngine {
                 pullFailureStreak += 1
                 onPullHealth?(pullFailureStreak)
                 return
+            }
+            // Stream-identity check (once per pull): a redeployed/fresh backend
+            // restarts the per-device seq space, so a persisted cursor can sit
+            // PAST the new stream's max seq — every pull then returns empty and
+            // the device silently never receives another message. Detect it via
+            // the oplog epoch (changed) or an impossible cursor (> maxSeq) and
+            // restart from 0; ingest is idempotent (deterministic ids), so the
+            // replay is safe.
+            if !streamChecked {
+                streamChecked = true
+                let sinceVal = Int(cursor) ?? 0
+                let known = cursorStore.loadBackendEpoch()
+                let epochChanged = wire.epoch.map { !$0.isEmpty && !known.isEmpty && $0 != known } ?? false
+                let cursorBeyond = wire.maxSeq.map { sinceVal > $0 } ?? false
+                if let e = wire.epoch, !e.isEmpty, e != known { cursorStore.saveBackendEpoch(e) }
+                if (epochChanged || cursorBeyond) && sinceVal > 0 {
+                    cursor = ""
+                    cursorStore.saveBackendCursor("")
+                    continue
+                }
             }
             var result = BackendBatchNormalizer.normalize(wire)
             result.batch.contacts = await fetchAvatars(for: result.batch.contacts, wire: wire.contacts)

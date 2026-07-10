@@ -91,6 +91,14 @@ export interface WireBatch {
   messages: WireMessage[];
   cursor: string;                // opaque; max oplog seq included in this page
   hasMore: boolean;
+  /** Identity of this oplog sequence space (new per server boot). A client
+      holding a cursor minted under a different epoch must reset to 0 — its
+      cursor may be far past this stream's seq and would otherwise silently
+      starve it of messages forever (the redeploy-stall bug). */
+  epoch?: string;
+  /** The device's current max seq — lets a client detect an impossible
+      cursor (cursor > maxSeq) even without an epoch change. */
+  maxSeq?: number;
 }
 
 // ---------------------------------------------------------------------------

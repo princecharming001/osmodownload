@@ -132,7 +132,7 @@ struct BackendClientTests {
         #expect(transport.requests.isEmpty)
     }
 
-    @Test("refreshRegistration drops stored creds, re-registers, fires onReRegistered")
+    @Test("refreshRegistration mints fresh creds, replaces the stored ones, fires onReRegistered")
     func refreshRegistrationRoundTrip() async throws {
         let transport = FakeTransport()
         transport.script = [("device/register", 200, Self.creds2)]
@@ -148,6 +148,27 @@ struct BackendClientTests {
         #expect(try tokens.load()?.deviceToken == "tok-2")   // persisted
         #expect(flagged.isSet)                               // cursor-reset hook fired
         #expect(await client.registeredToken() == "tok-2")
+    }
+
+    @Test("A failed refresh keeps the old credentials — never orphan the device identity")
+    func refreshRegistrationFailureKeepsCredentials() async throws {
+        // Backend unreachable mid-refresh: the register call 5xxs. The old
+        // identity must survive (memory AND Keychain) — wiping it before a mint
+        // that then fails would strand the server-side entitlement + oplog.
+        let transport = FakeTransport()
+        transport.script = [("device/register", 503, "{}")]
+        let tokens = MemoryDeviceToken()
+        try tokens.store(DeviceCredentials(deviceId: "dev-1", deviceToken: "tok-1", mode: "mock"))
+        let client = BackendClient(baseURL: URL(string: "http://test")!,
+                                   tokenStore: tokens, transport: transport.handler())
+        let flagged = FlagBox()
+        await client.setOnReRegistered { flagged.set() }
+
+        let fresh = await client.refreshRegistration()
+        #expect(fresh == nil)
+        #expect(try tokens.load()?.deviceToken == "tok-1")   // old creds survive
+        #expect(await client.registeredToken() == "tok-1")
+        #expect(!flagged.isSet)                              // no cursor reset for a no-op
     }
 
     private static let accountsBody = #"{"connections":[{"id":"c1","platform":"linkedin","status":"connected","displayName":"LinkedIn","backfillProgress":1,"createdAt":"2026-07-01T00:00:00Z","lastSyncAt":"2026-07-09T10:00:00Z","lastVerifiedAt":"2026-07-09T10:01:00Z"}]}"#

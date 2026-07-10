@@ -59,17 +59,29 @@ public actor BackendClient {
 
     @discardableResult
     private func register() async throws -> DeviceCredentials {
+        let creds = try await mintCredentials()
+        commit(creds)
+        return creds
+    }
+
+    /// POST /api/device/register and decode — NO stored-credential side effects,
+    /// so a caller can mint a fresh identity first and only commit it on success
+    /// (the refresh path must never be left credential-less by a failed mint).
+    private func mintCredentials() async throws -> DeviceCredentials {
         let (data, response) = try await transport(request("POST", "/api/device/register"))
         guard response.statusCode == 200 else { throw BackendError.badStatus(response.statusCode) }
-        let creds = try JSONDecoder.osmoWire.decode(DeviceCredentials.self, from: data)
+        return try JSONDecoder.osmoWire.decode(DeviceCredentials.self, from: data)
+    }
+
+    /// Atomically adopt a freshly minted identity (memory + Keychain).
+    /// A fresh device identity means any prior sync cursor is meaningless —
+    /// notify so the caller resets it (idempotent full re-pull). Firing this
+    /// on every commit covers the SSE-reconnect, authed-401, AND refresh paths;
+    /// the first-launch call is harmless (cursor is already empty).
+    private func commit(_ creds: DeviceCredentials) {
         credentials = creds
         try? tokenStore.store(creds)
-        // A fresh device identity means any prior sync cursor is meaningless —
-        // notify so the caller resets it (idempotent full re-pull). Firing this
-        // from register() covers BOTH the SSE-reconnect and authed-401 paths; the
-        // first-launch call is harmless (cursor is already empty).
         onReRegistered?()
-        return creds
     }
 
     /// True once registered against a keyless backend (drives the demo banner).
@@ -89,13 +101,17 @@ public actor BackendClient {
         return nil
     }
 
-    /// Force a fresh identity: drop the stored credentials (Keychain too) and
-    /// re-register. Returns the new token, or nil when the backend is
-    /// unreachable. `register()` fires the existing `onReRegistered` handler,
-    /// so the sync engine's cursor reset keeps working untouched.
+    /// Force a fresh identity: mint a NEW registration first and only then
+    /// replace the stored credentials (Keychain too). Returns the new token,
+    /// or nil when the backend is unreachable — in which case the OLD identity
+    /// survives untouched (dropping it before a mint that then fails would
+    /// orphan the server-side entitlement, connections, and oplog on the next
+    /// launch). `commit` fires the existing `onReRegistered` handler, so the
+    /// sync engine's cursor reset keeps working untouched.
     public func refreshRegistration() async -> String? {
-        dropCredentials()
-        return (try? await register())?.deviceToken
+        guard let fresh = try? await mintCredentials() else { return nil }
+        commit(fresh)
+        return fresh.deviceToken
     }
 
     // MARK: - API surface

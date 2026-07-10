@@ -130,10 +130,18 @@ public struct WireBatch: Codable, Equatable, Sendable {
     public var messages: [WireMessage]
     public var cursor: String
     public var hasMore: Bool
+    /// Identity of the server's oplog sequence space (changes on server boot/
+    /// redeploy). A cursor minted under a different epoch is meaningless — it
+    /// can sit past the new stream's seq and silently starve the client.
+    public var epoch: String?
+    /// The device's current max seq server-side — lets the client detect an
+    /// impossible cursor (cursor > maxSeq) even without an epoch change.
+    public var maxSeq: Int?
     public init(contacts: [WireContact], threads: [WireThread], messages: [WireMessage],
-                cursor: String, hasMore: Bool) {
+                cursor: String, hasMore: Bool, epoch: String? = nil, maxSeq: Int? = nil) {
         self.contacts = contacts; self.threads = threads; self.messages = messages
         self.cursor = cursor; self.hasMore = hasMore
+        self.epoch = epoch; self.maxSeq = maxSeq
     }
 }
 

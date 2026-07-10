@@ -278,27 +278,39 @@ struct QueueCardRow: View {
         }
     }
 
-    /// Hover reveals a Draft button; otherwise a muted chevron.
-    @ViewBuilder private var trailing: some View {
-        if hovering {
-            PillButton("Draft") { openThread() }
-                .accessibilityIdentifier("queue.card.draft.\(slug)")
-        } else {
-            Image(systemName: "chevron.right").font(.system(size: 11))
-                .foregroundStyle(DS.Colors.muted)
-        }
+    /// The Draft pill is ALWAYS laid out (so hover never shifts the row and the
+    /// button stays keyboard/AX-reachable); hover just cross-fades it with the
+    /// idle chevron. Return on the focused row still opens the thread — the row
+    /// itself is the Button.
+    private var trailing: some View {
+        PillButton("Draft") { openThread() }
+            .accessibilityIdentifier("queue.card.draft.\(slug)")
+            .opacity(hovering ? 1 : 0)
+            .overlay {
+                Image(systemName: "chevron.right").font(.system(size: 11))
+                    .foregroundStyle(DS.Colors.muted)
+                    .opacity(hovering ? 0 : 1)
+                    .allowsHitTesting(false)
+            }
+            .animation(DS.Motion.standard, value: hovering)
     }
 
-    /// Deterministic first-name slug for AX ids (lowercased alphanumerics).
+    /// Deterministic AX slug: lowercased first name + the first 4 chars of the
+    /// thread UUID — two "Amy"s must never collide on `queue.card.amy`. The
+    /// probe matches on the `queue.card.<name>` PREFIX.
     private var slug: String {
         let first = card.personName.split(separator: " ").first.map(String.init) ?? "x"
         let cleaned = first.lowercased().filter { $0.isLetter || $0.isNumber }
-        return cleaned.isEmpty ? "x" : cleaned
+        let suffix = card.threadID.uuidString.prefix(4).lowercased()
+        return "\(cleaned.isEmpty ? "x" : cleaned)-\(suffix)"
     }
+
+    /// One shared formatter — allocating per row per render is measurable churn.
+    private static let relativeFormatter = RelativeDateTimeFormatter()
 
     private var relativeTime: String? {
         guard let last = try? model.store.lastMessage(inThread: card.threadID) else { return nil }
-        return RelativeDateTimeFormatter().localizedString(for: last.sentAt, relativeTo: Date())
+        return Self.relativeFormatter.localizedString(for: last.sentAt, relativeTo: Date())
     }
 
     /// Today/overdue only — `.soon` doesn't earn a card-level chip (the flame

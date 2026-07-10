@@ -14,7 +14,7 @@ struct SettingsView: View {
             GeneralSettings().tabItem { Label("General", systemImage: "gear") }
             PlanSettings().environmentObject(model)
                 .tabItem { Label("Plan", systemImage: "creditcard") }
-            ConnectionsView().environmentObject(model)
+            ConnectionsView(connections: model.connections).environmentObject(model)
                 .tabItem { Label("Connections", systemImage: "link") }
             PillSettings().tabItem { Label("Pill & Hotkey", systemImage: "capsule") }
             AISettings().tabItem { Label("AI", systemImage: "brain") }
