@@ -10,6 +10,7 @@ import { stopDrip } from "@/lib/unipile/mock";
 import { accountIsHealthy, getUnipile } from "@/lib/unipile/client";
 import { platformForProvider } from "@/lib/unipile/normalize";
 import { backfillConnection } from "@/lib/connections/backfill";
+import { verifyConnections } from "@/lib/connections/liveness";
 import type { AccountsResponse, Connection } from "@/lib/connections/types";
 
 /** Devices we've already attempted adoption for this process (one shot each). */
@@ -58,6 +59,9 @@ export async function GET(req: Request): Promise<Response> {
     const device = await requireDevice(req);
     await ensureConnectionsLoaded(device.id); // rehydrate durable connections after a redeploy
     await adoptOrphanedAccounts(device.id);
+    // ?verify=1 → check stored statuses against upstream account health
+    // (TTL-throttled server-side; no-op in mock mode).
+    if (new URL(req.url).searchParams.get("verify") === "1") await verifyConnections(device.id);
     const connections = getStore().connections(device.id)
       .map(({ deviceId: _omit, ...rest }) => rest);
     const res: AccountsResponse = { connections };

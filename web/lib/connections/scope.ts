@@ -15,12 +15,21 @@ export type BackfillScope = {
   maxConversations: number | null;
 };
 
+/** Read a positive integer from the environment, falling back when the var is
+    unset or unparseable. The shared knob-reader for every ingestion cap. */
+export function envInt(name: string, fallback: number): number {
+  const raw = process.env[name];
+  if (raw == null || raw === "") return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : fallback;
+}
+
 export function backfillScope(): BackfillScope {
   if ((process.env.OSMO_BACKFILL_SCOPE ?? "").toLowerCase() === "demo") {
     return { sinceMs: 15 * 24 * 60 * 60 * 1000, maxConversations: 5 };
   }
-  // 1 month for now (demo phase) — was 60d. Bump back up when scaling past demos.
-  return { sinceMs: 30 * 24 * 60 * 60 * 1000, maxConversations: null };
+  // 30 days by default; OSMO_BACKFILL_DAYS widens/narrows the window without a deploy.
+  return { sinceMs: envInt("OSMO_BACKFILL_DAYS", 30) * 24 * 60 * 60 * 1000, maxConversations: null };
 }
 
 /** A gate over conversation ids: admits ids already seen, and new ids until the

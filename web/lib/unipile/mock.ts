@@ -8,7 +8,7 @@ import crypto from "node:crypto";
 import type { Connection, Platform } from "../connections/types";
 import { getStore } from "../connections/memoryStore";
 import { publish } from "../connections/events";
-import { demoAccountName, demoConversations, dripMessage } from "../demo/seed";
+import { demoAccountName, demoConversations, dripMessage, type DripSender } from "../demo/seed";
 import type { HostedAuthOptions, UnipileAccount, UnipileClient, UnipileUserProfile } from "./client";
 
 /** Tiny FNV-1a hash — stable across processes, unlike anything Math.random. */
@@ -85,11 +85,12 @@ export function stopDrip(connectionId: string): void {
   if (entry) { clearInterval(entry.timer); drips().delete(connectionId); }
 }
 
-/** Immediate scripted (or custom) inbound — the deterministic E2E trigger. */
-export function emitNow(deviceId: string, platform: Platform, text?: string): number {
+/** Immediate scripted (or custom) inbound — the deterministic E2E trigger.
+    `sender` swaps in a caller-chosen thread/person (see DripSender). */
+export function emitNow(deviceId: string, platform: Platform, text?: string, sender?: DripSender): number {
   const store = getStore();
   const n = Date.now() % 100_000; // unique-enough drip index for dev emits
-  const bundle = dripMessage(platform, n, text);
+  const bundle = dripMessage(platform, n, text, sender);
   if (!bundle) return 0;
   const seq = store.appendRows(deviceId, bundle);
   if (seq > 0) publish(deviceId, { type: "sync.dirty", seq });
@@ -116,6 +117,7 @@ class MockUnipileClient implements UnipileClient {
   // interface-compliance stubs — never exercised in the mock flow.
   async listChats(): Promise<{ chats: never[]; cursor: null }> { return { chats: [], cursor: null }; }
   async listMessages(): Promise<{ messages: never[]; cursor: null }> { return { messages: [], cursor: null }; }
+  async listChatMessages(): Promise<{ messages: never[]; cursor: null }> { return { messages: [], cursor: null }; }
   async listChatAttendees(): Promise<never[]> { return []; }
 
   /** Deterministic demo profile — same identifier always yields the same

@@ -27,7 +27,10 @@ export async function POST(req: Request): Promise<Response> {
     const bundle = normalizeMessageWebhook(payload);
     if (bundle) {
       const seq = store.appendRows(connection.deviceId, bundle);
-      if (seq > 0) publish(connection.deviceId, { type: "sync.dirty", seq });
+      if (seq > 0) {
+        store.touchConnection(connection.id, { lastSyncAt: new Date().toISOString() });
+        publish(connection.deviceId, { type: "sync.dirty", seq });
+      }
     }
   } else if (event.includes("account")) {
     const status = String(payload.status ?? "").toUpperCase();

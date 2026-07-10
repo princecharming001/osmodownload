@@ -19,6 +19,9 @@ import OsmoCore
 /// human side, while catching the codes and blasts.
 public enum HumanThreadClassifier {
     public static let threshold = 3
+    /// Bump whenever the rules change — the app keys its cached verdicts on it,
+    /// so old verdicts are recomputed instead of trusted forever.
+    public static let version = 2
 
     /// Everything the classifier needs, pulled from the store by the app. Kept a
     /// plain value so tests construct it directly (no DB, no models required).
@@ -45,12 +48,21 @@ public enum HumanThreadClassifier {
         /// sees the full recent transcript, so it catches shapes (a service-y
         /// sender with a bland first message) the regexes below miss.
         public var llmSaysAutomated: Bool?
+        /// The email subject / thread title, when known — templated subjects
+        /// ("Registration approved for…", "Your X is ready") are strong machine
+        /// evidence no snippet regex sees.
+        public var subjectOrTitle: String?
+        /// The user has EVER sent this sender a message — in ANY thread, not just
+        /// this one (`OsmoStore.outboundCounterpartyHandles()`). Damps the
+        /// never-corresponded rule for real correspondents.
+        public var userEverMessagedSender: Bool
 
         public init(platform: Platform, isGroup: Bool = false,
                     counterpartyHandles: [String] = [], counterpartyNames: [String] = [],
                     hasResolvedPerson: Bool = false, userReplied: Bool = false,
                     inboundTexts: [String] = [], inboundCount: Int = 0,
-                    serverAutomatedHint: Bool = false, llmSaysAutomated: Bool? = nil) {
+                    serverAutomatedHint: Bool = false, llmSaysAutomated: Bool? = nil,
+                    subjectOrTitle: String? = nil, userEverMessagedSender: Bool = false) {
             self.platform = platform
             self.isGroup = isGroup
             self.counterpartyHandles = counterpartyHandles
@@ -61,6 +73,8 @@ public enum HumanThreadClassifier {
             self.inboundCount = inboundCount
             self.serverAutomatedHint = serverAutomatedHint
             self.llmSaysAutomated = llmSaysAutomated
+            self.subjectOrTitle = subjectOrTitle
+            self.userEverMessagedSender = userEverMessagedSender
         }
     }
 
@@ -127,6 +141,37 @@ public enum HumanThreadClassifier {
         // A single brand-shaped name token (all caps or with digits) is a weak nudge.
         if s.counterpartyNames.allSatisfy(looksBrandName), !s.counterpartyNames.isEmpty {
             add(1, "brand-like name")
+        }
+
+        // ---- Transactional-email evidence (v2) — the event-registration /
+        // product-notification leak class. All SOFT rules, deliberately NOT in
+        // the hard isAutomatedEmail list: the reciprocity override above already
+        // rescued any sender the user actually replies to, so a real business at
+        // hello@ / events@ you correspond with never reaches this scoring.
+        // R1: a service/role localpart (events@, team@, billing@ …).
+        let serviceLocalpart = handles.contains(where: isServiceLocalpart)
+        if serviceLocalpart { add(2, "service email address") }
+        // R5: sent through an ESP / event platform (mirror of the server list).
+        let espSender = handles.contains(where: isESPSenderDomain)
+        if espSender { add(2, "bulk-mail platform") }
+        // R2: never-corresponded one-way email — they write, you never have,
+        // anywhere. A first-contact human at a personal-mail domain with a real
+        // name stays at +1 (2 total with one-way: under the threshold).
+        if s.platform == .gmail, !s.userReplied, !s.userEverMessagedSender, s.inboundCount >= 1 {
+            let personal = handles.contains(where: isPersonalMailDomain)
+            let humanNamed = s.counterpartyNames.contains(where: looksHumanName)
+            add((personal && humanNamed) ? 1 : 2, "no prior correspondence")
+        }
+        if let subject = s.subjectOrTitle?.lowercased(), !subject.isEmpty {
+            // R3: a templated subject line ("Registration approved for…",
+            // "Your X is ready") — damped by casual markers inside the helper.
+            if looksTemplatedSubject(subject) { add(2, "templated subject") }
+            // R4: emoji in the subject only counts alongside a brand signal —
+            // friends use emoji too.
+            if containsEmoji(subject),
+               serviceLocalpart || espSender || s.counterpartyNames.contains(where: looksBrandName) {
+                add(1, "promotional subject")
+            }
         }
 
         // Cold outreach / sales pitch — the LinkedIn slip-through class. A REAL
@@ -200,6 +245,83 @@ public enum HumanThreadClassifier {
         return false
     }
 
+    /// The email's domain, when the handle is an email; nil otherwise.
+    static func emailDomain(_ handle: String) -> String? {
+        let norm = HandleNormalizer.normalize(handle)
+        guard norm.kind == .email else { return nil }
+        let parts = norm.value.split(separator: "@")
+        guard parts.count == 2 else { return nil }
+        return String(parts[1])
+    }
+
+    /// Service/role localparts (events@, team@, billing@ …) — SOFT evidence, kept
+    /// out of the hard `isAutomatedEmail` list so reciprocity rescues a real
+    /// business. EXACT match on the collapsed localpart: "hi@x.com" hits,
+    /// "hillary@x.com" must not.
+    static func isServiceLocalpart(_ handle: String) -> Bool {
+        let norm = HandleNormalizer.normalize(handle)
+        guard norm.kind == .email else { return false }
+        let local = norm.value.split(separator: "@").first.map(String.init) ?? norm.value
+        let collapsed = local.replacingOccurrences(of: ".", with: "")
+            .replacingOccurrences(of: "-", with: "")
+            .replacingOccurrences(of: "_", with: "")
+        return serviceLocalparts.contains(collapsed)
+    }
+
+    static let serviceLocalparts: Set<String> = [
+        "events", "event", "registration", "register", "team", "hello", "hi", "hey",
+        "success", "support", "help", "billing", "receipts", "receipt", "orders",
+        "order", "invites", "invite", "invitations", "calendar", "welcome",
+        "community", "members", "membership", "info", "contact", "sales",
+        "marketing", "careers", "jobs", "offers", "promotions", "promo", "rewards",
+        "feedback", "survey", "digest", "reminders", "reminder", "admin",
+        "accounts", "account", "security", "verify", "verification", "confirm",
+        "confirmation", "invoices", "invoice", "booking", "bookings",
+        "reservations", "news", "press",
+    ]
+
+    /// A personal-mail provider domain — where individual humans live, as
+    /// opposed to a corporate/product domain.
+    static func isPersonalMailDomain(_ handle: String) -> Bool {
+        guard let domain = emailDomain(handle) else { return false }
+        let exact: Set<String> = ["gmail.com", "googlemail.com", "outlook.com",
+                                  "live.com", "icloud.com", "me.com", "mac.com",
+                                  "aol.com", "proton.me", "protonmail.com", "hey.com"]
+        if exact.contains(domain) { return true }
+        // Multi-TLD families (yahoo.co.uk, hotmail.fr, fastmail.fm …).
+        for family in ["yahoo.", "hotmail.", "fastmail."] where domain.hasPrefix(family) {
+            return true
+        }
+        return false
+    }
+
+    /// Sent through an ESP / event platform — the client mirror of the server's
+    /// bulk-sender domain list, plus the bulk-mail subdomain shape
+    /// (mail.foo.com, e.foo.com, news.foo.com …).
+    static func isESPSenderDomain(_ handle: String) -> Bool {
+        guard let domain = emailDomain(handle) else { return false }
+        let esps: Set<String> = [
+            "sendgrid.net", "mailgun.org", "amazonses.com", "postmarkapp.com",
+            "customeriomail.com", "klaviyomail.com", "braze.com", "intercom-mail.com",
+            "hubspotemail.net", "mandrillapp.com", "mcsv.net", "rsgsv.net",
+            "sparkpostmail.com", "mailjet.com", "brevo.com", "luma-mail.com",
+            "lu.ma", "partiful.com", "eventbrite.com",
+        ]
+        if esps.contains(domain) { return true }
+        if esps.contains(where: { domain.hasSuffix("." + $0) }) { return true }
+        // Subdomain first-label heuristic — needs an actual subdomain (≥3 labels)
+        // so plain providers like mail.com never trip it.
+        let labels = domain.split(separator: ".")
+        if labels.count >= 3, espSubdomainLabels.contains(String(labels[0])) { return true }
+        return false
+    }
+
+    static let espSubdomainLabels: Set<String> = [
+        "mail", "e", "em", "email", "marketing", "news", "newsletter", "notify",
+        "notifications", "updates", "alerts", "mailer", "bounce", "mg", "go",
+        "try", "get", "click", "links",
+    ]
+
     // MARK: - Text shapes
 
     static func looksLikeOTP(_ lower: String) -> Bool {
@@ -228,6 +350,27 @@ public enum HumanThreadClassifier {
                        "open to connecting", "pick your brain", "love to connect",
                        "hope this message finds you", "came across your profile"]
         return phrases.reduce(0) { $0 + (lower.contains($1) ? 1 : 0) }
+    }
+
+    /// A templated transactional subject line ("Registration approved for…",
+    /// "Your order has shipped"). Anchored so a friend's "your dog is hilarious"
+    /// subject-ish opener doesn't count, and damped entirely by casual markers —
+    /// no machine writes "lol" in a subject.
+    static func looksTemplatedSubject(_ lower: String) -> Bool {
+        for marker in ["lol", "haha", "??", "omg"] where lower.contains(marker) { return false }
+        let anchored = #"^(your|welcome to|verify|confirm|reset|receipt|invoice|order|registration|reminder|action required|invitation|you're invited|thanks for|get started|complete your|activate|new sign.?in|security alert)\b"#
+        if let regex = try? Regex(anchored), lower.firstMatch(of: regex) != nil { return true }
+        for pattern in [#"\bapproved for\b"#, #"\bis ready\b"#, #"\bhas shipped\b"#, #"\border #"#] {
+            if let regex = try? Regex(pattern), lower.firstMatch(of: regex) != nil { return true }
+        }
+        return false
+    }
+
+    /// Any emoji-presentation scalar (✨🎉…) — digits and plain symbols don't count.
+    static func containsEmoji(_ s: String) -> Bool {
+        s.unicodeScalars.contains {
+            $0.properties.isEmojiPresentation || ($0.properties.isEmoji && $0.value >= 0x1F000)
+        }
     }
 
     static func looksLikeMarketing(_ lower: String) -> Bool {

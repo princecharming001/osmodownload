@@ -472,6 +472,7 @@ export class SupabaseAccountsStore implements AccountsStore {
     await this.sb.from("osmo_connections").upsert({
       id: c.id, device_id: c.deviceId, platform: c.platform, status: c.status,
       display_name: c.displayName, backfill_progress: c.backfillProgress,
+      last_sync_at: c.lastSyncAt ?? null, last_verified_at: c.lastVerifiedAt ?? null,
       created_at: c.createdAt, updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
   }
@@ -480,6 +481,7 @@ export class SupabaseAccountsStore implements AccountsStore {
     return (data ?? []).map((r: any): Connection => ({
       id: r.id, deviceId: r.device_id, platform: r.platform, status: r.status,
       displayName: r.display_name ?? "", backfillProgress: r.backfill_progress ?? 0, createdAt: r.created_at,
+      lastSyncAt: r.last_sync_at ?? null, lastVerifiedAt: r.last_verified_at ?? null,
     }));
   }
   async deleteConnection(id: string): Promise<void> {

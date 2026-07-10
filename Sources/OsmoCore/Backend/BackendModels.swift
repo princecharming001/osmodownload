@@ -197,12 +197,17 @@ public struct ConnectionInfo: Codable, Equatable, Sendable, Identifiable {
     public var displayName: String
     public var backfillProgress: Double
     public var createdAt: Date
+    /// Sync/liveness stamps — optional so older servers/rows decode unchanged.
+    public var lastSyncAt: Date?
+    public var lastVerifiedAt: Date?
 
     public init(id: String, platform: String, status: String, displayName: String,
-                backfillProgress: Double, createdAt: Date) {
+                backfillProgress: Double, createdAt: Date,
+                lastSyncAt: Date? = nil, lastVerifiedAt: Date? = nil) {
         self.id = id; self.platform = platform; self.status = status
         self.displayName = displayName; self.backfillProgress = backfillProgress
         self.createdAt = createdAt
+        self.lastSyncAt = lastSyncAt; self.lastVerifiedAt = lastVerifiedAt
     }
 }
 

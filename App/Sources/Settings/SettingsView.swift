@@ -101,7 +101,9 @@ struct AISettings: View {
             }
             Section("AI proxy") {
                 TextField("Proxy URL", text: $proxyURL, prompt: Text("http://localhost:3000/api/suggest"))
-                TextField("Session token", text: $token)
+                TextField("Session token", text: $token, prompt: Text("Automatic — uses your signed-in device"))
+                Text("Leave the token blank to authenticate automatically with your signed-in device. Enter one only to override with a specific proxy session token.")
+                    .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
                 TextField("Model", text: $modelName, prompt: Text("claude-sonnet-5"))
             }
             Section("Connections backend") {
@@ -119,7 +121,7 @@ struct AISettings: View {
         }
         .formStyle(.grouped)
         .onAppear {
-            proxyURL = model.config.proxyURL; token = model.config.authToken
+            proxyURL = model.config.proxyURL; token = model.config.manualAuthToken ?? ""
             modelName = model.config.model; backendURL = model.config.backendURL ?? ""
         }
     }

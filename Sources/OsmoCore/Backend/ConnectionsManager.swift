@@ -12,6 +12,9 @@ public final class ConnectionsManager: ObservableObject {
 
     @Published public private(set) var phases: [Platform: ConnectionPhase] = [:]
     @Published public private(set) var lastReconcile: Date?
+    /// Last time the backend appended rows per platform (wire `lastSyncAt`) —
+    /// drives the "synced 2m ago" subtitle. Absent for platforms without one.
+    @Published public private(set) var lastSyncByPlatform: [Platform: Date] = [:]
 
     private let client: BackendClient
     private let persistURL: URL
@@ -138,8 +141,10 @@ public final class ConnectionsManager: ObservableObject {
 
     /// Snapshot-heal from GET /api/accounts: fixes missed webhooks, collapses
     /// stale linking, and detects a dev-server restart (all connections gone).
-    public func reconcile() async {
-        guard let accounts = try? await client.accounts() else { return }
+    /// `verify: true` additionally asks the backend to liveness-check each
+    /// connection upstream first (page-open/foreground; TTL-throttled server-side).
+    public func reconcile(verify: Bool = false) async {
+        guard let accounts = try? await client.accounts(verify: verify) else { return }
         let byPlatform = Dictionary(grouping: accounts, by: { Platform(rawValue: $0.platform) })
         // Backend truth drives every platform EXCEPT iMessage (local FDA probe).
         // This deliberately INCLUDES WhatsApp: it's `.localData` access but has no
@@ -155,6 +160,7 @@ public final class ConnectionsManager: ObservableObject {
             if let info, info.status == "backfilling" {
                 apply(platform, .backfillProgress(info.backfillProgress))
             }
+            if let syncedAt = info?.lastSyncAt { lastSyncByPlatform[platform] = syncedAt }
         }
         probeLocal()
         lastReconcile = Date()

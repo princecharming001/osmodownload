@@ -118,6 +118,28 @@ struct ThreadHintsTests {
         #expect(fetched?.lastMessageAt == Date(timeIntervalSince1970: 200))   // newer date still wins
     }
 
+    @Test("preservingEnrichment: automatedHint is sticky — a hint-less re-emit can't wash a bulk sender human")
+    func automatedHintSticky() throws {
+        let store = try OsmoStore.inMemory()
+        let platform = Platform.gmail
+        let id = OsmoThread.makeID(platform: platform, platformThreadID: "t-hint")
+        let hinted = OsmoThread(id: id, updatedAt: .distantPast, deviceSeq: 0,
+                                platform: platform, platformThreadID: "t-hint", title: "Deals",
+                                isGroup: false, lastMessageAt: Date(timeIntervalSince1970: 100),
+                                automatedHint: true)
+        _ = try store.ingest(hinted)
+
+        // A later webhook bundle carries no header evidence → automatedHint false.
+        let bare = OsmoThread(id: id, updatedAt: .distantPast, deviceSeq: 0,
+                              platform: platform, platformThreadID: "t-hint", title: "Deals",
+                              isGroup: false, lastMessageAt: Date(timeIntervalSince1970: 200))
+        _ = try store.ingest(bare)
+
+        let fetched = try store.thread(id: id)
+        #expect(fetched?.automatedHint == true)
+        #expect(fetched?.lastMessageAt == Date(timeIntervalSince1970: 200))   // newer date still wins
+    }
+
     @Test("preservingEnrichment: an out-of-order OLDER lastMessageAt never regresses the stored newer one")
     func lastMessageAtNeverRegresses() throws {
         let store = try OsmoStore.inMemory()

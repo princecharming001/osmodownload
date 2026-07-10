@@ -24,12 +24,21 @@ public struct ClaudeProxyConfig: Sendable, Equatable {
 /// without a network.
 public struct ClaudeProxyGenerator: Generator {
     public typealias Send = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
+    /// Dynamic credential source — reads the CURRENT device token each call (no
+    /// static copy that can go stale). Also the shape of the 401 refresh hook.
+    public typealias TokenProvider = @Sendable () async -> String?
 
     let config: ClaudeProxyConfig
     let send: Send
+    let tokenProvider: TokenProvider?
+    let refreshCredentials: TokenProvider?
 
-    public init(config: ClaudeProxyConfig, send: Send? = nil) {
+    public init(config: ClaudeProxyConfig, send: Send? = nil,
+                tokenProvider: TokenProvider? = nil,
+                refreshCredentials: TokenProvider? = nil) {
         self.config = config
+        self.tokenProvider = tokenProvider
+        self.refreshCredentials = refreshCredentials
         self.send = send ?? { request in
             let (data, response) = try await URLSession.shared.data(for: request)
             guard let http = response as? HTTPURLResponse else { throw GenerationError.http(-1) }
@@ -37,12 +46,20 @@ public struct ClaudeProxyGenerator: Generator {
         }
     }
 
+    /// Resolution order: a manual token from Settings wins (non-empty and not the
+    /// `"local-dev"` sentinel); else the dynamic provider; else the legacy static
+    /// `authToken` — which keeps the DEBUG localhost keyless flow working.
+    private func resolveToken() async -> String? {
+        let manual = (config.authToken ?? "").trimmingCharacters(in: .whitespaces)
+        if !manual.isEmpty && manual != "local-dev" { return manual }
+        if let tokenProvider, let provided = await tokenProvider(), !provided.isEmpty {
+            return provided
+        }
+        return manual.isEmpty ? nil : manual
+    }
+
     public func generate(systemCore: String, userTurn: String, count: Int) async throws -> String {
-        guard config.isReady else { throw GenerationError.notConfigured }
-        var request = URLRequest(url: config.proxyURL)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(config.authToken!)", forHTTPHeaderField: "Authorization")
+        guard var token = await resolveToken() else { throw GenerationError.notConfigured }
         // The proxy caches `systemCore` (marks it cache_control ephemeral) and
         // enforces the anti-manipulation policy server-side too.
         let body: [String: Any] = [
@@ -51,15 +68,43 @@ public struct ClaudeProxyGenerator: Generator {
             "userTurn": userTurn,
             "count": count
         ]
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, http) = try await send(request)
-        guard (200..<300).contains(http.statusCode) else { throw GenerationError.http(http.statusCode) }
-        let decoded = try JSONDecoder().decode(ProxyResponse.self, from: data)
-        guard !decoded.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-            throw GenerationError.empty
+        // 401 retry-once: the device token may be stale (backend restart / rotated
+        // registration) — refresh the credential once and retry with the new one.
+        for attempt in 0..<2 {
+            var request = URLRequest(url: config.proxyURL)
+            request.httpMethod = "POST"
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            request.httpBody = bodyData
+
+            let data: Data
+            let http: HTTPURLResponse
+            do { (data, http) = try await send(request) }
+            catch is URLError { throw GenerationError.network }
+
+            if http.statusCode == 401, attempt == 0, let refreshCredentials {
+                if let fresh = await refreshCredentials(), !fresh.isEmpty {
+                    token = fresh
+                    continue
+                }
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                if http.statusCode == 429 {
+                    let remaining = http.value(forHTTPHeaderField: "x-osmo-drafts-remaining")
+                        .flatMap(Int.init) ?? 0
+                    throw GenerationError.quotaExceeded(remaining: remaining)
+                }
+                throw GenerationError.http(http.statusCode)
+            }
+            let decoded = try JSONDecoder().decode(ProxyResponse.self, from: data)
+            guard !decoded.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw GenerationError.empty
+            }
+            return decoded.text
         }
-        return decoded.text
+        throw GenerationError.http(401)   // refreshed once, still rejected
     }
 
     struct ProxyResponse: Decodable { let text: String }
@@ -70,17 +115,24 @@ public struct ClaudeProxyGenerator: Generator {
 public struct GeneratorRouter: Generator {
     let live: Generator?
     let mock: Generator
+    /// Explicit fallback policy: drafts keep the keyless promise (unreachable
+    /// proxy → mock), while Ask must surface the failure instead of answering
+    /// with plausible-looking mock text. `.notConfigured` always mocks.
+    public var mockOnNetworkError: Bool
 
-    public init(live: Generator?, mock: Generator = MockGenerator()) {
+    public init(live: Generator?, mock: Generator = MockGenerator(),
+                mockOnNetworkError: Bool = true) {
         self.live = live
         self.mock = mock
+        self.mockOnNetworkError = mockOnNetworkError
     }
 
     public func generate(systemCore: String, userTurn: String, count: Int) async throws -> String {
         if let live {
             do { return try await live.generate(systemCore: systemCore, userTurn: userTurn, count: count) }
             catch GenerationError.notConfigured { /* not set up → mock */ }
-            catch is URLError { /* proxy unreachable (e.g. dev server down) → mock */ }
+            catch GenerationError.network where mockOnNetworkError { /* proxy unreachable → mock */ }
+            catch is URLError where mockOnNetworkError { /* same, from a live gen that didn't map it */ }
         }
         return try await mock.generate(systemCore: systemCore, userTurn: userTurn, count: count)
     }
@@ -111,6 +163,27 @@ public struct RuntimeConfig: Codable, Sendable, Equatable {
     /// old persisted configs still decode; defaults to the local dev server.
     public var backendURL: String?
 
+    /// Dynamic credential source — the app wires this to the CURRENT registered
+    /// device token (Keychain-backed), so the proxy path authenticates with the
+    /// real credential instead of the `"local-dev"` sentinel. A manual Settings
+    /// token (non-empty, not `"local-dev"`) still wins. Runtime-only: never
+    /// persisted, ignored by Equatable.
+    public var tokenProvider: (@Sendable () async -> String?)?
+    /// Called once on a 401 to mint a fresh registration; returns the new token
+    /// (or nil if re-registration failed). Runtime-only, like `tokenProvider`.
+    public var refreshCredentials: (@Sendable () async -> String?)?
+
+    // The closures are runtime wiring, not configuration — keep them out of the
+    // persisted shape (and out of equality, below).
+    private enum CodingKeys: String, CodingKey {
+        case proxyURL, authToken, model, backendURL
+    }
+
+    public static func == (lhs: RuntimeConfig, rhs: RuntimeConfig) -> Bool {
+        lhs.proxyURL == rhs.proxyURL && lhs.authToken == rhs.authToken
+            && lhs.model == rhs.model && lhs.backendURL == rhs.backendURL
+    }
+
     public init(proxyURL: String = OsmoBackend.defaultProxyURL,
                 authToken: String = "local-dev",
                 model: String = "claude-sonnet-5",
@@ -126,12 +199,34 @@ public struct RuntimeConfig: Codable, Sendable, Equatable {
         URL(string: backendURL ?? OsmoBackend.base) ?? URL(string: OsmoBackend.base)!
     }
 
+    /// The manual Settings override, when set. Empty and the legacy `"local-dev"`
+    /// sentinel both mean "automatic — use the registered device token".
+    public var manualAuthToken: String? {
+        let t = authToken.trimmingCharacters(in: .whitespaces)
+        return (t.isEmpty || t == "local-dev") ? nil : t
+    }
+
     public var liveGenerator: Generator? {
-        guard let url = URL(string: proxyURL), !authToken.isEmpty else { return nil }
-        return ClaudeProxyGenerator(config: .init(proxyURL: url, authToken: authToken, model: model))
+        guard let url = URL(string: proxyURL) else { return nil }
+        // Nothing to authenticate with at all → stay on the mock.
+        guard !authToken.isEmpty || tokenProvider != nil else { return nil }
+        // A hand-entered token must never be silently swapped — drop the dynamic
+        // closures when a manual token is in force.
+        let manual = manualAuthToken != nil
+        return ClaudeProxyGenerator(
+            config: .init(proxyURL: url, authToken: authToken.isEmpty ? nil : authToken, model: model),
+            tokenProvider: manual ? nil : tokenProvider,
+            refreshCredentials: manual ? nil : refreshCredentials)
     }
 
     public func makeService() -> SuggestionService {
         SuggestionService(generator: GeneratorRouter(live: liveGenerator))
+    }
+
+    /// The Ask path's service: same live generator, but network failures PROPAGATE
+    /// (no silent mock answer that would read as a hallucination). `.notConfigured`
+    /// still routes to the mock so the keyless demo keeps answering.
+    public func makeAskService() -> SuggestionService {
+        SuggestionService(generator: GeneratorRouter(live: liveGenerator, mockOnNetworkError: false))
     }
 }

@@ -81,12 +81,168 @@ struct GeneratorTests {
     func proxyHTTPError() async throws {
         let gen = ClaudeProxyGenerator(
             config: .init(proxyURL: URL(string: "https://api.osmo.test")!, authToken: "t"),
-            send: { req in (Data(), HTTPURLResponse(url: req.url!, statusCode: 429,
+            send: { req in (Data(), HTTPURLResponse(url: req.url!, statusCode: 503,
                                                     httpVersion: nil, headerFields: nil)!) })
-        await #expect(throws: GenerationError.http(429)) {
+        await #expect(throws: GenerationError.http(503)) {
             _ = try await gen.generate(systemCore: "c", userTurn: "u", count: 3)
         }
     }
+
+    // MARK: - Device-token wiring (the prod 401 fix)
+
+    /// 200 response with a canned text body.
+    private static func okResponse(_ req: URLRequest, headers: [String: String] = [:]) -> (Data, HTTPURLResponse) {
+        (try! JSONSerialization.data(withJSONObject: ["text": "a\nb\nc"]),
+         HTTPURLResponse(url: req.url!, statusCode: 200, httpVersion: nil, headerFields: headers)!)
+    }
+
+    @Test("tokenProvider supplies the Bearer token; 'local-dev' does not count as manual")
+    func tokenProviderResolution() async throws {
+        let captured = Captured()
+        let gen = ClaudeProxyGenerator(
+            config: .init(proxyURL: URL(string: "https://api.osmo.test/suggest")!,
+                          authToken: "local-dev"),
+            send: { req in await captured.set(req); return Self.okResponse(req) },
+            tokenProvider: { "device-tok-9" })
+        _ = try await gen.generate(systemCore: "c", userTurn: "u", count: 3)
+        let req = await captured.request!
+        #expect(req.value(forHTTPHeaderField: "Authorization") == "Bearer device-tok-9")
+    }
+
+    @Test("A manual Settings token wins over the provider")
+    func manualTokenWins() async throws {
+        let captured = Captured()
+        let gen = ClaudeProxyGenerator(
+            config: .init(proxyURL: URL(string: "https://api.osmo.test/suggest")!,
+                          authToken: "sess-manual"),
+            send: { req in await captured.set(req); return Self.okResponse(req) },
+            tokenProvider: { "device-tok-9" })
+        _ = try await gen.generate(systemCore: "c", userTurn: "u", count: 3)
+        let req = await captured.request!
+        #expect(req.value(forHTTPHeaderField: "Authorization") == "Bearer sess-manual")
+    }
+
+    @Test("401 then 200: refreshCredentials is called once, retry carries the fresh token")
+    func retryOnceOn401() async throws {
+        let calls = Counter()
+        let refreshes = Counter()
+        let tokens = TokenLog()
+        let gen = ClaudeProxyGenerator(
+            config: .init(proxyURL: URL(string: "https://api.osmo.test/suggest")!,
+                          authToken: "local-dev"),
+            send: { req in
+                await tokens.append(req.value(forHTTPHeaderField: "Authorization") ?? "")
+                if await calls.increment() == 1 {
+                    return (Data(), HTTPURLResponse(url: req.url!, statusCode: 401,
+                                                    httpVersion: nil, headerFields: nil)!)
+                }
+                return Self.okResponse(req)
+            },
+            tokenProvider: { "tok-stale" },
+            refreshCredentials: { await refreshes.increment(); return "tok-fresh" })
+        let out = try await gen.generate(systemCore: "c", userTurn: "u", count: 3)
+        #expect(out == "a\nb\nc")
+        #expect(await refreshes.count == 1)
+        #expect(await tokens.all == ["Bearer tok-stale", "Bearer tok-fresh"])
+    }
+
+    @Test("401 twice: throws .http(401), refresh called exactly once")
+    func doubleUnauthorized() async throws {
+        let refreshes = Counter()
+        let gen = ClaudeProxyGenerator(
+            config: .init(proxyURL: URL(string: "https://api.osmo.test/suggest")!,
+                          authToken: "local-dev"),
+            send: { req in (Data(), HTTPURLResponse(url: req.url!, statusCode: 401,
+                                                    httpVersion: nil, headerFields: nil)!) },
+            tokenProvider: { "tok-stale" },
+            refreshCredentials: { await refreshes.increment(); return "tok-fresh" })
+        await #expect(throws: GenerationError.http(401)) {
+            _ = try await gen.generate(systemCore: "c", userTurn: "u", count: 3)
+        }
+        #expect(await refreshes.count == 1)
+    }
+
+    @Test("429 maps to quotaExceeded with the x-osmo-drafts-remaining header (default 0)")
+    func quotaMapping() async throws {
+        let withHeader = ClaudeProxyGenerator(
+            config: .init(proxyURL: URL(string: "https://api.osmo.test")!, authToken: "t"),
+            send: { req in (Data(), HTTPURLResponse(url: req.url!, statusCode: 429, httpVersion: nil,
+                                                    headerFields: ["x-osmo-drafts-remaining": "2"])!) })
+        await #expect(throws: GenerationError.quotaExceeded(remaining: 2)) {
+            _ = try await withHeader.generate(systemCore: "c", userTurn: "u", count: 3)
+        }
+        let bare = ClaudeProxyGenerator(
+            config: .init(proxyURL: URL(string: "https://api.osmo.test")!, authToken: "t"),
+            send: { req in (Data(), HTTPURLResponse(url: req.url!, statusCode: 429,
+                                                    httpVersion: nil, headerFields: nil)!) })
+        await #expect(throws: GenerationError.quotaExceeded(remaining: 0)) {
+            _ = try await bare.generate(systemCore: "c", userTurn: "u", count: 3)
+        }
+    }
+
+    @Test("URLError from the transport becomes .network")
+    func urlErrorMapsToNetwork() async throws {
+        let gen = ClaudeProxyGenerator(
+            config: .init(proxyURL: URL(string: "https://api.osmo.test")!, authToken: "t"),
+            send: { _ in throw URLError(.notConnectedToInternet) })
+        await #expect(throws: GenerationError.network) {
+            _ = try await gen.generate(systemCore: "c", userTurn: "u", count: 3)
+        }
+    }
+
+    @Test("Router policy: drafts mock network failures; ask propagates them")
+    func routerNetworkPolicy() async throws {
+        struct Failing: Generator {
+            func generate(systemCore: String, userTurn: String, count: Int) async throws -> String {
+                throw GenerationError.network
+            }
+        }
+        // Default (drafts): unreachable proxy → mock, the keyless promise.
+        let drafts = GeneratorRouter(live: Failing())
+        let out = try await drafts.generate(systemCore: "c", userTurn: "u", count: 3)
+        #expect(out.contains("[mock]"))
+        // Ask: the failure must surface, not become a plausible mock answer.
+        let ask = GeneratorRouter(live: Failing(), mockOnNetworkError: false)
+        await #expect(throws: GenerationError.network) {
+            _ = try await ask.generate(systemCore: "c", userTurn: "u", count: 3)
+        }
+        // .notConfigured still mocks on BOTH policies (keyless demo answers).
+        struct Unconfigured: Generator {
+            func generate(systemCore: String, userTurn: String, count: Int) async throws -> String {
+                throw GenerationError.notConfigured
+            }
+        }
+        let askUnconfigured = GeneratorRouter(live: Unconfigured(), mockOnNetworkError: false)
+        #expect(try await askUnconfigured.generate(systemCore: "c", userTurn: "u", count: 3).contains("[mock]"))
+        // Other errors (e.g. quota) propagate on the default policy too.
+        struct Quota: Generator {
+            func generate(systemCore: String, userTurn: String, count: Int) async throws -> String {
+                throw GenerationError.quotaExceeded(remaining: 0)
+            }
+        }
+        await #expect(throws: GenerationError.quotaExceeded(remaining: 0)) {
+            _ = try await GeneratorRouter(live: Quota()).generate(systemCore: "c", userTurn: "u", count: 3)
+        }
+    }
+
+    @Test("RuntimeConfig.manualAuthToken: empty and 'local-dev' mean automatic")
+    func manualAuthToken() {
+        #expect(RuntimeConfig(authToken: "local-dev").manualAuthToken == nil)
+        #expect(RuntimeConfig(authToken: "").manualAuthToken == nil)
+        #expect(RuntimeConfig(authToken: " sess-x ").manualAuthToken == "sess-x")
+    }
+}
+
+/// Sendable-safe counters/logs for the stubbed transports.
+private actor Counter {
+    var count = 0
+    @discardableResult
+    func increment() -> Int { count += 1; return count }
+}
+
+private actor TokenLog {
+    var all: [String] = []
+    func append(_ s: String) { all.append(s) }
 }
 
 /// Actor to capture the request from the stubbed transport (Sendable-safe).

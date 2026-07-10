@@ -32,6 +32,9 @@ struct ConnectionsView: View {
             .frame(maxWidth: 720, alignment: .leading)
             .frame(maxWidth: .infinity)
         }
+        // Showing Connections is a good moment to verify liveness (last-sync
+        // freshness per platform) — cheap and on-view only.
+        .task { await model.connections.reconcile(verify: true) }
     }
 }
 
@@ -51,6 +54,7 @@ struct ConnectionRow: View {
                     HStack(spacing: DS.Space.xs) {
                         StatusDot(importFraction != nil ? .active : dotState)
                         Text(subtitle).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                            .accessibilityIdentifier("connections.status.\(platform.rawValue)")
                     }
                 }
                 Spacer()
@@ -87,7 +91,12 @@ struct ConnectionRow: View {
             return "Importing your messages… \(Int(f * 100))%"
         }
         if case .live = phase, messageCount > 0 {
-            return "Connected · \(messageCount.formatted()) messages"
+            var s = "Connected · \(messageCount.formatted()) messages"
+            if let lastSync = model.connections.lastSyncByPlatform[platform] {
+                let rel = RelativeDateTimeFormatter().localizedString(for: lastSync, relativeTo: Date())
+                s += " · synced \(rel)"
+            }
+            return s
         }
         return statusLabel
     }
@@ -115,12 +124,14 @@ struct ConnectionRow: View {
                 PillButton("Relaunch to finish", icon: "arrow.clockwise") { model.relaunchApp() }
             } else {
                 PillButton(platform == .imessage ? "Enable" : "Connect") { model.connect(platform) }
+                    .accessibilityIdentifier("connections.connect.\(platform.rawValue)")
             }
         case .linking:
             HStack(spacing: DS.Space.s) {
                 ProgressView().controlSize(.small)
                 Button("Cancel") { Task { await model.connections.cancelConnect(platform) } }
                     .font(DS.Typography.captionEm).buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
+                    .accessibilityIdentifier("connections.cancel.\(platform.rawValue)")
                 Button("Retry") {
                     Task { await model.connections.cancelConnect(platform); model.connect(platform) }
                 }

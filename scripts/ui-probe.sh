@@ -5,11 +5,14 @@
 # `sample` of the Osmo process so a hang can be told apart from dead event
 # routing.
 #
-# Usage: scripts/ui-probe.sh
+# Usage: scripts/ui-probe.sh [scenario]
+#   scenario ∈ { modals (default), ask, connections, queue-human-filter }
 # Exit 0 = probe passed. Non-zero = see stdout + diagnostics under /tmp.
 
 set -uo pipefail
 cd "$(dirname "$0")/.."
+
+SCENARIO="${1:-modals}"
 
 APP_PATH=".build/xcode/Build/Products/Debug/Osmo.app"
 APP_NAME="Osmo"
@@ -40,9 +43,9 @@ if [ "$ready" -ne 1 ]; then
 fi
 sleep 1
 
-echo "→ running AX click-through probe…"
-if osascript "scripts/ui-probe.applescript" 2>&1 | tee /tmp/osmo-ui-probe-last.log; then
-  echo "✓ UI probe PASSED"
+echo "→ running AX probe [$SCENARIO]…"
+if osascript "scripts/ui-probe.applescript" "$SCENARIO" 2>&1 | tee /tmp/osmo-ui-probe-last.log; then
+  echo "✓ UI probe [$SCENARIO] PASSED"
   exit 0
 fi
 

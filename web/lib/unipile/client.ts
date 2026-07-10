@@ -86,6 +86,8 @@ export interface UnipileClient {
   /** One page of the account's messages across all chats (newest first).
       `sinceISO` asks the provider for messages on/after that instant (deep backfill). */
   listMessages(accountId: string, cursor?: string, sinceISO?: string): Promise<{ messages: UnipileMessage[]; cursor: string | null }>;
+  /** One page of a SINGLE chat's messages (deep per-conversation fetch). */
+  listChatMessages(chatId: string, cursor?: string): Promise<{ messages: UnipileMessage[]; cursor: string | null }>;
   /** Send into a chat; resolves with the provider's real message id. */
   sendMessage(accountId: string, chatId: string, text: string): Promise<{ messageId: string }>;
   /** Raw bytes of one message's attachment — null when not found or no live

@@ -12,6 +12,8 @@ public enum GenerationError: Error, Equatable, Sendable {
     case http(Int)
     case empty
     case refusedBySafety(String)
+    case network                          // live proxy unreachable (was a raw URLError)
+    case quotaExceeded(remaining: Int)    // 429 from the proxy — weekly draft quota hit
 }
 
 /// Deterministic, keyless generator. Lets the whole app — onboarding, overlay,

@@ -116,6 +116,75 @@ struct BackendClientTests {
         #expect(body == ["platform": "linkedin", "platformThreadID": "t1", "text": "hi there"])
     }
 
+    @Test("registeredToken reads the current credential without any network call")
+    func registeredTokenNoNetwork() async throws {
+        let transport = FakeTransport()   // empty script — any request would 404
+        let tokens = MemoryDeviceToken()
+        try tokens.store(DeviceCredentials(deviceId: "dev-1", deviceToken: "tok-1", mode: "mock"))
+        let client = BackendClient(baseURL: URL(string: "http://test")!,
+                                   tokenStore: tokens, transport: transport.handler())
+        #expect(await client.registeredToken() == "tok-1")
+        #expect(transport.requests.isEmpty)   // Keychain only, no HTTP
+        // Unregistered device → nil, still no network.
+        let bare = BackendClient(baseURL: URL(string: "http://test")!,
+                                 tokenStore: MemoryDeviceToken(), transport: transport.handler())
+        #expect(await bare.registeredToken() == nil)
+        #expect(transport.requests.isEmpty)
+    }
+
+    @Test("refreshRegistration drops stored creds, re-registers, fires onReRegistered")
+    func refreshRegistrationRoundTrip() async throws {
+        let transport = FakeTransport()
+        transport.script = [("device/register", 200, Self.creds2)]
+        let tokens = MemoryDeviceToken()
+        try tokens.store(DeviceCredentials(deviceId: "dev-1", deviceToken: "tok-1", mode: "mock"))
+        let client = BackendClient(baseURL: URL(string: "http://test")!,
+                                   tokenStore: tokens, transport: transport.handler())
+        let flagged = FlagBox()
+        await client.setOnReRegistered { flagged.set() }
+
+        let fresh = await client.refreshRegistration()
+        #expect(fresh == "tok-2")
+        #expect(try tokens.load()?.deviceToken == "tok-2")   // persisted
+        #expect(flagged.isSet)                               // cursor-reset hook fired
+        #expect(await client.registeredToken() == "tok-2")
+    }
+
+    private static let accountsBody = #"{"connections":[{"id":"c1","platform":"linkedin","status":"connected","displayName":"LinkedIn","backfillProgress":1,"createdAt":"2026-07-01T00:00:00Z","lastSyncAt":"2026-07-09T10:00:00Z","lastVerifiedAt":"2026-07-09T10:01:00Z"}]}"#
+    private static let accountsBodyLegacy = #"{"connections":[{"id":"c1","platform":"linkedin","status":"connected","displayName":"LinkedIn","backfillProgress":1,"createdAt":"2026-07-01T00:00:00Z"}]}"#
+
+    @Test("accounts(verify: true) sends verify=1; plain accounts() doesn't")
+    func accountsVerifyQuery() async throws {
+        let transport = FakeTransport()
+        transport.script = [("device/register", 200, Self.creds),
+                            ("accounts", 200, Self.accountsBody),
+                            ("accounts", 200, Self.accountsBody)]
+        let client = BackendClient(baseURL: URL(string: "http://test")!,
+                                   tokenStore: MemoryDeviceToken(), transport: transport.handler())
+        _ = try await client.accounts(verify: true)
+        _ = try await client.accounts()
+        let queries = transport.requests
+            .filter { $0.url!.path.contains("accounts") }
+            .map { $0.url!.query ?? "" }
+        #expect(queries == ["verify=1", ""])
+    }
+
+    @Test("ConnectionInfo decodes with and without the sync stamps (wire compat)")
+    func connectionInfoStampsDecode() async throws {
+        let transport = FakeTransport()
+        transport.script = [("device/register", 200, Self.creds),
+                            ("accounts", 200, Self.accountsBody),
+                            ("accounts", 200, Self.accountsBodyLegacy)]
+        let client = BackendClient(baseURL: URL(string: "http://test")!,
+                                   tokenStore: MemoryDeviceToken(), transport: transport.handler())
+        let stamped = try await client.accounts()
+        #expect(stamped.first?.lastSyncAt == ISO8601DateFormatter().date(from: "2026-07-09T10:00:00Z"))
+        #expect(stamped.first?.lastVerifiedAt != nil)
+        let legacy = try await client.accounts()   // old server: fields absent
+        #expect(legacy.first?.lastSyncAt == nil)
+        #expect(legacy.first?.lastVerifiedAt == nil)
+    }
+
     @Test("non-200 non-401 surfaces as badStatus")
     func badStatus() async throws {
         let transport = FakeTransport()

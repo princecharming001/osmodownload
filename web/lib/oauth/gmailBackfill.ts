@@ -6,11 +6,12 @@
 import { getStore } from "../connections/memoryStore";
 import { publish } from "../connections/events";
 import type { WireAttachment, WireContact, WireMessage, WireThread } from "../connections/types";
-import { backfillScope, makeConversationGate } from "../connections/scope";
+import { backfillScope, envInt, makeConversationGate } from "../connections/scope";
+import { deepFetchScope } from "../connections/deepFetch";
 import { kindFromMime } from "../connections/attachments";
 
 const PAGE_SIZE = 100;
-const MAX_MESSAGES = 300;   // absolute ceiling, bounded for speed
+const MAX_MESSAGES_DEFAULT = 1000; // absolute sweep ceiling (OSMO_GMAIL_MAX_MESSAGES)
 const BODY_CHAR_CAP = 4000; // keeps oplog rows bounded even for long threads
 
 /** Gmail search window from the configured scope (60d full / 15d demo). */
@@ -106,28 +107,113 @@ const AUTOMATED_SENDER_DOMAINS = new Set([
   "notifications.google.com", "e.newsletter.com", "notify.slack.com",
 ]);
 
+/** ESP / event-platform sending domains: mail DKIM-signed by (or bounced
+    through) one of these is machine-sent by definition. Suffix-matched, so
+    "bounces.sendgrid.net" counts too. */
+export const ESP_DOMAINS = [
+  "sendgrid.net", "mailgun.org", "amazonses.com", "postmarkapp.com",
+  "customeriomail.com", "klaviyomail.com", "braze.com", "intercom-mail.com",
+  "hubspotemail.net", "mandrillapp.com", "mcsv.net", "rsgsv.net",
+  "sparkpostmail.com", "mailjet.com", "brevo.com", "luma-mail.com",
+  "lu.ma", "partiful.com", "eventbrite.com",
+];
+
+// Substring markers: safe because no human localpart contains one whole.
 const AUTOMATED_LOCALPART_MARKERS = [
   "no-reply", "noreply", "donotreply", "do-not-reply", "notifications",
   "notification", "notify", "alert", "newsletter", "mailer-daemon", "automated",
 ];
 
+/** Service localparts matched EXACTLY on the collapsed (dots/dashes/underscores
+    removed) localpart — exact, never substring, so "hi" can't swallow "hillary". */
+export const AUTOMATED_LOCALPART_EXACT = new Set([
+  "events", "event", "registration", "register", "team", "hello", "hi", "hey",
+  "success", "support", "help", "billing", "receipts", "receipt", "orders",
+  "order", "invites", "invite", "invitations", "calendar", "welcome",
+  "community", "members", "membership", "info", "contact", "sales",
+  "marketing", "careers", "jobs", "offers", "promotions", "promo", "rewards",
+  "feedback", "survey", "digest", "reminders", "reminder", "admin",
+  "accounts", "account", "security", "verify", "verification", "confirm",
+  "confirmation", "invoices", "invoice", "booking", "bookings",
+  "reservations", "news", "press",
+]);
+
+/** Sending-infrastructure first labels ("mail.instagram.com", "e.paypal.com").
+    Only meaningful on a subdomain (≥3 labels) — nobody @mail.com gets flagged. */
+const AUTOMATED_SUBDOMAIN_LABELS = new Set([
+  "mail", "e", "em", "email", "marketing", "news", "newsletter", "notify",
+  "notifications", "updates", "alerts", "mailer", "bounce", "mg",
+]);
+
+/** Free personal-mail domains — a templated-looking subject from one of these
+    stays human (mom really does write "Your photos from the lake"). */
+const PERSONAL_MAIL_DOMAINS = new Set([
+  "gmail.com", "googlemail.com", "yahoo.com", "outlook.com", "hotmail.com",
+  "icloud.com", "me.com", "aol.com", "proton.me", "protonmail.com",
+  "live.com", "msn.com",
+]);
+
+const TEMPLATED_SUBJECT_RES = [
+  /^(your|welcome to|verify|confirm|reset|receipt|invoice|order|registration|reminder|action required|invitation|you're invited|thanks for|get started|complete your|activate|new sign.?in|security alert)\b/i,
+  /\bapproved for\b/i,
+  /\bis ready\b/i,
+  /\bhas shipped\b/i,
+  /\border #/i,
+];
+
+/** Casual human markers that veto the templated-subject signal ("your package
+    arrived lol" is a friend, not a shipping bot). */
+const CASUAL_SUBJECT_RE = /\blol\b|\bhaha\b|\bomg\b|\?\?/i;
+
+/** True when a subject line reads like a transactional/marketing template. */
+export function templatedSubject(s: string): boolean {
+  if (CASUAL_SUBJECT_RE.test(s)) return false;
+  return TEMPLATED_SUBJECT_RES.some((re) => re.test(s.trim()));
+}
+
+/** Suffix-match a domain against the ESP list ("em1234.lu.ma" → lu.ma). */
+function isESPDomain(domain: string | undefined): boolean {
+  if (!domain) return false;
+  const d = domain.toLowerCase();
+  return ESP_DOMAINS.some((esp) => d === esp || d.endsWith(`.${esp}`));
+}
+
 /** True when the message is a bulk/automated send — checked via the headers
-    real mail clients use to auto-file it (List-Unsubscribe/Precedence/List-Id)
-    plus sender-shape heuristics that catch what those headers miss (a plain
-    "instagram.alerts@mail.instagram.com" carries none of them). */
-export function automatedSignals(headers: GmailHeader[], fromEmail: string | null): boolean {
+    real mail clients use to auto-file it (List-Unsubscribe/Precedence/List-Id/
+    Auto-Submitted/Feedback-ID…), ESP fingerprints in the signing/bounce path,
+    plus sender-shape and subject-template heuristics that catch what those
+    headers miss (a plain "instagram.alerts@mail.instagram.com" carries none
+    of them). */
+export function automatedSignals(headers: GmailHeader[], fromEmail: string | null, subject?: string | null): boolean {
   const h = (n: string) => headers.find((x) => x.name.toLowerCase() === n)?.value;
   if (h("list-unsubscribe")) return true;
+  if (h("list-unsubscribe-post")) return true;
   const precedence = h("precedence")?.toLowerCase();
   if (precedence && ["bulk", "list", "junk"].includes(precedence)) return true;
   if (h("list-id")) return true;
+  // RFC 3834: any Auto-Submitted value other than "no" is machine-generated.
+  const autoSubmitted = h("auto-submitted")?.toLowerCase();
+  if (autoSubmitted && autoSubmitted !== "no") return true;
+  if (h("feedback-id")) return true;              // ESP campaign tracking
+  if (h("x-auto-response-suppress")) return true; // "don't auto-reply to me" = a bot
+  // ESP fingerprints: DKIM d= signing domains + the Return-Path bounce domain.
+  for (const dkim of headers.filter((x) => x.name.toLowerCase() === "dkim-signature")) {
+    if (isESPDomain(dkim.value.match(/\bd=([^;\s]+)/i)?.[1])) return true;
+  }
+  if (isESPDomain(h("return-path")?.match(/@([^>\s]+)>?\s*$/)?.[1])) return true;
   if (fromEmail) {
     const at = fromEmail.indexOf("@");
     const localpart = at >= 0 ? fromEmail.slice(0, at) : fromEmail;
-    const domain = at >= 0 ? fromEmail.slice(at + 1) : "";
-    const collapsed = localpart.replace(/[._-]/g, "");
+    const domain = (at >= 0 ? fromEmail.slice(at + 1) : "").toLowerCase();
+    const collapsed = localpart.toLowerCase().replace(/[._-]/g, "");
     if (AUTOMATED_LOCALPART_MARKERS.some((marker) => collapsed.includes(marker))) return true;
+    if (AUTOMATED_LOCALPART_EXACT.has(collapsed)) return true;
     if (AUTOMATED_SENDER_DOMAINS.has(domain)) return true;
+    if (isESPDomain(domain)) return true;
+    const labels = domain.split(".");
+    if (labels.length >= 3 && AUTOMATED_SUBDOMAIN_LABELS.has(labels[0])) return true;
+    // Templated subject from a non-personal domain → transactional template.
+    if (subject && !PERSONAL_MAIL_DOMAINS.has(domain) && templatedSubject(subject)) return true;
   }
   return false;
 }
@@ -144,14 +230,85 @@ export function gmailAttachmentsToWire(attachments: GmailAttachmentMeta[]): Wire
   }));
 }
 
+/** A raw Gmail message as `format=full` returns it (loose — read defensively). */
+export interface GmailFullMessage {
+  id?: string;
+  threadId?: string;
+  internalDate?: string;
+  snippet?: string;
+  payload?: GmailPart;
+}
+
+/** Wire rows + signals for one raw `format=full` Gmail message. */
+export interface NormalizedGmailMessage {
+  threadId: string;
+  automated: boolean;
+  sentAtMs: number;
+  contact: WireContact | null;
+  thread: WireThread;
+  message: WireMessage;
+}
+
+/** One raw Gmail message → wire rows + its automated signal. Shared by the
+    account-wide sweep and the deep per-thread pass (ingest dedups on
+    platform+messageID, so overlap between the two is free). */
+export function normalizeGmailMessage(msg: GmailFullMessage, myEmail: string): NormalizedGmailMessage | null {
+  const id = msg.id;
+  if (!id) return null;
+  const headers: GmailHeader[] = msg.payload?.headers ?? [];
+  const header = (n: string) => headers.find((h) => h.name.toLowerCase() === n)?.value;
+  const from = parseAddress(header("from"));
+  const subject = header("subject") ?? null;
+  const threadId = String(msg.threadId ?? id);
+  const sentAtMs = msg.internalDate ? Number(msg.internalDate) : Date.now();
+  const sentAt = new Date(sentAtMs).toISOString();
+  const isFromMe = Boolean(from.email && myEmail && from.email === myEmail);
+
+  const { text, html, attachments } = walkParts(msg.payload ?? {});
+  const body = (text ?? (html ? stripHtml(html) : null) ?? String(msg.snippet ?? ""))
+    .slice(0, BODY_CHAR_CAP);
+
+  return {
+    threadId,
+    automated: automatedSignals(headers, from.email, subject),
+    sentAtMs,
+    contact: (!isFromMe && from.email)
+      ? { platform: "gmail", handle: from.email, displayName: from.name, isMe: false }
+      : null,
+    thread: {
+      platform: "gmail", platformThreadID: threadId, providerThreadID: threadId,
+      title: subject ?? from.name ?? from.email, isGroup: false, lastMessageAt: sentAt,
+    },
+    message: {
+      platform: "gmail", platformMessageID: id, platformThreadID: threadId,
+      senderHandle: isFromMe ? null : from.email,
+      isFromMe, text: body, sentAt, readAt: null,
+      attachments: gmailAttachmentsToWire(attachments),
+    },
+  };
+}
+
+/** GET a Gmail API URL as JSON, waiting out one 429 (Retry-After honoured,
+    capped at 30s) so a quota blip mid-import degrades to a pause, not a failure. */
+async function gmailGet(url: string, auth: Record<string, string>): Promise<Record<string, unknown>> {
+  let res = await fetch(url, { headers: auth });
+  if (res.status === 429) {
+    const seconds = Number(res.headers.get("retry-after") ?? "1");
+    await new Promise((r) => setTimeout(r, Math.min(Math.max(seconds || 1, 1), 30) * 1000));
+    res = await fetch(url, { headers: auth });
+  }
+  return res.json() as Promise<Record<string, unknown>>;
+}
+
 export async function backfillGmail(deviceId: string, connectionId: string, accessToken: string): Promise<void> {
   const store = getStore();
   const auth = { Authorization: `Bearer ${accessToken}` };
   const api = "https://gmail.googleapis.com/gmail/v1/users/me";
+  const maxMessages = envInt("OSMO_GMAIL_MAX_MESSAGES", MAX_MESSAGES_DEFAULT);
 
   try {
     // Who am I (to mark isFromMe)?
-    const profile = await fetch(`${api}/profile`, { headers: auth }).then((r) => r.json());
+    const profile = await gmailGet(`${api}/profile`, auth);
     const myEmail = String(profile.emailAddress ?? "").toLowerCase();
 
     // Page (id, threadId) pairs — messages.list already returns both, so the
@@ -159,11 +316,13 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
     // over the old fetch-then-gate order).
     const items: { id: string; threadId: string }[] = [];
     let pageToken: string | undefined;
-    while (items.length < MAX_MESSAGES) {
+    while (items.length < maxMessages) {
       const q = new URLSearchParams({ maxResults: String(PAGE_SIZE), q: historyQuery() });
       if (pageToken) q.set("pageToken", pageToken);
-      const list = await fetch(`${api}/messages?${q}`, { headers: auth }).then((r) => r.json());
-      for (const m of (list.messages ?? []) as { id: string; threadId: string }[]) {
+      const list = await gmailGet(`${api}/messages?${q}`, auth) as {
+        messages?: { id: string; threadId: string }[]; nextPageToken?: string;
+      };
+      for (const m of list.messages ?? []) {
         items.push({ id: m.id, threadId: m.threadId });
       }
       pageToken = list.nextPageToken;
@@ -179,6 +338,16 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
     // whole thread stays flagged (a single automated blast shouldn't get
     // "un-flagged" by an unrelated reply landing in the same thread id).
     const automatedByThread = new Map<string, boolean>();
+    // Most-recent activity per thread — ranks the deep-fetch candidates.
+    const lastActivityByThread = new Map<string, number>();
+
+    const collect = (norm: NormalizedGmailMessage) => {
+      automatedByThread.set(norm.threadId, (automatedByThread.get(norm.threadId) ?? false) || norm.automated);
+      lastActivityByThread.set(norm.threadId, Math.max(lastActivityByThread.get(norm.threadId) ?? 0, norm.sentAtMs));
+      if (norm.contact) contacts.set(norm.contact.handle, norm.contact);
+      threads.set(norm.threadId, norm.thread);
+      messages.push(norm.message);
+    };
 
     for (const item of items) {
       // User hit "Stop": the connection was flipped off "backfilling" — bail and
@@ -186,41 +355,31 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
       if (store.connectionById(connectionId)?.status !== "backfilling") break;
       if (!gate(item.threadId)) continue;   // gate BEFORE the format=full fetch
 
-      const msg = await fetch(`${api}/messages/${item.id}?format=full`, { headers: auth })
-        .then((r) => r.json()).catch(() => null);
+      const msg = await gmailGet(`${api}/messages/${item.id}?format=full`, auth).catch(() => null);
       if (!msg) continue;
+      const norm = normalizeGmailMessage(msg as GmailFullMessage, myEmail);
+      if (norm) collect(norm);
+    }
 
-      const headers: GmailHeader[] = msg.payload?.headers ?? [];
-      const header = (n: string) => headers.find((h) => h.name.toLowerCase() === n)?.value;
-      const from = parseAddress(header("from"));
-      const subject = header("subject") ?? null;
-      const threadId = String(msg.threadId ?? item.id);
-      const sentAt = msg.internalDate
-        ? new Date(Number(msg.internalDate)).toISOString()
-        : new Date().toISOString();
-      const isFromMe = Boolean(from.email && myEmail && from.email === myEmail);
-
-      const { text, html, attachments } = walkParts(msg.payload ?? {});
-      const body = (text ?? (html ? stripHtml(html) : null) ?? String(msg.snippet ?? ""))
-        .slice(0, BODY_CHAR_CAP);
-      const wireAttachments = gmailAttachmentsToWire(attachments);
-
-      const automated = automatedSignals(headers, from.email);
-      automatedByThread.set(threadId, (automatedByThread.get(threadId) ?? false) || automated);
-
-      if (!isFromMe && from.email) {
-        contacts.set(from.email, { platform: "gmail", handle: from.email, displayName: from.name, isMe: false });
+    // Deep pass: the N most-recently-active NON-automated threads get their
+    // whole conversation pulled (one threads.get call each = every message,
+    // full context) beyond whatever slice the sweep happened to cover.
+    const deep = deepFetchScope();
+    const deepIds = [...lastActivityByThread.entries()]
+      .filter(([tid]) => automatedByThread.get(tid) !== true)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, deep.conversations)
+      .map(([tid]) => tid);
+    for (const tid of deepIds) {
+      if (store.connectionById(connectionId)?.status !== "backfilling") break;
+      const thread = await gmailGet(`${api}/threads/${encodeURIComponent(tid)}?format=full`, auth)
+        .catch(() => null) as { messages?: GmailFullMessage[] } | null;
+      if (!thread?.messages) continue;
+      // Newest messagesPerConversation of the thread (Gmail returns oldest-first).
+      for (const m of thread.messages.slice(-deep.messagesPerConversation)) {
+        const norm = normalizeGmailMessage(m, myEmail);
+        if (norm) collect(norm);
       }
-      threads.set(threadId, {
-        platform: "gmail", platformThreadID: threadId, providerThreadID: threadId,
-        title: subject ?? from.name ?? from.email, isGroup: false, lastMessageAt: sentAt,
-      });
-      messages.push({
-        platform: "gmail", platformMessageID: item.id, platformThreadID: threadId,
-        senderHandle: isFromMe ? null : from.email,
-        isFromMe, text: body, sentAt, readAt: null,
-        attachments: wireAttachments,
-      });
     }
 
     // Fold the sticky per-thread automated hint into each emitted thread row.
@@ -243,6 +402,7 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
 
 function finish(deviceId: string, connectionId: string) {
   const store = getStore();
+  store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
   store.setConnectionStatus(connectionId, "connected", 1);
   publish(deviceId, { type: "connection.status", platform: "gmail", status: "connected", connectionId });
   publish(deviceId, { type: "sync.dirty", seq: store.appendRows(deviceId, {}) });

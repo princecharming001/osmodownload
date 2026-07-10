@@ -91,6 +91,9 @@ final class AppModel: ObservableObject {
     let notifier: OsmoNotifier
 
     @Published private(set) var service: SuggestionService
+    /// The Ask-path service (network errors PROPAGATE, no silent mock answer) —
+    /// used ONLY by `askOsmo`. `service` stays the draft/intel/dossier path.
+    @Published private(set) var askService: SuggestionService
     @Published var config: RuntimeConfig
 
     @Published var section: Section = .today
@@ -277,6 +280,10 @@ final class AppModel: ObservableObject {
     /// Non-nil when the backend reports a degraded/down status — drives the
     /// app-wide incident banner.
     @Published var serviceStatusMessage: String?
+    /// Set when the realtime pull has failed several times in a row (the sync
+    /// service is unreachable) — surfaced in the incident banner as a fallback
+    /// when the health endpoint itself hasn't flagged anything.
+    @Published var backendUnreachable = false
 
     private func refreshHealth() async {
         if let h = try? await backend.health(), h.status != "operational" {
@@ -544,13 +551,20 @@ final class AppModel: ObservableObject {
         let key = try? KeychainDBKey.loadOrCreate()
         let store = Self.openEncrypted(url: url, key: key)
         self.store = store
-        let config = Self.loadConfig()
-        self.config = config
-        self.service = config.makeService()
-        self.syncCoordinator = SyncCoordinator(store: store)
-
+        var config = Self.loadConfig()
         let backend = BackendClient(baseURL: config.backendOrigin)
         self.backend = backend
+        // Authenticate the proxy generator with the CURRENT registered device
+        // token (and re-register on a 401) so drafts/ask reach the live model
+        // instead of the mock. Set BEFORE building the services — the closures
+        // are excluded from Codable, so a loaded config never carries them.
+        config.tokenProvider = { [backend] in await backend.registeredToken() }
+        config.refreshCredentials = { [backend] in await backend.refreshRegistration() }
+        self.config = config
+        self.service = config.makeService()
+        self.askService = config.makeAskService()
+        self.syncCoordinator = SyncCoordinator(store: store)
+
         self.connections = ConnectionsManager(
             client: backend, persistURL: Self.connectionsURL())
         self.realtime = RealtimeSyncEngine(
@@ -600,6 +614,9 @@ final class AppModel: ObservableObject {
             }
             await realtime.setOnImportProgress { [weak self] platform, fraction in
                 Task { @MainActor in self?.handleImportProgress(platform, fraction) }
+            }
+            await realtime.setOnPullHealth { [weak self] consecutiveFailures in
+                Task { @MainActor in self?.backendUnreachable = consecutiveFailures >= 3 }
             }
             await realtime.start()
             await connections.reconcile()
@@ -691,7 +708,7 @@ final class AppModel: ObservableObject {
         // flips to Connected on its own and no relaunch prompt is needed.
         if connections.phases[.imessage] == .live { iMessageAwaitingRelaunch = false }
         Task {
-            await connections.reconcile()
+            await connections.reconcile(verify: true)
             await realtime.pullNow()
             await drainSendQueue()
             await refreshEntitlement()   // catch a purchase/cancel made elsewhere
@@ -737,9 +754,16 @@ final class AppModel: ObservableObject {
     // MARK: - Config
 
     func updateConfig(_ new: RuntimeConfig) {
+        var new = new
+        // A decoded/passed config lost the runtime closures (they're excluded
+        // from Codable + Equatable) — re-attach them before building services.
+        let backend = self.backend
+        new.tokenProvider = { [backend] in await backend.registeredToken() }
+        new.refreshCredentials = { [backend] in await backend.refreshRegistration() }
         config = new
         Self.saveConfig(new)
         service = new.makeService()
+        askService = new.makeAskService()
     }
 
     // MARK: - Connect
@@ -1039,6 +1063,12 @@ final class AppModel: ObservableObject {
     /// anything not yet classified).
     func isHuman(_ threadID: UUID) -> Bool { humanByThread[threadID] ?? true }
 
+    /// Avatar bytes for a person id — for queue/list rows that only have the id.
+    func avatarData(forPerson id: UUID?) -> Data? {
+        guard let id else { return nil }
+        return people.first { $0.id == id }?.avatar
+    }
+
     /// Attention flag for the queue: owe-a-reply compounded by a goal or a due
     /// follow-up (the things that make a miss expensive).
     func isHighPriority(_ threadID: UUID) -> Bool { priorityScore(threadID) >= 60 }
@@ -1203,18 +1233,30 @@ final class AppModel: ObservableObject {
 
     // MARK: - Ask Osmo (grounded Q&A over local data)
 
+    /// One Ask exchange. `isError` marks an answer that's a surfaced failure
+    /// (offline, quota, sign-in) so the transcript can render it as a warning
+    /// rather than a normal grounded answer.
+    struct AskExchange { let q: String; let a: String; var isError: Bool = false }
+
     /// Question/answer exchanges this session (newest last) + in-flight state.
-    @Published private(set) var askExchanges: [(q: String, a: String)] = []
+    @Published private(set) var askExchanges: [AskExchange] = []
     @Published private(set) var askBusy = false
 
     /// Answer a natural-language question from LOCAL retrieval (FTS snippets +
     /// the people directory) synthesized by the model. Refusal-biased prompt:
-    /// if it isn't in the user's data, the answer says so.
+    /// if it isn't in the user's data, the answer says so. Mock mode answers
+    /// deterministically from local state (no model call, no pro gate).
     func askOsmo(_ question: String) {
         let q = question.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty, !askBusy else { return }
+
+        // Keyless/demo: never dead-end — answer honestly from what we can see.
+        if isMockMode {
+            askExchanges.append(AskExchange(q: q, a: mockAnswer(for: q)))
+            return
+        }
+
         guard isPro else { activeSheet = .paywall; return }
-        guard !isMockMode else { toast = "Connect the AI proxy to ask questions."; return }
         askBusy = true
         let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .none
         let snippets = ((try? store.search(q, limit: 30)) ?? []).map { m -> String in
@@ -1226,12 +1268,58 @@ final class AppModel: ObservableObject {
                              about: onboardingProfile.promptPreamble)
         Task { [weak self] in
             guard let self else { return }
-            let answer = try? await self.service.ask(ctx)
-            await MainActor.run {
-                self.askBusy = false
-                self.askExchanges.append((q, answer ?? "Couldn't reach the model — try again."))
+            do {
+                let answer = try await self.askService.ask(ctx)
+                await MainActor.run {
+                    self.askBusy = false
+                    self.askExchanges.append(AskExchange(q: q, a: answer))
+                }
+            } catch {
+                await MainActor.run {
+                    self.askBusy = false
+                    self.askExchanges.append(AskExchange(q: q, a: Self.askErrorMessage(error), isError: true))
+                }
             }
         }
+    }
+
+    /// Map an Ask failure to an honest, actionable one-liner.
+    private static func askErrorMessage(_ error: Error) -> String {
+        switch error {
+        case GenerationError.quotaExceeded:
+            return "You've used your weekly questions. Upgrade for unlimited."
+        case GenerationError.http(401):
+            return "Sign-in issue — try reopening Osmo. If it persists, sign out and back in."
+        case GenerationError.http(503):
+            return "Osmo's AI is briefly unavailable. Try again shortly."
+        case GenerationError.network, is URLError:
+            return "You appear to be offline. Ask Osmo needs a connection."
+        default:
+            return "Couldn't reach the model — try again."
+        }
+    }
+
+    /// Deterministic, honest answers for demo/mock mode — read straight from the
+    /// local queue + counts, no model call.
+    private func mockAnswer(for question: String) -> String {
+        let ql = question.lowercased()
+        func names(_ cards: [QueueCard]) -> [String] {
+            var seen = Set<String>(); var out: [String] = []
+            for n in cards.map(\.personName) where seen.insert(n).inserted { out.append(n) }
+            return out
+        }
+        if ql.contains("waiting") || ql.contains("owe") {
+            let n = names(queue.filter { $0.kind == .reply })
+            return n.isEmpty ? "Nobody's waiting on a reply right now."
+                             : "Waiting on you: \(n.joined(separator: ", "))."
+        }
+        if ql.contains("overdue") || ql.contains("reach out") {
+            let n = names(queue.filter { $0.kind == .reconnect || $0.kind == .goalNudge })
+            return n.isEmpty ? "You're not overdue to reach out to anyone right now."
+                             : "Worth reaching out to: \(n.joined(separator: ", "))."
+        }
+        let convos = threads.count, ppl = people.count
+        return "Here's what I can see from your messages: \(convos) conversation\(convos == 1 ? "" : "s") across \(ppl) \(ppl == 1 ? "person" : "people"). Connect the AI proxy for deeper answers."
     }
 
     /// One compact line per person — lets "who do I know…" questions work even
@@ -1647,11 +1735,14 @@ final class AppModel: ObservableObject {
     /// message changes. Big imports reload the whole snapshot set every ~0.5s;
     /// without this, every reload re-samples every thread's messages (an extra DB
     /// round-trip each) even though almost nothing changed between ticks.
-    private var humanVerdictCache: [UUID: (stamp: Date?, human: Bool, reason: String?, topic: String?)] = [:]
+    private var humanVerdictCache: [UUID: (stamp: Date?, human: Bool, reason: String?, topic: String?, version: Int)] = [:]
 
     private func buildSnapshots() -> [ThreadSnapshot] {
         avatarByKey = [:]
         var newDetIntel: [UUID: DeterministicIntel] = [:]
+        // Normalized handles the user has ever sent TO — lets the classifier
+        // treat a one-way inbound from someone you've messaged as human.
+        let outboundHandles = (try? store.outboundCounterpartyHandles()) ?? []
         let snapshots = threads.compactMap { thread -> ThreadSnapshot? in
             guard let last = try? store.lastMessage(inThread: thread.id) else { return nil }
             let contacts = (try? store.contacts(inThread: thread.id)) ?? []
@@ -1675,6 +1766,7 @@ final class AppModel: ObservableObject {
             // the LLM-driven feedback loop invalidates the cache entry outright.
             let human: Bool, reason: String?
             if let cached = humanVerdictCache[thread.id], cached.stamp == last.sentAt,
+               cached.version == HumanThreadClassifier.version,
                !(thread.automatedHint && cached.human) {
                 human = cached.human; reason = cached.reason
                 deterministicTopicByThread[thread.id] = cached.topic
@@ -1691,12 +1783,16 @@ final class AppModel: ObservableObject {
                     inboundTexts: recent.filter { !$0.isFromMe }.map(\.text),
                     inboundCount: recent.filter { !$0.isFromMe }.count,
                     serverAutomatedHint: thread.automatedHint,
-                    llmSaysAutomated: intelByThread[thread.id]?.automated))
+                    llmSaysAutomated: intelByThread[thread.id]?.automated,
+                    subjectOrTitle: thread.title,
+                    userEverMessagedSender: others.contains {
+                        outboundHandles.contains(HandleNormalizer.normalize($0.handle).value)
+                    }))
                 human = verdict.isLikelyHuman; reason = verdict.reason
                 // Same sample powers the Kinso-style topic label — free.
                 let topic = TopicClassifier.classify(recent.map(\.text))
                 deterministicTopicByThread[thread.id] = topic
-                humanVerdictCache[thread.id] = (last.sentAt, human, reason, topic)
+                humanVerdictCache[thread.id] = (last.sentAt, human, reason, topic, HumanThreadClassifier.version)
             }
             return ThreadSnapshot(
                 threadID: thread.id, personID: personID, personName: name,

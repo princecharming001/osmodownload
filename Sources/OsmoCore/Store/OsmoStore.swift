@@ -380,6 +380,26 @@ public final class OsmoStore: @unchecked Sendable {
         }
     }
 
+    /// Normalized handles of every non-me contact in any thread the user has
+    /// actually sent a message in — cross-thread outbound reciprocity for the
+    /// human classifier ("have I EVER written to this sender?"). One query per
+    /// snapshot rebuild; keys use the same `HandleNormalizer` as the caller.
+    public func outboundCounterpartyHandles() throws -> Set<String> {
+        try dbQueue.read { db in
+            let handles = try String.fetchAll(db, sql: """
+                SELECT DISTINCT contact.handle FROM contact
+                JOIN message ON message.senderContactID = contact.id
+                WHERE contact.isMe = 0 AND contact.deletedAt IS NULL
+                  AND message.deletedAt IS NULL
+                  AND message.threadID IN (
+                    SELECT DISTINCT threadID FROM message
+                    WHERE isFromMe = 1 AND deletedAt IS NULL
+                  )
+                """)
+            return Set(handles.map { HandleNormalizer.normalize($0).value })
+        }
+    }
+
     /// The distinct sender contacts seen in a thread (the people it's with).
     public func contacts(inThread threadID: UUID) throws -> [OsmoContact] {
         try dbQueue.read { db in

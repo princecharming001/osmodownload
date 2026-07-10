@@ -10,7 +10,8 @@ import type { Platform, WireContact, WireMessage, WireThread } from "./types";
 import { getUnipile } from "../unipile/client";
 import { chatIndex, normalizeUnipileMessage } from "../unipile/normalize";
 import type { RowBundle } from "./memoryStore";
-import { backfillScope, makeConversationGate } from "./scope";
+import { backfillScope, envInt, makeConversationGate } from "./scope";
+import { deepFetchScope } from "./deepFetch";
 
 // The TIME cutoff (from the configured scope: 60d full / 15d demo) is the real
 // stop; MAX_MESSAGE_PAGES is only a runaway safety ceiling (250/page × 200 =
@@ -30,11 +31,18 @@ export async function backfillConnection(opts: {
   const unipile = getUnipile();
 
   try {
-    // 1. Chats → title/group index (best-effort; messages still import without it).
-    let chats: Map<string, { title: string | null; isGroup: boolean; providerId: string | null }> = new Map();
+    // 1. Chats → title/group index (best-effort; messages still import without
+    //    it). Cursor-paged so accounts with more chats than one page (50) keep
+    //    their titles; the mock returns a null cursor, so keyless stays 1 page.
+    const chats: Map<string, { title: string | null; isGroup: boolean; providerId: string | null }> = new Map();
     try {
-      const page = await unipile.listChats(accountId);
-      chats = chatIndex(page.chats);
+      let chatCursor: string | undefined;
+      for (let chatPage = 0; chatPage < envInt("OSMO_UNIPILE_MAX_CHAT_PAGES", 10); chatPage++) {
+        const page = await unipile.listChats(accountId, chatCursor);
+        for (const [id, entry] of chatIndex(page.chats)) chats.set(id, entry);
+        if (!page.cursor) break;
+        chatCursor = page.cursor;
+      }
     } catch { /* titles are optional */ }
 
     // 2. Page messages, normalize, append — until we've covered the scope's
@@ -73,23 +81,9 @@ export async function backfillConnection(opts: {
       } catch { /* names are enrichment — messages still import without them */ }
     }
 
-    let cursor: string | undefined;
-    for (let pageNo = 0; pageNo < MAX_MESSAGE_PAGES; pageNo++) {
-      // User hit "Stop": the connection was flipped off "backfilling" — bail and
-      // keep whatever's imported so far.
-      if (store.connectionById(accountId)?.status !== "backfilling") break;
-      const { messages, cursor: next } = await unipile.listMessages(accountId, cursor, cutoffISO);
-      if (messages.length === 0) break;
-
-      const bundles = (messages
-        .map((m) => normalizeUnipileMessage(m, platform, chats))
-        .filter(Boolean) as RowBundle[])
-        .filter((b) => {
-          const tid = b.messages?.[0]?.platformThreadID;
-          return tid ? gate(tid) : true;
-        });
-
-      // Enrich with attendee names/avatars + fix 1:1 titles + self-attribution.
+    // Enrich a batch with attendee names/avatars + fix 1:1 titles + self-
+    // attribution (shared by the sweep pages and the deep per-chat pass).
+    async function enrichBundles(bundles: RowBundle[]): Promise<void> {
       for (const b of bundles) {
         const tid = b.messages?.[0]?.platformThreadID;
         if (tid) await indexAttendees(tid);
@@ -116,6 +110,35 @@ export async function backfillConnection(opts: {
         // Drop self-contacts that slipped in as counterparties.
         if (b.contacts) b.contacts = b.contacts.filter((c) => !selfIds.has(c.handle));
       }
+    }
+
+    // First N DISTINCT chat ids on the newest-first stream = the N most
+    // recently active conversations → the deep per-chat pass below.
+    const deep = deepFetchScope();
+    const deepChatIds = new Set<string>();
+
+    let cursor: string | undefined;
+    for (let pageNo = 0; pageNo < MAX_MESSAGE_PAGES; pageNo++) {
+      // User hit "Stop": the connection was flipped off "backfilling" — bail and
+      // keep whatever's imported so far.
+      if (store.connectionById(accountId)?.status !== "backfilling") break;
+      const { messages, cursor: next } = await unipile.listMessages(accountId, cursor, cutoffISO);
+      if (messages.length === 0) break;
+
+      const normalized = messages
+        .map((m) => normalizeUnipileMessage(m, platform, chats))
+        .filter(Boolean) as RowBundle[];
+      for (const b of normalized) {
+        const tid = b.messages?.[0]?.platformThreadID;
+        if (tid && deepChatIds.size < deep.conversations) deepChatIds.add(tid);
+      }
+      const bundles = normalized.filter((b) => {
+        const tid = b.messages?.[0]?.platformThreadID;
+        return tid ? gate(tid) : true;
+      });
+
+      // Enrich with attendee names/avatars + fix 1:1 titles + self-attribution.
+      await enrichBundles(bundles);
       const merged = mergeBundles(bundles);
       const seq = merged ? store.appendRows(deviceId, merged) : 0;
 
@@ -145,6 +168,37 @@ export async function backfillConnection(opts: {
       cursor = next;
     }
 
+    // 3. Deep pass: those top conversations get their WHOLE chat paged to the
+    //    configured depth via the per-chat endpoint — full context beyond the
+    //    account-wide sweep's window slice. The conversation gate is
+    //    deliberately bypassed: these ARE the most recent chats. Best-effort
+    //    per chat (the sweep already imported the recent slice). Mock returns
+    //    an empty page, so keyless is untouched.
+    for (const chatId of deepChatIds) {
+      if (store.connectionById(accountId)?.status !== "backfilling") break;
+      try {
+        const collected: RowBundle[] = [];
+        let msgCursor: string | undefined;
+        while (collected.length < deep.messagesPerConversation) {
+          const page = await unipile.listChatMessages(chatId, msgCursor);
+          if (page.messages.length === 0) break;
+          for (const m of page.messages) {
+            if (collected.length >= deep.messagesPerConversation) break;
+            const b = normalizeUnipileMessage(m, platform, chats);
+            if (b) collected.push(b);
+          }
+          if (!page.cursor) break;
+          msgCursor = page.cursor;
+        }
+        if (collected.length === 0) continue;
+        await enrichBundles(collected);
+        const merged = mergeBundles(collected);
+        const seq = merged ? store.appendRows(deviceId, merged) : 0;
+        if (seq > 0) publish(deviceId, { type: "sync.dirty", seq });
+      } catch { /* deep context is enrichment — never fails the backfill */ }
+    }
+
+    store.touchConnection(accountId, { lastSyncAt: new Date().toISOString() });
     store.setConnectionStatus(accountId, "connected", 1);
     publish(deviceId, { type: "connection.status", platform, status: "connected", connectionId: accountId });
     // Final doorbell with the current max seq (empty append = read-only seq peek).

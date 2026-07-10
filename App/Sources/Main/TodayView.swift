@@ -33,7 +33,7 @@ struct TodayView: View {
                     notificationNudge
                     followupLane
                     ForEach(groups, id: \.title) { group in
-                        section(group.title, cards: group.cards)
+                        section(group.title, kind: group.kind, cards: group.cards)
                     }
                 }
             }
@@ -129,21 +129,58 @@ struct TodayView: View {
         }
     }
 
-    private func section(_ title: String, cards: [QueueCard]) -> some View {
-        VStack(alignment: .leading, spacing: DS.Space.s) {
+    /// One section = a hairline-grouped list of rows inside a single rounded
+    /// container (the ConnectionsView idiom). Insight lines are resolved + deduped
+    /// in order here, so no two rows repeat the same canned read.
+    private func section(_ title: String, kind: QueueCard.Kind, cards: [QueueCard]) -> some View {
+        var shown = Set<String>()
+        var insightFor: [UUID: String] = [:]
+        for card in cards {
+            if let line = resolvedInsight(for: card), shown.insert(line).inserted {
+                insightFor[card.threadID] = line
+            }
+        }
+        return VStack(alignment: .leading, spacing: DS.Space.s) {
             Eyebrow(title)
-            ForEach(cards) { card in QueueCardRow(card: card) }
+            VStack(spacing: 0) {
+                ForEach(cards) { card in
+                    QueueCardRow(card: card, showsVerdict: kind != .reply,
+                                 insight: insightFor[card.threadID])
+                }
+            }
+            .background(DS.Colors.card.opacity(0.5),
+                        in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                .stroke(DS.Colors.hairline, lineWidth: 1))
+            // NB: no container-level accessibilityIdentifier here — it collapses
+            // the child rows (and their queue.card.<slug> ids) out of the AX
+            // tree. The per-row ids are the stable handles instead.
         }
     }
 
-    private var groups: [(title: String, cards: [QueueCard])] {
+    /// The insight line a card should show (before section-level dedupe): an open
+    /// question they asked, else the live/cached AI brief, else the deterministic
+    /// goal/memory/trend line. `openQuestion` is a Bool, so "what they asked" is
+    /// the cleaned last inbound text (the deterministic signal that set it).
+    private func resolvedInsight(for card: QueueCard) -> String? {
+        let intel = model.intel(forThread: card.threadID)
+        if intel.openQuestion == true,
+           let last = try? model.store.lastMessage(inThread: card.threadID), !last.isFromMe {
+            let q = SnippetCleaner.clean(last.text, maxLength: 90)
+            if !q.isEmpty { return "They asked: “\(q)”" }
+        }
+        if let brief = model.insightByThread[card.threadID], !brief.isEmpty { return brief }
+        return model.insightLine(forThread: card.threadID)
+    }
+
+    private var groups: [(title: String, kind: QueueCard.Kind, cards: [QueueCard])] {
         let byKind = Dictionary(grouping: model.queue, by: \.kind)
-        var out: [(String, [QueueCard])] = []
+        var out: [(String, QueueCard.Kind, [QueueCard])] = []
         // The pitch's morning ritual, in its words: owe / gone quiet / worth a nudge.
-        if let r = byKind[.reply] { out.append(("You owe a reply", r)) }
-        if let r = byKind[.leftOnRead] { out.append(("Gone quiet on you", r)) }
-        if let r = byKind[.goalNudge] { out.append(("Worth a nudge", r)) }
-        if let r = byKind[.reconnect] { out.append(("Drifting — reconnect", r)) }
+        if let r = byKind[.reply] { out.append(("You owe a reply", .reply, r)) }
+        if let r = byKind[.leftOnRead] { out.append(("Gone quiet on you", .leftOnRead, r)) }
+        if let r = byKind[.goalNudge] { out.append(("Worth a nudge", .goalNudge, r)) }
+        if let r = byKind[.reconnect] { out.append(("Drifting — reconnect", .reconnect, r)) }
         return out
     }
 
@@ -158,57 +195,110 @@ struct TodayView: View {
 }
 
 /// One queue card → opens the thread in the inbox with a pre-fired draft.
+/// A transparent hairline row (ConnectionsView idiom): avatar · name + platform
+/// logo + priority · one-line snippet · deduped insight · hover-to-draft.
 struct QueueCardRow: View {
     @EnvironmentObject var model: AppModel
     let card: QueueCard
+    /// Reply cards drop the verdict chip (the section header already says "you
+    /// owe a reply"); the other kinds keep it since their headline varies.
+    var showsVerdict: Bool = false
+    /// The section-resolved, deduped insight line (nil = show nothing).
+    var insight: String?
+    @State private var hovering = false
 
     var body: some View {
-        Card {
+        Button { openThread() } label: {
             HStack(alignment: .top, spacing: DS.Space.m) {
-                AvatarView(name: card.personName, size: 38)
-                VStack(alignment: .leading, spacing: 3) {
-                    HStack(spacing: DS.Space.s) {
-                        Text(card.personName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
-                        Chip(card.platform.displayName, systemImage: card.platform.symbolName)
-                        verdictChip
-                        urgencyChip
-                        if model.isHighPriority(card.threadID) {
-                            Label("Priority", systemImage: "flame.fill")
-                                .font(DS.Typography.eyebrow)
-                                .padding(.horizontal, 6).padding(.vertical, 1)
-                                .foregroundStyle(DS.Colors.red)
-                                .background(DS.Colors.red.opacity(0.10), in: Capsule())
-                        }
-                        if draftReady {
-                            Label("Draft ready", systemImage: "sparkles")
-                                .font(DS.Typography.eyebrow)
-                                .padding(.horizontal, 6).padding(.vertical, 1)
-                                .foregroundStyle(DS.Colors.accent)
-                                .background(DS.Colors.accent.opacity(0.10), in: Capsule())
-                        }
-                    }
-                    // Memory jogger: what was actually said, and when.
-                    if let jogger {
-                        Text(jogger).font(DS.Typography.caption).foregroundStyle(DS.Colors.ink.opacity(0.75))
-                            .lineLimit(2)
-                    }
-                    // The brief: AI-read history + long-term context (cached), or
-                    // the deterministic goal/memory/trend line. A quiet accent
-                    // rule marks it as a read, not a quote — no icon needed.
-                    if let line = model.insightByThread[card.threadID] ?? model.insightLine(forThread: card.threadID) {
-                        HStack(alignment: .top, spacing: DS.Space.s) {
-                            Rectangle().fill(DS.Colors.accent.opacity(0.4)).frame(width: 2)
-                            Text(line).font(DS.Typography.caption).italic().foregroundStyle(DS.Colors.muted)
-                                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
+                AvatarView(name: card.personName,
+                           data: model.avatarData(forPerson: card.personID), size: 32)
+                VStack(alignment: .leading, spacing: 4) {
+                    header
+                    snippetLine
+                    if let insight { insightRule(insight) }
                     followUpOneTap
                 }
-                Spacer()
-                PillButton("Draft") { openThread() }
+                Spacer(minLength: DS.Space.s)
+                trailing
+            }
+            .padding(.vertical, DS.Space.m)
+            .padding(.horizontal, DS.Space.l)
+            .background(hovering ? DS.Colors.ink.opacity(0.03) : Color.clear)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottom) {
+            Rectangle().fill(DS.Colors.hairlineSoft).frame(height: 1)
+        }
+        .onHover { hovering = $0 }
+        .accessibilityIdentifier("queue.card.\(slug)")
+        .task { model.ensureIntel(forThread: card.threadID) }
+    }
+
+    private var header: some View {
+        HStack(spacing: DS.Space.s) {
+            Text(card.personName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
+            PlatformLogo(card.platform, size: 14)
+            if showsVerdict { verdictChip }
+            urgencyChip
+            if model.isHighPriority(card.threadID) {
+                Label("Priority", systemImage: "flame.fill")
+                    .font(DS.Typography.eyebrow)
+                    .padding(.horizontal, 6).padding(.vertical, 1)
+                    .foregroundStyle(DS.Colors.red)
+                    .background(DS.Colors.red.opacity(0.10), in: Capsule())
+            }
+            if draftReady {
+                Image(systemName: "sparkles").font(.system(size: 11)).foregroundStyle(DS.Colors.accent)
+            }
+            Spacer(minLength: DS.Space.s)
+            if let when = relativeTime {
+                Text(when).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
             }
         }
-        .task { model.ensureIntel(forThread: card.threadID) }
+    }
+
+    /// One-line last-message preview, cleaned; "You: " when it's yours.
+    @ViewBuilder private var snippetLine: some View {
+        if let last = try? model.store.lastMessage(inThread: card.threadID) {
+            let cleaned = SnippetCleaner.clean(last.text, maxLength: 80)
+            if !cleaned.isEmpty {
+                Text((last.isFromMe ? "You: " : "") + cleaned)
+                    .font(DS.Typography.caption).foregroundStyle(DS.Colors.ink.opacity(0.75))
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    private func insightRule(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: DS.Space.s) {
+            Rectangle().fill(DS.Colors.accent.opacity(0.4)).frame(width: 2)
+            Text(text).font(DS.Typography.caption).italic().foregroundStyle(DS.Colors.muted)
+                .lineLimit(2).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// Hover reveals a Draft button; otherwise a muted chevron.
+    @ViewBuilder private var trailing: some View {
+        if hovering {
+            PillButton("Draft") { openThread() }
+                .accessibilityIdentifier("queue.card.draft.\(slug)")
+        } else {
+            Image(systemName: "chevron.right").font(.system(size: 11))
+                .foregroundStyle(DS.Colors.muted)
+        }
+    }
+
+    /// Deterministic first-name slug for AX ids (lowercased alphanumerics).
+    private var slug: String {
+        let first = card.personName.split(separator: " ").first.map(String.init) ?? "x"
+        let cleaned = first.lowercased().filter { $0.isLetter || $0.isNumber }
+        return cleaned.isEmpty ? "x" : cleaned
+    }
+
+    private var relativeTime: String? {
+        guard let last = try? model.store.lastMessage(inThread: card.threadID) else { return nil }
+        return RelativeDateTimeFormatter().localizedString(for: last.sentAt, relativeTo: Date())
     }
 
     /// Today/overdue only — `.soon` doesn't earn a card-level chip (the flame
@@ -247,14 +337,6 @@ struct QueueCardRow: View {
     static let weekdayFormatter: DateFormatter = {
         let f = DateFormatter(); f.dateFormat = "EEE"; return f
     }()
-
-    /// Their (or your) last words, quoted — the fastest possible re-orientation.
-    private var jogger: String? {
-        guard let last = try? model.store.lastMessage(inThread: card.threadID) else { return nil }
-        let text = previewLine(last)
-        let when = RelativeDateTimeFormatter().localizedString(for: last.sentAt, relativeTo: Date())
-        return last.isFromMe ? "You: “\(text)” · \(when)" : "“\(text)” · \(when)"
-    }
 
     /// The explicit timing call, right on the card — nudge or lay back.
     private var verdict: ReachOutVerdict { model.reachOutVerdict(forThread: card.threadID) }
@@ -394,7 +476,7 @@ struct AskOsmoBox: View {
         VStack(alignment: .leading, spacing: DS.Space.m) {
             ForEach(Array(model.askExchanges.enumerated()), id: \.offset) { _, ex in
                 userBubble(ex.q)
-                answerRow(ex.a)
+                answerRow(ex.a, isError: ex.isError)
             }
             if let pending {
                 userBubble(pending)
@@ -414,19 +496,22 @@ struct AskOsmoBox: View {
         .transition(.move(edge: .trailing).combined(with: .opacity))
     }
 
-    private func answerRow(_ text: String) -> some View {
+    private func answerRow(_ text: String, isError: Bool = false) -> some View {
         HStack(alignment: .top, spacing: DS.Space.s) {
-            AskOrb(mode: .idle, size: 20)
-            Text(text).font(DS.Typography.body).foregroundStyle(DS.Colors.ink)
+            AskOrb(mode: isError ? .thinking : .idle, size: 20)
+            Text(text).font(DS.Typography.body)
+                .foregroundStyle(isError ? DS.Colors.red : DS.Colors.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
                 .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(DS.Colors.paper, in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
+                .background(isError ? DS.Colors.red.opacity(0.06) : DS.Colors.paper,
+                            in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous)
-                    .stroke(DS.Colors.hairlineSoft, lineWidth: 1))
+                    .stroke(isError ? DS.Colors.red.opacity(0.30) : DS.Colors.hairlineSoft, lineWidth: 1))
         }
         .transition(.opacity)
+        .accessibilityIdentifier("ask.answer")
     }
 
     private var thinkingRow: some View {
@@ -449,11 +534,13 @@ struct AskOsmoBox: View {
             TextField("Ask about your conversations or contacts…", text: $question)
                 .textFieldStyle(.plain).font(DS.Typography.body).focused($focused)
                 .onSubmit { ask(question) }
+                .accessibilityIdentifier("ask.input")
             if canSend {
                 Button { ask(question) } label: {
                     Image(systemName: "arrow.up.circle.fill").font(.system(size: 18))
                 }.buttonStyle(.plain).foregroundStyle(DS.Colors.accent)
                     .transition(.scale.combined(with: .opacity))
+                    .accessibilityIdentifier("ask.send")
             }
         }
         .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)

@@ -118,6 +118,10 @@ export interface Connection {
   displayName: string;           // e.g. the account's own name/number
   backfillProgress: number;      // 0..1
   createdAt: string;
+  /** Last time rows for this connection were appended (webhook/backfill). ISO-8601. */
+  lastSyncAt?: string | null;
+  /** Last upstream liveness check (GET /api/accounts?verify=1). ISO-8601. */
+  lastVerifiedAt?: string | null;
 }
 
 // ---------------------------------------------------------------------------

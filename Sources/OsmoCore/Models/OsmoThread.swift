@@ -59,12 +59,16 @@ public struct OsmoThread: Codable, Equatable, Sendable, Identifiable, SyncableRe
     /// already resolved; (2) providers page newest-first, so an OUT-OF-ORDER
     /// later page can carry an OLDER `lastMessageAt` than what's stored — a
     /// blind overwrite would regress the inbox's sort order mid-backfill.
+    /// `automatedHint` is sticky for the same reason: the header evidence lives
+    /// on whichever message the backfill inspected — a later hint-less re-emit
+    /// (webhook bundle) must not wash a bulk sender back to "human".
     public func preservingEnrichment(from existing: OsmoThread) -> OsmoThread {
         var t = self
         if t.providerThreadID == nil { t.providerThreadID = existing.providerThreadID }
         if let existingAt = existing.lastMessageAt, let incomingAt = t.lastMessageAt, incomingAt < existingAt {
             t.lastMessageAt = existingAt
         }
+        t.automatedHint = t.automatedHint || existing.automatedHint
         return t
     }
 }

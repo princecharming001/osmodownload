@@ -103,6 +103,15 @@ public actor RealtimeSyncEngine {
         onImportProgress = handler
     }
 
+    /// Pull health: fires after EVERY `pullNow` attempt with the consecutive-
+    /// failure count — 0 on success. The app maps a streak (≥3) to its
+    /// "can't reach the sync service" banner instead of failing silently.
+    public var onPullHealth: (@Sendable (Int) -> Void)?
+    public func setOnPullHealth(_ handler: @escaping @Sendable (Int) -> Void) {
+        onPullHealth = handler
+    }
+    private var pullFailureStreak = 0
+
     public init(store: OsmoStore,
                 client: BackendClient,
                 cursorStore: CursorStoring,
@@ -202,7 +211,13 @@ public actor RealtimeSyncEngine {
         var wroteAny = false
 
         while true {
-            guard let wire = try? await client.pull(since: cursor) else { return }
+            guard let wire = try? await client.pull(since: cursor) else {
+                // Pull failed (network / backend down) — count it and surface the
+                // streak; semantics otherwise unchanged (next tick retries).
+                pullFailureStreak += 1
+                onPullHealth?(pullFailureStreak)
+                return
+            }
             var result = BackendBatchNormalizer.normalize(wire)
             result.batch.contacts = await fetchAvatars(for: result.batch.contacts, wire: wire.contacts)
             let fresh = ingest(result.batch)
@@ -214,6 +229,8 @@ public actor RealtimeSyncEngine {
             if !wire.hasMore { break }
         }
 
+        pullFailureStreak = 0
+        onPullHealth?(0)
         if wroteAny { scheduleIdentityRebuild() }
     }
 

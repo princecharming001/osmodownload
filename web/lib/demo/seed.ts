@@ -194,25 +194,46 @@ export function demoConversations(platform: Platform): RowBundle {
   };
 }
 
+/** A caller-chosen sender for a dev-emit — lets tests drive messages from a
+    DISTINCT thread/person (e.g. an automated email address) instead of the
+    scripted default. `threadKey` picks/creates the thread; it defaults to a
+    slug of the handle so the same sender always lands in the same thread. */
+export interface DripSender {
+  handle: string;
+  name?: string | null;
+  threadKey?: string;
+}
+
 /** The nth scripted inbound (drip timer / dev-emit). Cycles past the end. */
-export function dripMessage(platform: Platform, n: number, customText?: string): RowBundle | null {
+export function dripMessage(platform: Platform, n: number, customText?: string, sender?: DripSender): RowBundle | null {
   const s = SCRIPTS[platform];
   if (!s || s.threads.length === 0) return null;
   const t = s.threads[0];
   const text = customText ?? s.drip[n % s.drip.length];
+  const key = sender
+    ? (sender.threadKey ?? sender.handle.toLowerCase().replace(/[^a-z0-9]+/g, "-"))
+    : t.key;
+  const threadID = `demo-${s.short}-${key}`;
+  const handle = sender?.handle ?? s.people[t.withIdx].handle;
+  const name = sender ? (sender.name ?? sender.handle) : s.people[t.withIdx].name;
   return {
+    // The sender rides as a contact row too, so the app's classifier sees the
+    // real handle (for gmail emits that's an email address) — not just a title.
+    contacts: [{
+      platform, handle, displayName: name, isMe: false,
+    }],
     threads: [{
       platform,
-      platformThreadID: `demo-${s.short}-${t.key}`,
-      title: s.people[t.withIdx].name,
+      platformThreadID: threadID,
+      title: name,
       isGroup: false,
       lastMessageAt: new Date().toISOString(),
     }],
     messages: [{
       platform,
-      platformMessageID: `demo-${s.short}-${t.key}-drip-${n}`,
-      platformThreadID: `demo-${s.short}-${t.key}`,
-      senderHandle: s.people[t.withIdx].handle,
+      platformMessageID: `${threadID}-drip-${n}`,
+      platformThreadID: threadID,
+      senderHandle: handle,
       isFromMe: false,
       text,
       sentAt: new Date().toISOString(),

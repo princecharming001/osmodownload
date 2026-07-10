@@ -21,12 +21,29 @@ struct MainWindow: View {
             }
         }
         .background(DS.Colors.paper)
+        .background(sectionShortcuts)
         .toast(model.toast) { model.toast = nil }
         .sheet(item: $model.activeSheet) { sheet in sheetContent(sheet) }
         .onAppear {
             model.reload()
             if !acceptedLegal { model.activeSheet = .consent }
         }
+    }
+
+    /// Keyboard navigation: ⌘1–⌘5 jump between sections, ⌘R syncs. Zero-size and
+    /// AX-hidden, they add fast switching for power users (and give UI tests a
+    /// stable way in — a NavigationSplitView's List rows don't expose their own
+    /// identifiers reliably).
+    private var sectionShortcuts: some View {
+        Group {
+            Button("") { model.section = .today }.keyboardShortcut("1", modifiers: .command)
+            Button("") { model.section = .inbox }.keyboardShortcut("2", modifiers: .command)
+            Button("") { model.section = .people }.keyboardShortcut("3", modifiers: .command)
+            Button("") { model.section = .you }.keyboardShortcut("4", modifiers: .command)
+            Button("") { model.section = .connections }.keyboardShortcut("5", modifiers: .command)
+            Button("") { Task { await model.sync() } }.keyboardShortcut("r", modifiers: .command)
+        }
+        .opacity(0).frame(width: 0, height: 0).accessibilityHidden(true)
     }
 
     @ViewBuilder private func sheetContent(_ sheet: AppModel.AppSheet) -> some View {
@@ -42,9 +59,17 @@ struct MainWindow: View {
         }
     }
 
+    /// The incident-banner message: a backend-reported status wins; otherwise a
+    /// repeated realtime-pull failure (sync service unreachable) surfaces here.
+    private var bannerMessage: String? {
+        if let message = model.serviceStatusMessage { return message }
+        if model.backendUnreachable { return "Can't reach Osmo's sync service — messages may be delayed." }
+        return nil
+    }
+
     /// App-wide incident banner — only when the backend reports trouble.
     @ViewBuilder private var incidentBanner: some View {
-        if let message = model.serviceStatusMessage {
+        if let message = bannerMessage {
             HStack(spacing: DS.Space.s) {
                 Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 11))
                     .accessibilityHidden(true)
@@ -97,6 +122,7 @@ struct MainWindow: View {
                         Image(systemName: section.icon)
                     }
                     .tag(section)
+                    .accessibilityIdentifier("sidebar.\(section.rawValue.lowercased())")
                 }
             }
             .listStyle(.sidebar)
@@ -144,6 +170,7 @@ struct MainWindow: View {
             }
             .buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
             .disabled(model.syncing)
+            .accessibilityIdentifier("sidebar.sync")
             if model.isMockMode {
                 Text("Demo mode — connect a platform to sync real messages.")
                     .font(DS.Typography.eyebrow).foregroundStyle(DS.Colors.muted).lineLimit(2)

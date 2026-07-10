@@ -19,6 +19,7 @@ function fakeClient(existing: UnipileWebhook[]): UnipileClient & {
     async listChatAttendees() { return []; },
     async getUserProfile() { return null; },
     async listMessages() { return { messages: [], cursor: null }; },
+    async listChatMessages() { return { messages: [], cursor: null }; },
     async sendMessage() { return { messageId: "" }; },
     async downloadAttachment() { return null; },
     async listWebhooks() { return existing; },

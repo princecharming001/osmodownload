@@ -77,6 +77,27 @@ public actor BackendClient {
         (try? await registerIfNeeded())?.mode == "mock"
     }
 
+    /// The current device token, if any — memory first, then the Keychain.
+    /// Never touches the network (the AI proxy's per-call token read must stay
+    /// cheap); registration happens elsewhere.
+    public func registeredToken() -> String? {
+        if let creds = credentials { return creds.deviceToken }
+        if let stored = try? tokenStore.load() {
+            credentials = stored
+            return stored.deviceToken
+        }
+        return nil
+    }
+
+    /// Force a fresh identity: drop the stored credentials (Keychain too) and
+    /// re-register. Returns the new token, or nil when the backend is
+    /// unreachable. `register()` fires the existing `onReRegistered` handler,
+    /// so the sync engine's cursor reset keeps working untouched.
+    public func refreshRegistration() async -> String? {
+        dropCredentials()
+        return (try? await register())?.deviceToken
+    }
+
     // MARK: - API surface
 
     public func createConnectLink(platform: Platform) async throws -> ConnectLink {
@@ -84,8 +105,12 @@ public actor BackendClient {
                          body: ["platform": platform.rawValue])
     }
 
-    public func accounts() async throws -> [ConnectionInfo] {
-        let envelope: AccountsEnvelope = try await authed("GET", "/api/accounts")
+    /// `verify: true` asks the backend to liveness-check each connection against
+    /// the provider (TTL-throttled server-side) before returning the snapshot.
+    /// An older server simply ignores the param.
+    public func accounts(verify: Bool = false) async throws -> [ConnectionInfo] {
+        let envelope: AccountsEnvelope = try await authed(
+            "GET", "/api/accounts", query: verify ? [("verify", "1")] : [])
         return envelope.connections
     }
 

@@ -76,6 +76,46 @@ struct OsmoStoreTests {
         #expect(try store.search("delete").isEmpty)
     }
 
+    @Test("outboundCounterpartyHandles: normalized non-me senders from threads you've written in")
+    func outboundCounterpartyHandles() throws {
+        let store = try newStore()
+        let contact = { (handle: String, isMe: Bool) -> OsmoContact in
+            OsmoContact(id: OsmoContact.makeID(platform: .imessage, handle: handle),
+                        updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+                        platform: .imessage, handle: handle, isMe: isMe)
+        }
+        let me = contact("me@self.test", true)
+        let bob = contact("+1 (555) 123-4567", false)
+        let carol = contact("+15559990000", false)
+        for c in [me, bob, carol] { try store.ingest(c) }
+
+        // Thread A: bob writes, the user replies → bob counts.
+        let a = thread(.imessage, "chat-A"); try store.ingest(a)
+        try store.ingest(OsmoMessage(id: OsmoMessage.makeID(platform: .imessage, platformMessageID: "a1"),
+                                     updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+                                     platform: .imessage, platformMessageID: "a1", threadID: a.id,
+                                     senderContactID: bob.id, isFromMe: false, text: "hey",
+                                     sentAt: Date(timeIntervalSince1970: 1000)))
+        try store.ingest(OsmoMessage(id: OsmoMessage.makeID(platform: .imessage, platformMessageID: "a2"),
+                                     updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+                                     platform: .imessage, platformMessageID: "a2", threadID: a.id,
+                                     senderContactID: me.id, isFromMe: true, text: "hey back",
+                                     sentAt: Date(timeIntervalSince1970: 2000)))
+
+        // Thread B: carol writes, the user never has → carol does NOT count.
+        let b = thread(.imessage, "chat-B"); try store.ingest(b)
+        try store.ingest(OsmoMessage(id: OsmoMessage.makeID(platform: .imessage, platformMessageID: "b1"),
+                                     updatedAt: Date(timeIntervalSince1970: 0), deviceSeq: 0,
+                                     platform: .imessage, platformMessageID: "b1", threadID: b.id,
+                                     senderContactID: carol.id, isFromMe: false, text: "one-way blast",
+                                     sentAt: Date(timeIntervalSince1970: 1000)))
+
+        let handles = try store.outboundCounterpartyHandles()
+        #expect(handles.contains("5551234567"))       // bob, phone-normalized last-10
+        #expect(!handles.contains("5559990000"))      // carol: never replied to
+        #expect(!handles.contains("me@self.test"))    // own handle excluded
+    }
+
     @Test("Unified FTS search finds messages across platforms")
     func ftsSearch() throws {
         let store = try newStore()

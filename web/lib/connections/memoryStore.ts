@@ -79,6 +79,10 @@ export interface ConnectionsStore {
   connections(deviceId: string): Connection[];
   connectionById(id: string): Connection | null;
   setConnectionStatus(id: string, status: ConnectionStatus, progress?: number): void;
+  /** Stamp lastSyncAt/lastVerifiedAt. The durable write is throttled (≥5 min
+      apart per connection) — these tick on every webhook message; a Supabase
+      upsert per message would be silly. */
+  touchConnection(id: string, patch: { lastSyncAt?: string; lastVerifiedAt?: string }): void;
   removeConnection(id: string): void;
 
   /** Append normalized rows to the device oplog. Dedups: an identical row is a
@@ -220,6 +224,18 @@ class MemoryConnectionsStore implements ConnectionsStore {
     if (progress !== undefined) c.backfillProgress = progress;
     // Persist on status transitions only (not every backfill-progress tick).
     if (statusChanged) void getAccounts().upsertConnection(c).catch(() => {});
+  }
+  /** Last durable touch-write per connection id (epoch ms) — the throttle clock. */
+  private durableTouch = new Map<string, number>();
+  touchConnection(id: string, patch: { lastSyncAt?: string; lastVerifiedAt?: string }) {
+    const c = this.s.connections.get(id);
+    if (!c) return;
+    if (patch.lastSyncAt !== undefined) c.lastSyncAt = patch.lastSyncAt;
+    if (patch.lastVerifiedAt !== undefined) c.lastVerifiedAt = patch.lastVerifiedAt;
+    const now = Date.now();
+    if (now - (this.durableTouch.get(id) ?? 0) < 5 * 60_000) return; // throttle hot writes
+    this.durableTouch.set(id, now);
+    void getAccounts().upsertConnection(c).catch(() => {});
   }
   removeConnection(id: string) {
     this.s.connections.delete(id);

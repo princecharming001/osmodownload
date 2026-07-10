@@ -6,10 +6,10 @@
 import { getStore } from "../connections/memoryStore";
 import { publish } from "../connections/events";
 import type { WireContact, WireMessage, WireThread } from "../connections/types";
-import { backfillScope } from "../connections/scope";
+import { backfillScope, envInt } from "../connections/scope";
 
 const PAGE_SIZE = 100;
-const MAX_EVENTS = 400;   // absolute ceiling, bounded for speed
+const MAX_EVENTS_DEFAULT = 1000;   // absolute ceiling (OSMO_X_MAX_EVENTS)
 const API = "https://api.x.com/2";
 
 interface XUser { id: string; name?: string; username?: string }
@@ -39,9 +39,10 @@ export async function backfillX(deviceId: string, connectionId: string, accessTo
     const threads = new Map<string, WireThread>();
     const messages: WireMessage[] = [];
 
+    const maxEvents = envInt("OSMO_X_MAX_EVENTS", MAX_EVENTS_DEFAULT);
     let paginationToken: string | undefined;
     let fetched = 0;
-    while (fetched < MAX_EVENTS) {
+    while (fetched < maxEvents) {
       // User hit "Stop": the connection was flipped off "backfilling" — bail.
       if (store.connectionById(connectionId)?.status !== "backfilling") break;
       const q = new URLSearchParams({
@@ -112,6 +113,7 @@ export async function backfillX(deviceId: string, connectionId: string, accessTo
 
 function finish(deviceId: string, connectionId: string) {
   const store = getStore();
+  store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
   store.setConnectionStatus(connectionId, "connected", 1);
   publish(deviceId, { type: "connection.status", platform: "x", status: "connected", connectionId });
   publish(deviceId, { type: "sync.dirty", seq: store.appendRows(deviceId, {}) });

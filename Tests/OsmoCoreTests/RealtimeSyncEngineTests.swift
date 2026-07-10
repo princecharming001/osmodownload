@@ -211,6 +211,54 @@ struct RealtimeSyncEngineTests {
         quiet.cancel()   // …but no inbound yield (would fail the `return false` above)
     }
 
+    @Test("onPullHealth: consecutive failures count up, success resets to 0, cursor untouched on failure")
+    func pullHealth() async throws {
+        let store = try OsmoStore.inMemory()
+        // Three failing pulls, then a good (empty) one. "FAIL" → HTTP 500.
+        let bodies = Box(["FAIL", "FAIL", "FAIL", Self.emptyJSON])
+        let transport: BackendClient.DataTransport = { request in
+            let path = request.url!.path
+            let respond = { (status: Int, body: String) -> (Data, HTTPURLResponse) in
+                (Data(body.utf8), HTTPURLResponse(url: request.url!, statusCode: status,
+                                                  httpVersion: nil, headerFields: nil)!)
+            }
+            if path.contains("device/register") {
+                return respond(200, #"{"deviceId":"d","deviceToken":"t","mode":"mock"}"#)
+            }
+            if path.contains("sync/pull") {
+                let body = bodies.next() ?? Self.emptyJSON
+                return body == "FAIL" ? respond(500, "{}") : respond(200, body)
+            }
+            return respond(404, "{}")
+        }
+        let client = BackendClient(baseURL: URL(string: "http://test")!,
+                                   tokenStore: MemoryDeviceToken(), transport: transport,
+                                   byteStream: { _ in AsyncThrowingStream { _ in } })
+        let cursors = MemoryCursorStore()
+        cursors.saveBackendCursor("7")
+        let engine = RealtimeSyncEngine(store: store, client: client, cursorStore: cursors,
+                                        iMessageDBPath: URL(fileURLWithPath: "/nonexistent"))
+        let health = HealthLog()
+        await engine.setOnPullHealth { health.append($0) }
+
+        await engine.pullNow()
+        await engine.pullNow()
+        await engine.pullNow()
+        #expect(health.values == [1, 2, 3])
+        #expect(cursors.loadBackendCursor() == "7")   // failure never moves the cursor
+
+        await engine.pullNow()                        // backend back → success
+        #expect(health.values == [1, 2, 3, 0])
+        #expect(cursors.loadBackendCursor() == "3")
+    }
+
+    final class HealthLog: @unchecked Sendable {
+        private let lock = NSLock()
+        private var _values: [Int] = []
+        func append(_ n: Int) { lock.lock(); _values.append(n); lock.unlock() }
+        var values: [Int] { lock.lock(); defer { lock.unlock() }; return _values }
+    }
+
     @Test("hasMore pages until drained")
     func paging() async throws {
         let store = try OsmoStore.inMemory()

@@ -162,6 +162,16 @@ class RealUnipileClient implements UnipileClient {
     return { messages: out.items ?? [], cursor: out.cursor ?? null };
   }
 
+  async listChatMessages(chatId: string, cursor?: string): Promise<{ messages: UnipileMessage[]; cursor: string | null }> {
+    // The GET sibling of sendMessage's POST on the same path — one chat's
+    // messages, newest first, cursor-paged.
+    const q = new URLSearchParams({ limit: "100" });
+    if (cursor) q.set("cursor", cursor);
+    const out = await this.call<{ items?: UnipileMessage[]; cursor?: string | null }>(
+      `/api/v1/chats/${encodeURIComponent(chatId)}/messages?${q}`);
+    return { messages: out.items ?? [], cursor: out.cursor ?? null };
+  }
+
   async sendMessage(accountId: string, chatId: string, text: string): Promise<{ messageId: string }> {
     const out = await this.call<{ message_id?: string; id?: string }>(
       `/api/v1/chats/${encodeURIComponent(chatId)}/messages`,

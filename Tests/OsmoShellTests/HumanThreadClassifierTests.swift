@@ -169,6 +169,113 @@ struct ColdOutreachTests {
     }
 }
 
+@Suite("Transactional-email hardening (v2) — event registrations + product notifications")
+struct TransactionalEmailTests {
+    typealias S = HumanThreadClassifier.HumanSignals
+
+    @Test("Classifier version is 2 — the app keys its verdict cache on it")
+    func version() {
+        #expect(HumanThreadClassifier.version == 2)
+    }
+
+    @Test("The Poker Night leak: registration email from an event platform is hidden")
+    func pokerNightRegistration() {
+        let v = HumanThreadClassifier.classify(S(
+            platform: .gmail, counterpartyHandles: ["events@partiful.com"],
+            counterpartyNames: ["Partiful"], userReplied: false,
+            inboundTexts: ["You've got a spot at Poker Night"], inboundCount: 1,
+            subjectOrTitle: "Registration approved for Poker Night"))
+        #expect(!v.isLikelyHuman)
+        #expect(v.score >= HumanThreadClassifier.threshold)
+    }
+
+    @Test("The product-notification leak is hidden WITHOUT a server hint")
+    func productNotification() {
+        // "Your influencer chad is ready ✨" from team@ — no List-Unsubscribe
+        // header, so serverAutomatedHint is false; the v2 rules alone catch it.
+        let v = HumanThreadClassifier.classify(S(
+            platform: .gmail, counterpartyHandles: ["team@chadhq.com"],
+            counterpartyNames: ["Chad"], userReplied: false,
+            inboundTexts: ["Your influencer chad is ready to view."], inboundCount: 1,
+            subjectOrTitle: "Your influencer chad is ready ✨"))
+        #expect(!v.isLikelyHuman)
+    }
+
+    @Test("A first-contact human at a personal-mail domain stays visible (score 2)")
+    func firstContactHuman() {
+        let v = HumanThreadClassifier.classify(S(
+            platform: .gmail, counterpartyHandles: ["chris.park@gmail.com"],
+            counterpartyNames: ["Chris Park"], userReplied: false,
+            inboundTexts: ["hey it's chris from the gym, good meeting you"], inboundCount: 1))
+        #expect(v.isLikelyHuman)
+        #expect(v.score == 2)   // never-corresponded +1, one-way +1 — under threshold
+    }
+
+    @Test("A friend whose text happens to start with 'your' is rescued by reciprocity")
+    func casualYourText() {
+        let v = HumanThreadClassifier.classify(S(
+            platform: .imessage, counterpartyHandles: ["+15551234567"],
+            counterpartyNames: ["Sam Rivera"], hasResolvedPerson: true, userReplied: true,
+            inboundTexts: ["your package arrived lol"], inboundCount: 1))
+        #expect(v.isLikelyHuman)
+    }
+
+    @Test("A contact NAMED like a service ('Events Guy') you reply to is human")
+    func serviceyNameOnIMessage() {
+        let v = HumanThreadClassifier.classify(S(
+            platform: .imessage, counterpartyHandles: ["+15557770000"],
+            counterpartyNames: ["Events Guy"], userReplied: true,
+            inboundTexts: ["can you still make it tonight?"], inboundCount: 1))
+        #expect(v.isLikelyHuman)
+    }
+
+    @Test("hello@ a business you actually reply to stays visible — R1 is soft, not hard")
+    func repliedServiceLocalpart() {
+        let v = HumanThreadClassifier.classify(S(
+            platform: .gmail, counterpartyHandles: ["hello@realbusiness.com"],
+            counterpartyNames: ["Real Business"], userReplied: true,
+            inboundTexts: ["Sure, we can do Thursday — see you then!"], inboundCount: 1))
+        #expect(v.isLikelyHuman)
+    }
+
+    @Test("userEverMessagedSender damps the never-corresponded rule")
+    func everMessagedDampsR2() {
+        var s = S(platform: .gmail, counterpartyHandles: ["jordan@acmecorp.com"],
+                  counterpartyNames: ["Jordan"], userReplied: false,
+                  inboundTexts: ["following up on the contract"], inboundCount: 1)
+        // Corporate one-way email you never wrote to → hidden (+2 R2, +1 one-way).
+        #expect(!HumanThreadClassifier.classify(s).isLikelyHuman)
+        // …but you HAVE written to them in another thread → shown.
+        s.userEverMessagedSender = true
+        #expect(HumanThreadClassifier.classify(s).isLikelyHuman)
+    }
+
+    @Test("Service localparts match EXACTLY on the collapsed localpart: hi@ yes, hillary@ no")
+    func exactLocalpartMatch() {
+        #expect(HumanThreadClassifier.isServiceLocalpart("hi@x.com"))
+        #expect(HumanThreadClassifier.isServiceLocalpart("no.tifications@x.com") == false)
+        #expect(!HumanThreadClassifier.isServiceLocalpart("hillary@x.com"))
+        #expect(HumanThreadClassifier.isServiceLocalpart("e.vents@pokernight.com"))   // dots collapse
+    }
+
+    @Test("Templated subjects are damped by casual markers — no machine writes 'lol'")
+    func templatedSubjectDamper() {
+        #expect(HumanThreadClassifier.looksTemplatedSubject("registration approved for poker night"))
+        #expect(HumanThreadClassifier.looksTemplatedSubject("your order has shipped"))
+        #expect(!HumanThreadClassifier.looksTemplatedSubject("your face when you see this lol"))
+        #expect(!HumanThreadClassifier.looksTemplatedSubject("omg did you see the invoice??"))
+    }
+
+    @Test("ESP + bulk-subdomain shapes hit; plain providers don't")
+    func espDomains() {
+        #expect(HumanThreadClassifier.isESPSenderDomain("rsvp@lu.ma"))
+        #expect(HumanThreadClassifier.isESPSenderDomain("x@em123.sendgrid.net"))
+        #expect(HumanThreadClassifier.isESPSenderDomain("updates@mail.instagram.com"))
+        #expect(!HumanThreadClassifier.isESPSenderDomain("aunt.carol@mail.com"))   // 2 labels ≠ subdomain
+        #expect(!HumanThreadClassifier.isESPSenderDomain("chris@gmail.com"))
+    }
+}
+
 @Suite("Topic classifier — Kinso-style labels, locally")
 struct TopicClassifierTests {
     @Test("Clear topics label; small talk stays unlabeled")

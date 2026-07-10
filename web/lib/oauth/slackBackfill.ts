@@ -5,7 +5,7 @@
 import { getStore } from "../connections/memoryStore";
 import { publish } from "../connections/events";
 import type { WireAttachment, WireContact, WireMessage, WireThread } from "../connections/types";
-import { backfillScope } from "../connections/scope";
+import { backfillScope, envInt } from "../connections/scope";
 import { kindFromMime } from "../connections/attachments";
 
 interface SlackFile {
@@ -35,7 +35,7 @@ export function readSlackAttachments(files: SlackFile[] | undefined): WireAttach
   return out.length > 0 ? out : undefined;
 }
 
-const MAX_DMS = 25;
+const MAX_DMS = () => envInt("OSMO_SLACK_MAX_DMS", 100);
 const PER_PAGE = 100;
 const MAX_PER_DM = 300;                       // per-DM ceiling
 // Window start from the configured scope (60d full / 15d demo).
@@ -43,7 +43,7 @@ const OLDEST_TS = () => String(Math.floor((Date.now() - backfillScope().sinceMs)
 // Demo scope also caps the DM count. Slack's conversations.list isn't
 // recency-ordered, so this takes the first N returned — fine for a demo, and
 // DMs that are empty inside the window don't surface in the inbox anyway.
-const dmCap = () => Math.min(MAX_DMS, backfillScope().maxConversations ?? MAX_DMS);
+const dmCap = () => Math.min(MAX_DMS(), backfillScope().maxConversations ?? MAX_DMS());
 
 async function slack<T = Record<string, unknown>>(method: string, token: string, params: Record<string, string> = {}): Promise<T> {
   const q = new URLSearchParams(params);
@@ -145,6 +145,7 @@ function tsToISO(ts: string | undefined): string {
 
 function finish(deviceId: string, connectionId: string) {
   const store = getStore();
+  store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
   store.setConnectionStatus(connectionId, "connected", 1);
   publish(deviceId, { type: "connection.status", platform: "slack", status: "connected", connectionId });
   publish(deviceId, { type: "sync.dirty", seq: store.appendRows(deviceId, {}) });
