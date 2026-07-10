@@ -19,7 +19,9 @@ cd "$(dirname "$0")/.."
 APP_PATH=".build/xcode/Build/Products/Debug/Osmo.app"
 APP_NAME="Osmo"
 BASE="http://localhost:3000"
-DEVICE_FILE="$HOME/Library/Application Support/Osmo/.device"
+# DEBUG builds keep a SEPARATE identity file (.device-dev) so probe/dev
+# re-registrations can never clobber the installed app's production identity.
+DEVICE_FILE="$HOME/Library/Application Support/Osmo/.device-dev"
 DIAG_DIR="/tmp/osmo-ui-probe-ext-$(date +%s 2>/dev/null || echo run)"
 
 fail() {

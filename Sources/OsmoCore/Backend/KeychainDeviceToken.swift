@@ -11,7 +11,16 @@ public protocol DeviceTokenStoring: Sendable {
 /// Keychain, so there's no per-rebuild access-approval prompt). The device token
 /// is a backend session identifier, not a high-value secret.
 public struct KeychainDeviceToken: DeviceTokenStoring {
+    /// DEBUG builds talk to localhost and re-register freely against throwaway
+    /// mock servers — writing those credentials into the SAME file the Release
+    /// app uses would clobber the real production device identity (it did:
+    /// the installed app silently became a fresh device, orphaning its
+    /// server-side connections). Per-build-flavor files keep them apart.
+    #if DEBUG
+    static let secretName = "device-dev"
+    #else
     static let secretName = "device"
+    #endif
     public init() {}
 
     public func load() throws -> DeviceCredentials? {
