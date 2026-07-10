@@ -165,6 +165,23 @@ struct RealtimeSyncEngineTests {
         #expect(cursors.loadBackendEpoch() == "ep-B")
     }
 
+    @Test("A server-declared gap (reset:true) restarts the pull from 0")
+    func serverGapResets() async throws {
+        let store = try OsmoStore.inMemory()
+        // Same epoch, plausible cursor — but the server evicted rows below it.
+        let gapped = #"{"contacts":[],"threads":[],"messages":[],"cursor":"50","hasMore":false,"epoch":"ep-A","maxSeq":90,"reset":true,"oldestSeq":60}"#
+        let client = makeClient(pullBodies: [gapped, Self.freshBatch()])
+        let cursors = MemoryCursorStore()
+        cursors.saveBackendCursor("50")
+        cursors.saveBackendEpoch("ep-A")
+        let engine = RealtimeSyncEngine(store: store, client: client, cursorStore: cursors,
+                                        iMessageDBPath: URL(fileURLWithPath: "/nonexistent"))
+
+        await engine.pullNow()
+        #expect(try store.messageCount() == 1)          // re-pulled from 0, ingested
+        #expect(cursors.loadBackendCursor() == "3")
+    }
+
     @Test("An unchanged epoch with a plausible cursor does NOT trigger a reset")
     func healthyStreamDoesNotReset() async throws {
         let store = try OsmoStore.inMemory()

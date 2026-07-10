@@ -124,6 +124,10 @@ export async function backfillConnection(opts: {
       if (store.connectionById(accountId)?.status !== "backfilling") break;
       const { messages, cursor: next } = await unipile.listMessages(accountId, cursor, cutoffISO);
       if (messages.length === 0) break;
+      // Loop guard: a provider echoing the SAME cursor back would re-fetch this
+      // page forever (ingest dedups, so it looks like silent spinning, burning
+      // upstream quota until the page ceiling). Repeat cursor → done.
+      if (next && next === cursor) break;
 
       const normalized = messages
         .map((m) => normalizeUnipileMessage(m, platform, chats))
@@ -163,7 +167,7 @@ export async function backfillConnection(opts: {
       publish(deviceId, { type: "backfill.progress", platform, progress });
       if (seq > 0) publish(deviceId, { type: "sync.dirty", seq });
 
-      if (oldestMs < cutoff) break;   // reached ~2 months back
+      if (oldestMs < cutoff) break;   // reached the scope window's edge
       if (!next) break;
       cursor = next;
     }
@@ -179,7 +183,11 @@ export async function backfillConnection(opts: {
       try {
         const collected: RowBundle[] = [];
         let msgCursor: string | undefined;
-        while (collected.length < deep.messagesPerConversation) {
+        // Page ceiling: `collected` only grows on normalizable messages, so a
+        // provider feeding pages of junk rows with fresh cursors would spin
+        // this while-loop forever without a hard bound.
+        const maxPages = Math.max(10, Math.ceil(deep.messagesPerConversation / 10));
+        for (let page_ = 0; page_ < maxPages && collected.length < deep.messagesPerConversation; page_++) {
           const page = await unipile.listChatMessages(chatId, msgCursor);
           if (page.messages.length === 0) break;
           for (const m of page.messages) {
@@ -187,7 +195,8 @@ export async function backfillConnection(opts: {
             const b = normalizeUnipileMessage(m, platform, chats);
             if (b) collected.push(b);
           }
-          if (!page.cursor) break;
+          // No cursor, or the SAME cursor echoed back (would loop) → done.
+          if (!page.cursor || page.cursor === msgCursor) break;
           msgCursor = page.cursor;
         }
         if (collected.length === 0) continue;
@@ -198,18 +207,26 @@ export async function backfillConnection(opts: {
       } catch { /* deep context is enrichment — never fails the backfill */ }
     }
 
-    store.touchConnection(accountId, { lastSyncAt: new Date().toISOString() });
-    store.setConnectionStatus(accountId, "connected", 1);
-    publish(deviceId, { type: "connection.status", platform, status: "connected", connectionId: accountId });
+    // Terminal flip ONLY from "backfilling": if the user paused (or the
+    // connection was removed) mid-import, the bail-out above must not be
+    // overridden back to "connected" here.
+    if (store.connectionById(accountId)?.status === "backfilling") {
+      store.touchConnection(accountId, { lastSyncAt: new Date().toISOString() });
+      store.setConnectionStatus(accountId, "connected", 1);
+      publish(deviceId, { type: "connection.status", platform, status: "connected", connectionId: accountId });
+    }
     // Final doorbell with the current max seq (empty append = read-only seq peek).
     publish(deviceId, { type: "sync.dirty", seq: store.appendRows(deviceId, {}) });
   } catch (err) {
-    // Leave status `backfilling`; reconciliation retries. Surface a degraded
-    // state so the UI can nudge a reconnect if it never recovers.
-    store.setConnectionStatus(accountId, "degraded");
-    publish(deviceId, {
-      type: "connection.status", platform, status: "degraded", connectionId: accountId,
-    });
+    // Drive the status to a terminal state so it never sticks on "backfilling"
+    // forever — but only from "backfilling" (a pause that raced the throw must
+    // stay paused).
+    if (store.connectionById(accountId)?.status === "backfilling") {
+      store.setConnectionStatus(accountId, "degraded");
+      publish(deviceId, {
+        type: "connection.status", platform, status: "degraded", connectionId: accountId,
+      });
+    }
     console.error(`[backfill] ${platform}/${accountId} failed:`, (err as Error).message);
   }
 }

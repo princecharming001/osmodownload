@@ -7,6 +7,7 @@ import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { ensureConnectionsLoaded } from "@/lib/connections/connectionsDurable";
 import { enrichPerson, type EnrichRequest } from "@/lib/enrich/person";
 import { rateLimit } from "@/lib/rateLimit";
+import { readJsonObject } from "@/lib/http";
 
 // Enrichment fans out to two paid upstreams, so a person-page-flipping spree
 // must not turn into an API bill. Uses the shared rate-limit substrate.
@@ -19,7 +20,7 @@ export { resetRateLimitForTests } from "@/lib/rateLimit";
 export async function POST(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
-    const body = await req.json().catch(() => ({})) as Partial<EnrichRequest>;
+    const body = await readJsonObject(req) as Partial<EnrichRequest>;
     const name = (body.name ?? "").trim().slice(0, 200);
     if (!name) {
       return Response.json({ error: "name required" }, { status: 400 });

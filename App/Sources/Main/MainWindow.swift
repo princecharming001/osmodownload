@@ -22,6 +22,7 @@ struct MainWindow: View {
         }
         .background(DS.Colors.paper)
         .background(sectionShortcuts)
+        .background(WindowDragEnabler())
         .toast(model.toast) { model.toast = nil }
         .sheet(item: $model.activeSheet) { sheet in sheetContent(sheet) }
         .onAppear {
@@ -86,9 +87,16 @@ struct MainWindow: View {
 
     private var sidebar: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("Osmo")
-                .font(DS.Typography.displaySmall).foregroundStyle(DS.Colors.ink)
-                .padding(.horizontal, DS.Space.l).padding(.top, DS.Space.l).padding(.bottom, DS.Space.m)
+            HStack {
+                Text("Osmo")
+                    .font(DS.Typography.displaySmall).foregroundStyle(DS.Colors.ink)
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, DS.Space.l).padding(.top, DS.Space.l).padding(.bottom, DS.Space.m)
+            // The whole header row is a real drag handle — SwiftUI content
+            // blocks isMovableByWindowBackground, so this strip was the one
+            // dead zone where the window refused to drag (probe: 0px of 220).
+            .background(WindowDragHandle())
 
             SearchField(text: $model.searchText, onChange: { model.runSearch() })
                 .padding(.horizontal, DS.Space.m)
@@ -237,5 +245,36 @@ extension View {
             }
         }
         .animation(DS.Motion.expoOut, value: message)
+    }
+}
+
+
+/// An explicit drag surface: any mouse-down that reaches it hands the event to
+/// the window's native drag loop (`performDrag`), exactly like a titlebar.
+/// SwiftUI's hosting view does NOT honor mouseDownCanMoveWindow for content
+/// areas, so background-drag alone can't fix a dead strip — this can.
+private struct WindowDragHandle: NSViewRepresentable {
+    final class DragView: NSView {
+        override func mouseDown(with event: NSEvent) {
+            window?.performDrag(with: event)
+        }
+    }
+    func makeNSView(context: Context) -> NSView { DragView() }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+/// With `.windowStyle(.hiddenTitleBar)` the drag strip is whatever content
+/// happens to sit at the top — the sidebar header ("Osmo" + search) ate drags
+/// entirely (probe: 0px of 220 moved). Background-drag makes every
+/// non-interactive surface draggable, the standard feel for hidden-titlebar
+/// Mac apps; interactive controls (buttons, fields, lists) still win.
+private struct WindowDragEnabler: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView {
+        let v = NSView()
+        DispatchQueue.main.async { v.window?.isMovableByWindowBackground = true }
+        return v
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {
+        DispatchQueue.main.async { nsView.window?.isMovableByWindowBackground = true }
     }
 }

@@ -10,13 +10,14 @@ import { emitNow } from "@/lib/unipile/mock";
 import { isLiveUnipile } from "@/lib/unipile/client";
 import { isProduction } from "@/lib/config/runtime";
 import type { Platform } from "@/lib/connections/types";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   // Dev E2E surface — unreachable in production (would let any device inject inbound messages).
   if (isLiveUnipile() || isProduction()) return Response.json({ error: "not found" }, { status: 404 });
   try {
     const device = await requireDevice(req);
-    const body = await req.json().catch(() => ({}));
+    const body = await readJsonObject(req);
     const platform = body.platform as Platform | undefined;
     if (!platform) return Response.json({ error: "platform required" }, { status: 400 });
     const senderHandle = body.senderHandle as string | undefined;

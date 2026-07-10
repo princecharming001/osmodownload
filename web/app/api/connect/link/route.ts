@@ -9,13 +9,14 @@ import { CONNECTABLE } from "@/lib/connections/types";
 import { getUnipile } from "@/lib/unipile/client";
 import { ensureUnipileWebhooks } from "@/lib/unipile/webhooks";
 import { authURL, isLiveOAuth, makePkce } from "@/lib/oauth/providers";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   let deviceId: string;
   try { deviceId = (await requireDevice(req)).id; }
   catch (e) { if (e instanceof AuthError) return unauthorized(); throw e; }
 
-  const body = await req.json().catch(() => ({}));
+  const body = await readJsonObject(req);
   const platform = body.platform as Platform | undefined;
   if (!platform || !CONNECTABLE.includes(platform)) {
     return Response.json({ error: `platform must be one of ${CONNECTABLE.join(", ")}` }, { status: 400 });

@@ -6,11 +6,12 @@
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { createCheckoutSession, priceForPlan } from "@/lib/license/stripe";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
-    const body = await req.json().catch(() => ({})) as { plan?: string };
+    const body = await readJsonObject(req) as { plan?: string };
     const plan = typeof body.plan === "string" ? body.plan : "com.osmo.pro.monthly";
     const origin = process.env.PUBLIC_URL ?? new URL(req.url).origin;
 

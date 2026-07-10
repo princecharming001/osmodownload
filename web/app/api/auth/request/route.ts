@@ -10,11 +10,12 @@ import { getAccounts } from "@/lib/accounts/store";
 import { sendMagicLink } from "@/lib/email/resend";
 import { isProduction } from "@/lib/config/runtime";
 import { rateLimit, clientIp } from "@/lib/rateLimit";
+import { readJsonObject } from "@/lib/http";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export async function POST(req: Request): Promise<Response> {
-  const body = await req.json().catch(() => ({})) as { email?: string };
+  const body = await readJsonObject(req) as { email?: string };
   const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   if (!EMAIL_RE.test(email)) {
     return Response.json({ error: "Enter a valid email address." }, { status: 400 });

@@ -137,11 +137,19 @@ public struct WireBatch: Codable, Equatable, Sendable {
     /// The device's current max seq server-side — lets the client detect an
     /// impossible cursor (cursor > maxSeq) even without an epoch change.
     public var maxSeq: Int?
+    /// Server-declared gap: the cursor points below the oplog's retained
+    /// window (rows were evicted), so this batch is NOT contiguous — restart
+    /// from 0 (idempotent) to recover.
+    public var reset: Bool?
+    /// Oldest seq still retained when the window is truncated.
+    public var oldestSeq: Int?
     public init(contacts: [WireContact], threads: [WireThread], messages: [WireMessage],
-                cursor: String, hasMore: Bool, epoch: String? = nil, maxSeq: Int? = nil) {
+                cursor: String, hasMore: Bool, epoch: String? = nil, maxSeq: Int? = nil,
+                reset: Bool? = nil, oldestSeq: Int? = nil) {
         self.contacts = contacts; self.threads = threads; self.messages = messages
         self.cursor = cursor; self.hasMore = hasMore
         self.epoch = epoch; self.maxSeq = maxSeq
+        self.reset = reset; self.oldestSeq = oldestSeq
     }
 }
 

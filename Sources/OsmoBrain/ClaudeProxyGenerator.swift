@@ -98,8 +98,11 @@ public struct ClaudeProxyGenerator: Generator {
                 }
                 throw GenerationError.http(http.statusCode)
             }
-            let decoded = try JSONDecoder().decode(ProxyResponse.self, from: data)
-            guard !decoded.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            // A 2xx whose body isn't the expected JSON shape (missing `text`,
+            // non-JSON/non-UTF-8 bytes) carries no usable text — map it to the
+            // typed `.empty` instead of leaking a raw DecodingError to callers.
+            guard let decoded = try? JSONDecoder().decode(ProxyResponse.self, from: data),
+                  !decoded.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw GenerationError.empty
             }
             return decoded.text

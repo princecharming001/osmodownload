@@ -97,8 +97,11 @@ extension OsmoStore {
     }
 
     /// Threads snoozed past `now` (hidden from queue/inbox until due).
+    /// A `write` transaction, not `read`: the auto-clear DELETE below would
+    /// throw SQLITE_READONLY inside GRDB's read-only `read` block, making this
+    /// call fail outright the moment any snooze elapsed.
     public func snoozedThreadIDs(now: Date = Date()) throws -> Set<UUID> {
-        try dbQueue.read { db in
+        try dbQueue.write { db in
             let due = try ThreadSnooze.filter(Column("until") <= now).fetchAll(db)
             // Auto-clear elapsed snoozes on read.
             for snooze in due { _ = try ThreadSnooze.deleteOne(db, key: snooze.threadID) }

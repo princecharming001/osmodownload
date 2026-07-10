@@ -351,7 +351,11 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
     // over the old fetch-then-gate order).
     const items: { id: string; threadId: string }[] = [];
     let pageToken: string | undefined;
-    while (items.length < maxMessages) {
+    // Page ceiling: `items` may not grow on every page (messages.list with a
+    // q filter legitimately returns EMPTY pages that still carry a
+    // nextPageToken), so the while-condition alone can't bound the loop.
+    const maxListPages = Math.max(20, Math.ceil(maxMessages / PAGE_SIZE) * 4);
+    for (let page_ = 0; page_ < maxListPages && items.length < maxMessages; page_++) {
       const q = new URLSearchParams({ maxResults: String(PAGE_SIZE), q: historyQuery() });
       if (pageToken) q.set("pageToken", pageToken);
       const list = await gmailGet(`${api}/messages?${q}`, auth) as {
@@ -360,8 +364,10 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
       for (const m of list.messages ?? []) {
         items.push({ id: m.id, threadId: m.threadId });
       }
+      // No next token, or the SAME token echoed back (a stuck upstream would
+      // otherwise re-fetch this page until the ceiling) → done.
+      if (!list.nextPageToken || list.nextPageToken === pageToken) break;
       pageToken = list.nextPageToken;
-      if (!pageToken) break;
     }
     if (items.length === 0) { finish(deviceId, connectionId); return; }
 
@@ -434,16 +440,22 @@ export async function backfillGmail(deviceId: string, connectionId: string, acce
     if (seq > 0) publish(deviceId, { type: "sync.dirty", seq });
     finish(deviceId, connectionId);
   } catch (err) {
-    store.setConnectionStatus(connectionId, "degraded");
-    publish(deviceId, { type: "connection.status", platform: "gmail", status: "degraded", connectionId });
+    if (store.connectionById(connectionId)?.status === "backfilling") {
+      store.setConnectionStatus(connectionId, "degraded");
+      publish(deviceId, { type: "connection.status", platform: "gmail", status: "degraded", connectionId });
+    }
     console.error(`[gmail backfill] failed:`, (err as Error).message);
   }
 }
 
 function finish(deviceId: string, connectionId: string) {
   const store = getStore();
-  store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
-  store.setConnectionStatus(connectionId, "connected", 1);
-  publish(deviceId, { type: "connection.status", platform: "gmail", status: "connected", connectionId });
+  // Terminal flip ONLY from "backfilling": a user pause (or disconnect) that
+  // made the import bail must not be overridden back to "connected" here.
+  if (store.connectionById(connectionId)?.status === "backfilling") {
+    store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
+    store.setConnectionStatus(connectionId, "connected", 1);
+    publish(deviceId, { type: "connection.status", platform: "gmail", status: "connected", connectionId });
+  }
   publish(deviceId, { type: "sync.dirty", seq: store.appendRows(deviceId, {}) });
 }

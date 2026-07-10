@@ -99,6 +99,14 @@ export interface WireBatch {
   /** The device's current max seq — lets a client detect an impossible
       cursor (cursor > maxSeq) even without an epoch change. */
   maxSeq?: number;
+  /** Oldest seq still retained in the oplog window. Present only after the
+      OOM cap has evicted entries — rows below it are gone from this server. */
+  oldestSeq?: number;
+  /** True when the caller's cursor points below the retained window: entries
+      it never pulled were evicted, so this batch is NOT contiguous with its
+      cursor. The client should treat its local view as potentially gapped
+      (re-pull from 0 is idempotent; a rebackfill recovers evicted history). */
+  reset?: boolean;
 }
 
 // ---------------------------------------------------------------------------

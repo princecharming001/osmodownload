@@ -627,7 +627,10 @@ final class AppModel: ObservableObject {
             // finishes the stream (stop()), releasing this task. AppModel is a
             // root object (app lifetime), so the loop's strong hold is fine.
             for await inbound in realtime.inbound {
-                reload()
+                // Coalesced: a backfill can yield hundreds of inbounds in a
+                // burst — one reload per message re-runs snapshots/classifier
+                // per message and makes the whole window janky (drag stutter).
+                reloadSoon()
                 notifier.considerInbound(inbound, focusedThreadID: focusedThreadID,
                                          mutedThreadIDs: mutedThreadIDs(), store: store)
                 considerAutodraft(inbound)
@@ -926,7 +929,51 @@ final class AppModel: ObservableObject {
     /// "Connect click takes minutes to reflect" wedge).
     @Published private(set) var messageCountByPlatform: [Platform: Int] = [:]
 
+    /// Everything a queue row needs that would otherwise be a SQLCipher read
+    /// per row PER RENDER (snippet, timestamp, draft flag, open question).
+    /// Rebuilt once per reload — rows just index the dictionary.
+    struct QueueRowMeta {
+        var snippet: String?
+        var when: String?
+        var draftReady: Bool
+        var lastInboundQuestion: String?
+    }
+    @Published private(set) var queueRowMeta: [UUID: QueueRowMeta] = [:]
+
+    private func rebuildQueueRowMeta() {
+        var meta: [UUID: QueueRowMeta] = [:]
+        let formatter = RelativeDateTimeFormatter()
+        for card in queue {
+            guard let last = try? store.lastMessage(inThread: card.threadID) else { continue }
+            let cleaned = SnippetCleaner.clean(last.text, maxLength: 80)
+            meta[card.threadID] = QueueRowMeta(
+                snippet: cleaned.isEmpty ? nil : (last.isFromMe ? "You: " : "") + cleaned,
+                when: formatter.localizedString(for: last.sentAt, relativeTo: Date()),
+                draftReady: (try? store.draftRecord(forThread: card.threadID))?.isAuto == true,
+                lastInboundQuestion: last.isFromMe ? nil : {
+                    let q = SnippetCleaner.clean(last.text, maxLength: 90)
+                    return q.isEmpty ? nil : q
+                }())
+        }
+        queueRowMeta = meta
+    }
+
+    /// Trailing-edge coalescer for reload(): bursts (per-message inbound
+    /// during a backfill) collapse into at most ~3 reloads/second.
+    private var reloadPending = false
+    private var lastReloadAt = Date.distantPast
+    func reloadSoon() {
+        if Date().timeIntervalSince(lastReloadAt) > 0.35 { reload(); return }
+        guard !reloadPending else { return }
+        reloadPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+            self?.reloadPending = false
+            self?.reload()
+        }
+    }
+
     func reload() {
+        lastReloadAt = Date()
         let snoozed = (try? store.snoozedThreadIDs()) ?? []
         // Load ALL threads (the default 500 cap silently dropped older threads —
         // e.g. Gmail behind hundreds of iMessage threads — so their platform chip
@@ -975,6 +1022,7 @@ final class AppModel: ObservableObject {
         // deleted; this is a view filter over the same stored data.
         let snapshots = showNonHuman ? allSnapshots : allSnapshots.filter { $0.isLikelyHuman }
         queue = MorningQueue.build(snapshots: snapshots, projects: projects)
+        rebuildQueueRowMeta()
         people = buildPeople(snapshots: snapshots)
 
         // Today-header pulse.

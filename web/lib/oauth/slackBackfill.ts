@@ -88,7 +88,10 @@ export async function backfillSlack(
       // Page this DM's history back ~2 months (bounded by MAX_PER_DM).
       const dmMessages: { user?: string; text?: string; ts?: string; files?: SlackFile[] }[] = [];
       let cursor: string | undefined;
-      while (dmMessages.length < MAX_PER_DM) {
+      // Page ceiling: pages may be empty-but-cursored, so the while-condition
+      // alone can't bound the loop against a stuck upstream.
+      const maxPages = Math.max(10, Math.ceil(MAX_PER_DM / PER_PAGE) * 4);
+      for (let page_ = 0; page_ < maxPages && dmMessages.length < MAX_PER_DM; page_++) {
         const params: Record<string, string> = { channel: im.id, limit: String(PER_PAGE), oldest };
         if (cursor) params.cursor = cursor;
         const page = await slack<{
@@ -96,8 +99,11 @@ export async function backfillSlack(
           response_metadata?: { next_cursor?: string };
         }>("conversations.history", userToken, params);
         dmMessages.push(...(page.messages ?? []));
-        cursor = page.response_metadata?.next_cursor;
-        if (!cursor) break;
+        // No next cursor, or the SAME cursor echoed back (would re-fetch this
+        // page until the ceiling) → done.
+        const next = page.response_metadata?.next_cursor;
+        if (!next || next === cursor) break;
+        cursor = next;
       }
 
       if (partnerId) {
@@ -132,8 +138,10 @@ export async function backfillSlack(
     if (seq > 0) publish(deviceId, { type: "sync.dirty", seq });
     finish(deviceId, connectionId);
   } catch (err) {
-    store.setConnectionStatus(connectionId, "degraded");
-    publish(deviceId, { type: "connection.status", platform: "slack", status: "degraded", connectionId });
+    if (store.connectionById(connectionId)?.status === "backfilling") {
+      store.setConnectionStatus(connectionId, "degraded");
+      publish(deviceId, { type: "connection.status", platform: "slack", status: "degraded", connectionId });
+    }
     console.error(`[slack backfill] failed:`, (err as Error).message);
   }
 }
@@ -145,8 +153,12 @@ function tsToISO(ts: string | undefined): string {
 
 function finish(deviceId: string, connectionId: string) {
   const store = getStore();
-  store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
-  store.setConnectionStatus(connectionId, "connected", 1);
-  publish(deviceId, { type: "connection.status", platform: "slack", status: "connected", connectionId });
+  // Terminal flip ONLY from "backfilling": a user pause (or disconnect) that
+  // made the import bail must not be overridden back to "connected" here.
+  if (store.connectionById(connectionId)?.status === "backfilling") {
+    store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
+    store.setConnectionStatus(connectionId, "connected", 1);
+    publish(deviceId, { type: "connection.status", platform: "slack", status: "connected", connectionId });
+  }
   publish(deviceId, { type: "sync.dirty", seq: store.appendRows(deviceId, {}) });
 }

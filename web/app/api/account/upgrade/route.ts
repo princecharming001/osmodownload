@@ -8,6 +8,7 @@ import { getAccounts } from "@/lib/accounts/store";
 import { readSessionToken } from "@/lib/auth/session";
 import { sameOrigin, forbidden } from "@/lib/auth/csrf";
 import { createCheckoutSession, priceForPlan } from "@/lib/license/stripe";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   if (!sameOrigin(req)) return forbidden();
@@ -16,7 +17,7 @@ export async function POST(req: Request): Promise<Response> {
   const user = token ? await accounts.webSessionUser(token) : null;
   if (!user) return Response.json({ error: "not signed in" }, { status: 401 });
 
-  const plan = (await req.json().catch(() => ({})) as { plan?: string }).plan ?? "com.osmo.pro.monthly";
+  const plan = (await readJsonObject(req) as { plan?: string }).plan ?? "com.osmo.pro.monthly";
 
   if (process.env.STRIPE_SECRET_KEY) {
     // Real Stripe Checkout, keyed to the USER (client_reference_id=user:<id>) so

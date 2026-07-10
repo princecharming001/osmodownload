@@ -6,11 +6,12 @@
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
 import { getAccounts } from "@/lib/accounts/store";
 import { buildSignedEntitlement, validateLicenseKey } from "@/lib/license/entitlement";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
-    const body = await req.json().catch(() => ({})) as { licenseKey?: string };
+    const body = await readJsonObject(req) as { licenseKey?: string };
     const accounts = getAccounts();
 
     if (typeof body.licenseKey === "string" && body.licenseKey.trim()) {

@@ -253,8 +253,9 @@ public actor RealtimeSyncEngine {
                 let known = cursorStore.loadBackendEpoch()
                 let epochChanged = wire.epoch.map { !$0.isEmpty && !known.isEmpty && $0 != known } ?? false
                 let cursorBeyond = wire.maxSeq.map { sinceVal > $0 } ?? false
+                let serverGap = wire.reset == true   // cursor below the retained window
                 if let e = wire.epoch, !e.isEmpty, e != known { cursorStore.saveBackendEpoch(e) }
-                if (epochChanged || cursorBeyond) && sinceVal > 0 {
+                if (epochChanged || cursorBeyond || serverGap) && sinceVal > 0 {
                     cursor = ""
                     cursorStore.saveBackendCursor("")
                     continue

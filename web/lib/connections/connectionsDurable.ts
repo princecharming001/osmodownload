@@ -6,10 +6,59 @@
 
 import { getAccounts } from "@/lib/accounts/store";
 import { getStore } from "./memoryStore";
+import type { Connection, ConnectionStatus, Platform } from "./types";
+
+const KNOWN_PLATFORMS = new Set<Platform>([
+  "imessage", "gmail", "slack", "whatsapp", "linkedin", "x", "instagram",
+]);
+const KNOWN_STATUSES = new Set<ConnectionStatus>([
+  "linking", "backfilling", "connected", "degraded", "paused", "disconnected",
+]);
+
+/** Decode-tolerant gate on a durable row. A partially-written or hand-edited
+    Supabase row (unknown platform, null status) must degrade to "skipped", not
+    crash /api/accounts or feed the Swift client an enum it can't decode. */
+export function isValidDurableConnection(c: Partial<Connection> | null | undefined): c is Connection {
+  return !!c
+    && typeof c.id === "string" && c.id.length > 0
+    && typeof c.deviceId === "string" && c.deviceId.length > 0
+    && KNOWN_PLATFORMS.has(c.platform as Platform)
+    && KNOWN_STATUSES.has(c.status as ConnectionStatus);
+}
+
+/** Coerce the optional fields a junk row may carry so downstream code (and the
+    wire contract) always sees the declared shapes. Call only on valid rows. */
+function sanitizeDurableConnection(c: Connection): Connection {
+  return {
+    ...c,
+    displayName: typeof c.displayName === "string" ? c.displayName : "",
+    backfillProgress: typeof c.backfillProgress === "number" && Number.isFinite(c.backfillProgress)
+      ? c.backfillProgress : 0,
+    createdAt: typeof c.createdAt === "string" ? c.createdAt : new Date().toISOString(),
+    lastSyncAt: typeof c.lastSyncAt === "string" ? c.lastSyncAt : null,
+    lastVerifiedAt: typeof c.lastVerifiedAt === "string" ? c.lastVerifiedAt : null,
+  };
+}
 
 export async function ensureConnectionsLoaded(deviceId: string): Promise<void> {
   const store = getStore();
   if (store.connections(deviceId).length > 0) return; // already warm in this process
   const durable = await getAccounts().connectionsForDevice(deviceId);
-  for (const c of durable) store.hydrateConnection(c);
+  for (const c of durable) {
+    if (!isValidDurableConnection(c)) continue;   // tolerate partial/corrupt rows
+    store.hydrateConnection(sanitizeDurableConnection(c));
+  }
+}
+
+/** Webhook-path rehydration: look one connection up by id (webhooks carry the
+    account id, not a device), hydrate it into memory when found. Returns the
+    in-memory record either way. */
+export async function ensureConnectionById(id: string): Promise<Connection | null> {
+  const store = getStore();
+  const warm = store.connectionById(id);
+  if (warm) return warm;
+  const durable = await getAccounts().connectionById(id).catch(() => null);
+  if (!isValidDurableConnection(durable)) return null;
+  store.hydrateConnection(sanitizeDurableConnection(durable));
+  return store.connectionById(id);
 }

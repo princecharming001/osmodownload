@@ -105,16 +105,22 @@ export async function backfillX(deviceId: string, connectionId: string, accessTo
     if (seq > 0) publish(deviceId, { type: "sync.dirty", seq });
     finish(deviceId, connectionId);
   } catch (err) {
-    store.setConnectionStatus(connectionId, "degraded");
-    publish(deviceId, { type: "connection.status", platform: "x", status: "degraded", connectionId });
+    if (store.connectionById(connectionId)?.status === "backfilling") {
+      store.setConnectionStatus(connectionId, "degraded");
+      publish(deviceId, { type: "connection.status", platform: "x", status: "degraded", connectionId });
+    }
     console.error(`[x backfill] failed:`, (err as Error).message);
   }
 }
 
 function finish(deviceId: string, connectionId: string) {
   const store = getStore();
-  store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
-  store.setConnectionStatus(connectionId, "connected", 1);
-  publish(deviceId, { type: "connection.status", platform: "x", status: "connected", connectionId });
+  // Terminal flip ONLY from "backfilling": a user pause (or disconnect) that
+  // made the import bail must not be overridden back to "connected" here.
+  if (store.connectionById(connectionId)?.status === "backfilling") {
+    store.touchConnection(connectionId, { lastSyncAt: new Date().toISOString() });
+    store.setConnectionStatus(connectionId, "connected", 1);
+    publish(deviceId, { type: "connection.status", platform: "x", status: "connected", connectionId });
+  }
   publish(deviceId, { type: "sync.dirty", seq: store.appendRows(deviceId, {}) });
 }

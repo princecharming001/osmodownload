@@ -90,7 +90,15 @@ public enum MorningQueue {
             }
         }
 
-        return Array(cards.sorted { $0.priority > $1.priority }.prefix(config.cap))
+        // Total, deterministic order: priority first, threadID as the tiebreak.
+        // Swift's sort is not stable, and upstream snapshot order can vary
+        // between reloads — without the tiebreak, equal-priority cards could
+        // swap places (and flap across the cap boundary) on identical input.
+        return Array(cards.sorted {
+            $0.priority != $1.priority
+                ? $0.priority > $1.priority
+                : $0.threadID.uuidString < $1.threadID.uuidString
+        }.prefix(config.cap))
     }
 
     private static func card(_ s: ThreadSnapshot, _ kind: QueueCard.Kind, _ status: TextingStatus,

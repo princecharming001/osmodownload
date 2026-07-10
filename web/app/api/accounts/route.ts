@@ -12,6 +12,7 @@ import { platformForProvider } from "@/lib/unipile/normalize";
 import { backfillConnection } from "@/lib/connections/backfill";
 import { verifyConnections } from "@/lib/connections/liveness";
 import type { AccountsResponse, Connection } from "@/lib/connections/types";
+import { readJsonObject } from "@/lib/http";
 
 /** Devices we've already attempted adoption for this process (one shot each). */
 const adopted = new Set<string>();
@@ -76,7 +77,7 @@ export async function PATCH(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
     const id = new URL(req.url).searchParams.get("id") ?? "";
-    const body = await req.json().catch(() => ({}));
+    const body = await readJsonObject(req);
     const action = body.action as string | undefined;
     await ensureConnectionsLoaded(device.id); // rehydrate after redeploy before the lookup
     const store = getStore();

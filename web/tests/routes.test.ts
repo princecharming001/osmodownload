@@ -233,3 +233,32 @@ describe("media proxy", () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe("pull cursor/limit sanitization", () => {
+  it("junk `since` values are 400, not an empty-forever stream", async () => {
+    const { token } = await registered();
+    for (const since of ["abc", "Infinity", "-1", "NaN"]) {
+      const res = await pull(req(`/api/sync/pull?since=${since}`, token));
+      expect(res.status, `since=${since}`).toBe(400);
+    }
+  });
+
+  it("a junk `limit` falls back to the default instead of slicing an empty page forever", async () => {
+    process.env.OSMO_MOCK_DRIP_MS = "0";
+    const { token } = await registered();
+    const link = await (await connectLink(req("/api/connect/link", token, {
+      method: "POST", body: JSON.stringify({ platform: "linkedin" }),
+    }))).json();
+    await mockComplete(req("/api/connect/mock/complete", undefined, {
+      method: "POST", body: JSON.stringify({ linkId: link.linkId }),
+    }));
+
+    // The old Math.min(NaN, cap) sliced an EMPTY page while hasMore stayed
+    // true — a client polling with a junk limit would loop forever.
+    for (const limit of ["abc", "-5", "0", "Infinity"]) {
+      const batch = await (await pull(req(`/api/sync/pull?since=0&limit=${limit}`, token))).json();
+      expect(batch.messages.length, `limit=${limit}`).toBeGreaterThan(0);
+      expect(batch.hasMore).toBe(false);
+    }
+  });
+});

@@ -27,6 +27,13 @@ type Body = {
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
+// Prompt size caps — systemCore/userTurn are CLIENT-SUPPLIED, and every char
+// is billed against the server-side key. A multi-megabyte body must die here
+// with a 413, not burn tokens (or blow the model's context) upstream. Generous
+// vs. real payloads: the psychology core is ~10k chars, a user turn ~1-2k.
+const SYSTEM_CORE_MAX_CHARS = 32_000;
+const USER_TURN_MAX_CHARS = 8_000;
+
 export async function POST(req: NextRequest) {
   // Auth: the Mac app sends its device token. In keyless/dev mode we accept any
   // bearer so the flow is exercisable; in production (OSMO_REQUIRE_AUTH=1) the
@@ -51,17 +58,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "ai_disabled" }, { status: 503 });
   }
 
-  let body: Body;
-  try {
-    body = (await req.json()) as Body;
-  } catch {
+  // The body must be a plain JSON object — the valid JSON values `null`, `[]`,
+  // `"str"` etc. would otherwise crash the property reads below (500).
+  const parsed = (await req.json().catch(() => null)) as unknown;
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
     return NextResponse.json({ error: "bad request" }, { status: 400 });
   }
-  const systemCore = body.systemCore ?? "";
-  const userTurn = body.userTurn ?? "";
-  const model = body.model ?? DEFAULT_MODEL;
+  const body = parsed as Body;
+  const systemCore = typeof body.systemCore === "string" ? body.systemCore : "";
+  const userTurn = typeof body.userTurn === "string" ? body.userTurn : "";
+  const model = typeof body.model === "string" ? body.model : DEFAULT_MODEL;
   if (!systemCore || !userTurn) {
     return NextResponse.json({ error: "missing prompt" }, { status: 400 });
+  }
+  if (systemCore.length > SYSTEM_CORE_MAX_CHARS || userTurn.length > USER_TURN_MAX_CHARS) {
+    return NextResponse.json({ error: "prompt_too_large" }, { status: 413 });
   }
   // Server owns model selection — a client cannot force an arbitrary (expensive)
   // model onto the server-side key.
@@ -149,12 +160,23 @@ export async function POST(req: NextRequest) {
     log("error", "anthropic_upstream", { status: res.status });
     return NextResponse.json({ error: "upstream", status: res.status }, { status: 502 });
   }
-  const data = (await res.json()) as { content?: { type: string; text?: string }[] };
-  const text = (data.content ?? [])
-    .filter((b) => b.type === "text")
-    .map((b) => b.text ?? "")
-    .join("\n")
-    .trim();
+  // A 200 whose body isn't the documented shape (truncated JSON, content not
+  // an array) must refund + 502 like any other upstream failure — an uncaught
+  // res.json() throw here would 500 AND silently burn the reserved draft.
+  let text: string;
+  try {
+    const data = (await res.json()) as { content?: { type: string; text?: string }[] };
+    text = (Array.isArray(data?.content) ? data.content : [])
+      .filter((b) => b && b.type === "text")
+      .map((b) => (typeof b.text === "string" ? b.text : ""))
+      .join("\n")
+      .trim();
+  } catch {
+    await refund();
+    metric("draft.upstream_error");
+    log("error", "anthropic_malformed_response");
+    return NextResponse.json({ error: "upstream_malformed" }, { status: 502 });
+  }
   if (!text) {
     await refund();
     metric("draft.empty");

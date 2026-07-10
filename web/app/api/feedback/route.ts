@@ -4,11 +4,12 @@
 // persistent here.
 
 import { AuthError, requireDevice, unauthorized } from "@/lib/connections/auth";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
-    const body = await req.json().catch(() => ({})) as { message?: string; meta?: string };
+    const body = await readJsonObject(req) as { message?: string; meta?: string };
     const message = (body.message ?? "").toString().slice(0, 5000).trim();
     if (!message) return Response.json({ error: "empty" }, { status: 400 });
 

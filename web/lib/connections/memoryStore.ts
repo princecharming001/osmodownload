@@ -131,6 +131,7 @@ interface MemoryState {
   oplogs: Map<string, OplogEntry[]>;         // deviceId → entries
   dedup: Map<string, Map<string, string>>;   // deviceId → (dedupKey → contentHash)
   seqs: Map<string, number>;                 // deviceId → last seq
+  evictedThrough: Map<string, number>;       // deviceId → highest seq the OOM cap evicted
   oauth: Map<string, unknown>;               // `${deviceId}:${platform}` → tokens
   outboxes: Map<string, WireMessage[]>;      // deviceId → sent messages
   licenses: Map<string, LicenseRecord>;      // deviceId → subscription/trial state
@@ -143,7 +144,7 @@ interface MemoryState {
 function freshState(): MemoryState {
   return {
     devices: new Map(), links: new Map(), connections: new Map(),
-    oplogs: new Map(), dedup: new Map(), seqs: new Map(),
+    oplogs: new Map(), dedup: new Map(), seqs: new Map(), evictedThrough: new Map(),
     oauth: new Map(), outboxes: new Map(),
     licenses: new Map(), usage: new Map(),
     magicLinks: new Map(), webSessions: new Map(),
@@ -270,10 +271,18 @@ class MemoryConnectionsStore implements ConnectionsStore {
     // OOM guard: bound the retained window (the oplog holds full message payloads;
     // on a long-lived instance it would grow without limit). The oldest entries
     // have the lowest seqs and have long since been pulled by any live device, so
-    // evicting them is safe; a device that somehow pulls from below the retained
-    // window simply re-pulls from 0 (idempotent, local-first). Cap is generous.
+    // evicting them is usually safe — but a client whose cursor sits BELOW the
+    // window would otherwise silently skip the evicted rows forever (its next
+    // pull jumps straight to the retained window with no signal). Record the
+    // highest evicted seq so pull() can flag the gap. Cap is generous.
     const cap = Number(process.env.OSMO_OPLOG_MAX ?? 20000);
-    if (oplog.length > cap) oplog.splice(0, oplog.length - cap);
+    if (oplog.length > cap) {
+      const evicted = oplog.splice(0, oplog.length - cap);
+      const through = evicted[evicted.length - 1].seq;
+      if (through > (this.s.evictedThrough.get(deviceId) ?? 0)) {
+        this.s.evictedThrough.set(deviceId, through);
+      }
+    }
 
     this.s.oplogs.set(deviceId, oplog);
     this.s.dedup.set(deviceId, dedup);
@@ -291,6 +300,15 @@ class MemoryConnectionsStore implements ConnectionsStore {
       epoch: this.s.epoch,
       maxSeq: this.s.seqs.get(deviceId) ?? 0,
     };
+    // Truncated-window signal: once the OOM cap has evicted entries, tell the
+    // client where the retained window starts — and flag a cursor that points
+    // below it (rows it never pulled are gone; this batch is not contiguous).
+    // A cursor of 0 is a deliberate full re-pull, not a gap.
+    const evictedThrough = this.s.evictedThrough.get(deviceId) ?? 0;
+    if (evictedThrough > 0) {
+      batch.oldestSeq = evictedThrough + 1;
+      if (since > 0 && since < evictedThrough) batch.reset = true;
+    }
     for (const e of page) {
       if (e.kind === "contact") batch.contacts.push(e.row as WireContact);
       else if (e.kind === "thread") batch.threads.push(e.row as WireThread);
@@ -350,6 +368,7 @@ class MemoryConnectionsStore implements ConnectionsStore {
     this.s.oplogs.delete(deviceId);
     this.s.dedup.delete(deviceId);
     this.s.seqs.delete(deviceId);
+    this.s.evictedThrough.delete(deviceId);
     this.s.outboxes.delete(deviceId);
     for (const key of [...this.s.oauth.keys()]) {
       if (key.startsWith(`${deviceId}:`)) this.s.oauth.delete(key);

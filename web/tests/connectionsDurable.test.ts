@@ -3,7 +3,8 @@
 
 import { beforeEach, describe, expect, it } from "vitest";
 import { resetStoreForTests, getStore } from "@/lib/connections/memoryStore";
-import { resetAccountsForTests } from "@/lib/accounts/store";
+import { resetAccountsForTests, getAccounts } from "@/lib/accounts/store";
+import type { Connection } from "@/lib/connections/types";
 import { resetEventsForTests } from "@/lib/connections/events";
 import { POST as register } from "@/app/api/device/register/route";
 import { POST as connectLink } from "@/app/api/connect/link/route";
@@ -61,5 +62,32 @@ describe("connection durability", () => {
       body: JSON.stringify({ action: "pause" }),
     }));
     expect(patchRes.status).toBe(200); // not 404 "unknown connection"
+  });
+
+  it("rehydration tolerates corrupt durable rows (unknown platform / null status) — skipped, not crashed", async () => {
+    const token = (await (await register()).json()).deviceToken as string;
+    const link = await (await connectLink(req("/api/connect/link", token, { platform: "linkedin" }))).json();
+    await mockComplete(req("/api/connect/mock/complete", undefined, { linkId: link.linkId }));
+    const deviceId = (await getAccounts().deviceByToken(token))!.id;
+
+    // Corrupt rows alongside the good one — a partially-written or hand-edited
+    // osmo_connections row must not 500 /api/accounts or reach the Swift
+    // client's strict enum decoder.
+    await getAccounts().upsertConnection({
+      id: "junk-1", deviceId, platform: "myspace", status: "connected",
+      displayName: "?", backfillProgress: 0, createdAt: new Date().toISOString(),
+    } as unknown as Connection);
+    await getAccounts().upsertConnection({
+      id: "junk-2", deviceId, platform: "linkedin", status: null,
+      displayName: null, backfillProgress: "NaN", createdAt: null,
+    } as unknown as Connection);
+
+    resetStoreForTests();   // force the durable rehydrate path
+    const res = await accounts(req("/api/accounts", token));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.connections).toHaveLength(1);           // only the valid row survives
+    expect(body.connections[0].platform).toBe("linkedin");
+    expect(body.connections[0].status).toBe("connected");
   });
 });

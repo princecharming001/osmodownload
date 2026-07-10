@@ -93,6 +93,9 @@ export interface AccountsStore {
   // survive redeploy (the in-memory set is empty after restart).
   upsertConnection(c: Connection): Promise<void>;
   connectionsForDevice(deviceId: string): Promise<Connection[]>;
+  /** Durable lookup by connection id — the webhook path's rehydration seam
+      (webhooks arrive keyed by account id, with no device in hand). */
+  connectionById(id: string): Promise<Connection | null>;
   deleteConnection(id: string): Promise<void>;
 
   // durable webhook idempotency (osmo_processed_events): returns true the FIRST
@@ -257,6 +260,10 @@ class MemoryAccountsStore implements AccountsStore {
   async upsertConnection(c: Connection): Promise<void> { this.m.conns.set(c.id, { ...c }); }
   async connectionsForDevice(deviceId: string): Promise<Connection[]> {
     return [...this.m.conns.values()].filter((c) => c.deviceId === deviceId);
+  }
+  async connectionById(id: string): Promise<Connection | null> {
+    const c = this.m.conns.get(id);
+    return c ? { ...c } : null;
   }
   async deleteConnection(id: string): Promise<void> { this.m.conns.delete(id); }
   async markEventProcessed(eventId: string, source: string): Promise<boolean> {
@@ -483,13 +490,18 @@ export class SupabaseAccountsStore implements AccountsStore {
       created_at: c.createdAt, updated_at: new Date().toISOString(),
     }, { onConflict: "id" });
   }
+  private mapConn = (r: any): Connection => ({
+    id: r.id, deviceId: r.device_id, platform: r.platform, status: r.status,
+    displayName: r.display_name ?? "", backfillProgress: r.backfill_progress ?? 0, createdAt: r.created_at,
+    lastSyncAt: r.last_sync_at ?? null, lastVerifiedAt: r.last_verified_at ?? null,
+  });
   async connectionsForDevice(deviceId: string): Promise<Connection[]> {
     const { data } = await this.sb.from("osmo_connections").select("*").eq("device_id", deviceId);
-    return (data ?? []).map((r: any): Connection => ({
-      id: r.id, deviceId: r.device_id, platform: r.platform, status: r.status,
-      displayName: r.display_name ?? "", backfillProgress: r.backfill_progress ?? 0, createdAt: r.created_at,
-      lastSyncAt: r.last_sync_at ?? null, lastVerifiedAt: r.last_verified_at ?? null,
-    }));
+    return (data ?? []).map(this.mapConn);
+  }
+  async connectionById(id: string): Promise<Connection | null> {
+    const { data } = await this.sb.from("osmo_connections").select("*").eq("id", id).maybeSingle();
+    return data ? this.mapConn(data) : null;
   }
   async deleteConnection(id: string): Promise<void> {
     await this.sb.from("osmo_connections").delete().eq("id", id);

@@ -165,9 +165,8 @@ struct TodayView: View {
     private func resolvedInsight(for card: QueueCard) -> String? {
         let intel = model.intel(forThread: card.threadID)
         if intel.openQuestion == true,
-           let last = try? model.store.lastMessage(inThread: card.threadID), !last.isFromMe {
-            let q = SnippetCleaner.clean(last.text, maxLength: 90)
-            if !q.isEmpty { return "They asked: “\(q)”" }
+           let q = model.queueRowMeta[card.threadID]?.lastInboundQuestion {
+            return "They asked: “\(q)”"
         }
         if let brief = model.insightByThread[card.threadID], !brief.isEmpty { return brief }
         return model.insightLine(forThread: card.threadID)
@@ -260,13 +259,10 @@ struct QueueCardRow: View {
 
     /// One-line last-message preview, cleaned; "You: " when it's yours.
     @ViewBuilder private var snippetLine: some View {
-        if let last = try? model.store.lastMessage(inThread: card.threadID) {
-            let cleaned = SnippetCleaner.clean(last.text, maxLength: 80)
-            if !cleaned.isEmpty {
-                Text((last.isFromMe ? "You: " : "") + cleaned)
-                    .font(DS.Typography.caption).foregroundStyle(DS.Colors.ink.opacity(0.75))
-                    .lineLimit(1)
-            }
+        if let snippet = model.queueRowMeta[card.threadID]?.snippet {
+            Text(snippet)
+                .font(DS.Typography.caption).foregroundStyle(DS.Colors.ink.opacity(0.75))
+                .lineLimit(1)
         }
     }
 
@@ -305,12 +301,8 @@ struct QueueCardRow: View {
         return "\(cleaned.isEmpty ? "x" : cleaned)-\(suffix)"
     }
 
-    /// One shared formatter — allocating per row per render is measurable churn.
-    private static let relativeFormatter = RelativeDateTimeFormatter()
-
     private var relativeTime: String? {
-        guard let last = try? model.store.lastMessage(inThread: card.threadID) else { return nil }
-        return Self.relativeFormatter.localizedString(for: last.sentAt, relativeTo: Date())
+        model.queueRowMeta[card.threadID]?.when
     }
 
     /// Today/overdue only — `.soon` doesn't earn a card-level chip (the flame
@@ -326,7 +318,7 @@ struct QueueCardRow: View {
     /// True once an autodraft has actually landed for this thread (isAuto is
     /// only ever set true by the autodraft path — a user save always clears it).
     private var draftReady: Bool {
-        (try? model.store.draftRecord(forThread: card.threadID))?.isAuto == true
+        model.queueRowMeta[card.threadID]?.draftReady == true
     }
 
     /// One tap to arm the same "nudge if no reply" reminder the thread's

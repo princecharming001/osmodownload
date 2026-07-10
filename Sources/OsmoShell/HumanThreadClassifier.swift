@@ -23,6 +23,14 @@ public enum HumanThreadClassifier {
     /// so old verdicts are recomputed instead of trusted forever.
     public static let version = 2
 
+    /// Hard bounds on scanned text, so a pathological thread (a 1MB pasted blob,
+    /// thousands of sampled messages) can never make classification unbounded.
+    /// Every phrase/regex signal the rules look for lives in the first couple of
+    /// kilobytes of a message; scanning more adds cost, not evidence.
+    static let maxScannedTexts = 40
+    static let maxScannedChars = 2048
+    static let maxScannedSubjectChars = 512
+
     /// Everything the classifier needs, pulled from the store by the app. Kept a
     /// plain value so tests construct it directly (no DB, no models required).
     public struct HumanSignals: Sendable {
@@ -86,7 +94,8 @@ public enum HumanThreadClassifier {
     }
 
     public static func classify(_ s: HumanSignals) -> Verdict {
-        let texts = s.inboundTexts.map { $0.lowercased() }
+        let texts = s.inboundTexts.prefix(maxScannedTexts)
+            .map { String($0.prefix(maxScannedChars)).lowercased() }
         let anyOTP = texts.contains(where: looksLikeOTP)
         let anyMarketing = texts.contains(where: looksLikeMarketing)
         let handles = s.counterpartyHandles
@@ -119,12 +128,25 @@ public enum HumanThreadClassifier {
         }
 
         // ---- Additive non-human evidence.
+        // The surfaced reason is the HEAVIEST single rule that fired (ties keep
+        // the earliest) — "service email address" explains a hidden thread far
+        // better than a +1 nudge like "one-way messages" that happened to fire
+        // first.
         var score = 0
         var reason: String?
-        func add(_ n: Int, _ why: String) { score += n; if reason == nil { reason = why } }
+        var reasonWeight = 0
+        func add(_ n: Int, _ why: String) {
+            score += n
+            if n > reasonWeight { reasonWeight = n; reason = why }
+        }
 
         if !handles.isEmpty && handles.allSatisfy(isShortcode) { add(2, "texted from a shortcode") }
-        if handles.contains(where: { isAlphaSender($0, platform: s.platform) }) {
+        // An alpha sender id ("VERIFY", "unknown") is machine-shaped — but a
+        // handle the address book actually resolved to a merged person is a
+        // person on an odd carrier id, not an A2P blast. Real A2P senders are
+        // never in Contacts, so this damp costs nothing on the true positives.
+        if handles.contains(where: { isAlphaSender($0, platform: s.platform) }),
+           !s.hasResolvedPerson {
             add(2, "automated sender ID")
         }
         if anyOTP { add(3, "verification code") }
@@ -170,7 +192,8 @@ public enum HumanThreadClassifier {
         if s.platform == .gmail, !s.userReplied, !s.userEverMessagedSender, s.inboundCount >= 1 {
             add(personLike ? 1 : 2, "no prior correspondence")
         }
-        if let subject = s.subjectOrTitle?.lowercased(), !subject.isEmpty {
+        if let subject = s.subjectOrTitle.map({ String($0.prefix(maxScannedSubjectChars)).lowercased() }),
+           !subject.isEmpty {
             // R3: a templated subject line ("Registration approved for…",
             // "Your X is ready") — damped by casual markers inside the helper,
             // and skipped entirely for a person-like sender: "Thanks for the

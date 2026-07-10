@@ -6,6 +6,7 @@ import { getStore } from "@/lib/connections/memoryStore";
 import { publish } from "@/lib/connections/events";
 import { backfillConnection } from "@/lib/connections/backfill";
 import type { Connection } from "@/lib/connections/types";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   // Shared-secret gate: when configured, an unauthenticated caller can't bind an
@@ -19,7 +20,7 @@ export async function POST(req: Request): Promise<Response> {
     if (provided !== secret) return Response.json({ error: "bad secret" }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => ({}));
+  const body = await readJsonObject(req);
   const linkId = (body.name ?? body.linkId) as string | undefined;
   const accountId = body.account_id as string | undefined;
   if (!linkId || !accountId) return Response.json({ ok: true });   // never error at Unipile

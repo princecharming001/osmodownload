@@ -14,11 +14,12 @@ import { backfillX } from "@/lib/oauth/xBackfill";
 import { freshOAuthToken } from "@/lib/oauth/tokens";
 import { isLiveOAuth } from "@/lib/oauth/providers";
 import type { Platform } from "@/lib/connections/types";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
-    const body = await req.json().catch(() => ({})) as { platform?: Platform };
+    const body = await readJsonObject(req) as { platform?: Platform };
     const platform = body.platform;
     if (!platform) return Response.json({ error: "platform required" }, { status: 400 });
 

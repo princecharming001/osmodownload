@@ -11,13 +11,14 @@ import { getUnipile } from "@/lib/unipile/client";
 import { sendGmail, sendSlack, sendX } from "@/lib/oauth/send";
 import { isLiveOAuth } from "@/lib/oauth/providers";
 import { freshOAuthToken } from "@/lib/oauth/tokens";
-import { recallSend, rememberSend } from "@/lib/connections/sendIdempotency";
+import { recallSend, sendOnce } from "@/lib/connections/sendIdempotency";
 import type { SendRequest, SendResponse, WireMessage } from "@/lib/connections/types";
+import { readJsonObject } from "@/lib/http";
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
-    const body = await req.json().catch(() => ({})) as Partial<SendRequest>;
+    const body = await readJsonObject(req) as Partial<SendRequest>;
     const { platform, platformThreadID, text, idempotencyKey } = body;
     if (!platform || !platformThreadID || !text?.trim()) {
       return Response.json({ error: "platform, platformThreadID, text required" }, { status: 400 });
@@ -41,8 +42,8 @@ export async function POST(req: Request): Promise<Response> {
     // Route to the right provider. Gmail/Slack use their own APIs with the stored
     // OAuth token (Unipile only covers LinkedIn/WhatsApp/Instagram). In keyless
     // mock mode every platform falls through to the mock sender.
-    let sent: { messageId: string };
-    try {
+    const doSend = async (): Promise<WireMessage> => {
+      let sent: { messageId: string };
       if (platform === "gmail" && isLiveOAuth("gmail")) {
         sent = await sendGmail(await freshOAuthToken(device.id, "gmail"), platformThreadID, text);
       } else if (platform === "slack" && isLiveOAuth("slack")) {
@@ -52,28 +53,36 @@ export async function POST(req: Request): Promise<Response> {
       } else {
         sent = await getUnipile().sendMessage(connection.id, platformThreadID, text);
       }
+      const message: WireMessage = {
+        platform,
+        platformMessageID: sent.messageId,
+        platformThreadID,
+        senderHandle: null,
+        isFromMe: true,
+        text,
+        sentAt: new Date().toISOString(),
+        readAt: null,
+      };
+      // Record in the oplog (so other devices / re-pulls see it) + mock outbox.
+      const seq = store.appendRows(device.id, { messages: [message] });
+      store.recordOutbound(device.id, message);
+      if (seq > 0) publish(device.id, { type: "sync.dirty", seq });
+      return message;
+    };
+
+    let message: WireMessage;
+    try {
+      // sendOnce covers the CONCURRENT double-POST too (both requests in
+      // flight before either completed): the second call awaits the first's
+      // in-flight promise instead of delivering a duplicate to the recipient.
+      message = idempotencyKey
+        ? await sendOnce(device.id, idempotencyKey, doSend)
+        : await doSend();
     } catch (err) {
       // Provider rejected (bad thread, outside session window, revoked token) —
       // a real error the client should surface, NOT queue-and-retry forever.
       return Response.json({ error: `send rejected: ${(err as Error).message}` }, { status: 422 });
     }
-
-    const message: WireMessage = {
-      platform,
-      platformMessageID: sent.messageId,
-      platformThreadID,
-      senderHandle: null,
-      isFromMe: true,
-      text,
-      sentAt: new Date().toISOString(),
-      readAt: null,
-    };
-
-    // Record in the oplog (so other devices / re-pulls see it) + mock outbox.
-    const seq = store.appendRows(device.id, { messages: [message] });
-    store.recordOutbound(device.id, message);
-    if (seq > 0) publish(device.id, { type: "sync.dirty", seq });
-    if (idempotencyKey) rememberSend(device.id, idempotencyKey, message);
 
     const res: SendResponse = { message };
     return Response.json(res);

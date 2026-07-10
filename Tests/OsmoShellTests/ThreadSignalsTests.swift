@@ -101,7 +101,9 @@ struct ThreadSignalsTests {
 
     @Test("A timed deadline infers .schedule action + urgency by distance")
     func deadlineInfersSchedule() {
-        let now = Date()
+        // Pin "now" to mid-morning so "tonight" (8pm) is still ahead —
+        // a wall-clock Date() made this test fail when run after 8pm.
+        let now = Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: Date())!
         let intel = ThreadSignals.read(theirLastText: "can we meet tonight?", lastFromMe: false,
                                        lastMessageAt: now, now: now)
         #expect(intel.action == .schedule)

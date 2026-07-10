@@ -11,15 +11,22 @@ public enum BackendBatchNormalizer {
     public struct Result: Sendable {
         public var batch: NormalizedBatch
         public var skippedUnknownPlatform: Int
+        /// Malformed rows dropped defensively (e.g. a contact with an empty
+        /// handle — it can't key an identity and would only pollute the store).
+        public var skippedInvalid: Int
     }
 
     public static func normalize(_ wire: WireBatch) -> Result {
         var skipped = 0
+        var invalid = 0
         let epoch = Date(timeIntervalSince1970: 0)
 
         var contacts: [OsmoContact] = []
         for w in wire.contacts {
             guard let platform = Platform(rawValue: w.platform) else { skipped += 1; continue }
+            guard !w.handle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                invalid += 1; continue
+            }
             contacts.append(OsmoContact(
                 id: OsmoContact.makeID(platform: platform, handle: w.handle),
                 updatedAt: epoch, deviceSeq: 0,
@@ -49,7 +56,13 @@ public enum BackendBatchNormalizer {
                 updatedAt: epoch, deviceSeq: 0,
                 platform: platform, platformMessageID: w.platformMessageID,
                 threadID: OsmoThread.makeID(platform: platform, platformThreadID: w.platformThreadID),
-                senderContactID: w.senderHandle.map { OsmoContact.makeID(platform: platform, handle: $0) },
+                // An empty sender handle can't reference a contact row (empty-
+                // handle contacts are skipped above) — minting an id for it
+                // would FK-fail the whole message on ingest. Treat it as nil,
+                // the same as a wire message with no sender at all.
+                senderContactID: w.senderHandle
+                    .flatMap { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : $0 }
+                    .map { OsmoContact.makeID(platform: platform, handle: $0) },
                 isFromMe: w.isFromMe, text: w.text,
                 sentAt: w.sentAt, readAt: w.readAt,
                 inReplyToMessageID: w.replyToMessageID.map {
@@ -86,6 +99,6 @@ public enum BackendBatchNormalizer {
 
         return Result(batch: NormalizedBatch(contacts: contacts, threads: threads, messages: messages,
                                              reactionAdds: reactionAdds, attachmentAdds: attachmentAdds),
-                      skippedUnknownPlatform: skipped)
+                      skippedUnknownPlatform: skipped, skippedInvalid: invalid)
     }
 }
