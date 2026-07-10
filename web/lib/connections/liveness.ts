@@ -20,6 +20,7 @@ import type { Connection, Platform } from "./types";
 import { accountIsHealthy, getUnipile } from "../unipile/client";
 import { isLiveOAuth } from "../oauth/providers";
 import { freshOAuthToken } from "../oauth/tokens";
+import { getOAuthTokens } from "../oauth/oauthStore";
 
 const TTL_MS = Number(process.env.OSMO_VERIFY_TTL_MS ?? 5 * 60_000);
 const FAILURE_TTL_MS = 60_000;   // short penalty so a down upstream isn't hammered
@@ -45,11 +46,22 @@ type OAuthVerdict = "healthy" | "unauthorized" | "unknown";
     authoritative auth failure returns "unauthorized"; a timeout/5xx (or a
     missing/unreadable token bundle) is "unknown" — never a downgrade. */
 async function verifyOAuthAccount(deviceId: string, platform: "gmail" | "slack"): Promise<OAuthVerdict> {
+  // A HEALTHY read that finds no token bundle at all is authoritative: the
+  // connection cannot sync, period (the pre-durable-mirror deployments lost
+  // every OAuth token on restart while the connection row kept saying
+  // "connected" — this is what finally surfaces that as Reconnect). A store
+  // READ FAILURE, by contrast, stays "unknown".
+  try {
+    const stored = await getOAuthTokens(deviceId, platform);
+    if (!stored) return "unauthorized";
+  } catch {
+    return "unknown";   // token-store read failure ≠ an auth verdict
+  }
   let bundle: Record<string, unknown>;
   try {
     bundle = await freshOAuthToken(deviceId, platform);
   } catch {
-    return "unknown";   // token-store read failure ≠ an auth verdict
+    return "unknown";   // refresh-path failure ≠ an auth verdict
   }
   const token = platform === "slack"
     ? (bundle as { authed_user?: { access_token?: string } }).authed_user?.access_token

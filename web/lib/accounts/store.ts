@@ -534,7 +534,16 @@ const g = globalThis as unknown as { __osmoAccounts?: AccountsStore; __osmoAccou
 
 /** True when the real cloud DB is wired (both env vars present). */
 export function accountsAreLive(): boolean {
-  return !!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+  if (!(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY)) return false;
+  // A keyless/mock boot (dev server with provider creds stripped, tests, the
+  // AX probe harness) must NEVER attach the production durable store: its
+  // fire-and-forget mirror writes/deletes would corrupt real rows. Durable is
+  // for production, an explicit opt-in, or a genuinely live local stack.
+  if (process.env.NODE_ENV === "production") return true;
+  if (process.env.OSMO_ALLOW_DURABLE_DEV === "1") return true;
+  const liveUnipile = !!(process.env.UNIPILE_DSN && process.env.UNIPILE_API_KEY);
+  const liveGoogle = !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET);
+  return liveUnipile || liveGoogle;
 }
 
 export function getAccounts(): AccountsStore {
