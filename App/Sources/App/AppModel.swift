@@ -1122,7 +1122,10 @@ final class AppModel: ObservableObject {
     }
 
     func runSearch() {
-        searchResults = searchText.isEmpty ? [] : ((try? store.search(searchText)) ?? [])
+        // Trimmed: a whitespace-only query must not swap the whole detail pane
+        // for a "0 results" takeover (one stray space blanked the entire app).
+        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        searchResults = q.isEmpty ? [] : ((try? store.search(q)) ?? [])
     }
 
     /// Whether a thread reads as a genuine human conversation (defaults true for
@@ -1324,18 +1327,25 @@ final class AppModel: ObservableObject {
 
         guard isPro else { activeSheet = .paywall; return }
         askBusy = true
-        let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .none
-        let snippets = ((try? store.search(q, limit: 30)) ?? []).map { m -> String in
-            let members = (try? store.contacts(inThread: m.threadID)) ?? []
-            let title = (try? store.thread(id: m.threadID)).map { threadTitle($0, members: members) } ?? "?"
-            return "[\(m.platform.displayName) · \(title) · \(df.string(from: m.sentAt))] \(m.isFromMe ? "You: " : "")\(String(m.text.prefix(160)))"
-        }
+        let snippets = askSnippets(for: q)
         let ctx = AskContext(question: q, snippets: snippets, people: peopleDirectory(),
                              about: onboardingProfile.promptPreamble)
         Task { [weak self] in
             guard let self else { return }
             do {
-                let answer = try await self.askService.ask(ctx)
+                // Hard deadline: a hung request must never wedge askBusy —
+                // a stuck true disables the input forever ("chat stopped
+                // working"), which is strictly worse than an error bubble.
+                let answer = try await withThrowingTaskGroup(of: String.self) { group in
+                    group.addTask { try await self.askService.ask(ctx) }
+                    group.addTask {
+                        try await Task.sleep(nanoseconds: 60_000_000_000)
+                        throw URLError(.timedOut)
+                    }
+                    guard let first = try await group.next() else { throw URLError(.timedOut) }
+                    group.cancelAll()
+                    return first
+                }
                 await MainActor.run {
                     self.askBusy = false
                     self.askExchanges.append(AskExchange(q: q, a: answer))
@@ -1390,6 +1400,61 @@ final class AppModel: ObservableObject {
 
     /// One compact line per person — lets "who do I know…" questions work even
     /// when full-text search can't find anything.
+    /// Retrieval for Ask, in three lanes. FTS on the RAW question is useless
+    /// for the flagship shape ("what did Niki and I last talk about?") — FTS5
+    /// ANDs every token, and no message contains the question's boilerplate.
+    /// 1. PERSON lane: names in the question → that person's threads' recent
+    ///    messages (the actual conversation, not keyword hits).
+    /// 2. KEYWORD lane: FTS over content words only (stopwords stripped).
+    /// 3. RECENCY lane: when both are thin, the last few days across top
+    ///    threads — "how are my relationships doing" gets real material.
+    private func askSnippets(for q: String) -> [String] {
+        let df = DateFormatter(); df.dateStyle = .short; df.timeStyle = .none
+        var seen = Set<UUID>()
+        var out: [String] = []
+
+        func add(_ m: OsmoMessage) {
+            guard seen.insert(m.id).inserted else { return }
+            let members = (try? store.contacts(inThread: m.threadID)) ?? []
+            let title = (try? store.thread(id: m.threadID)).map { threadTitle($0, members: members) } ?? "?"
+            out.append("[\(m.platform.displayName) · \(title) · \(df.string(from: m.sentAt))] \(m.isFromMe ? "You: " : "")\(String(m.text.prefix(160)))")
+        }
+
+        // 1. Person lane.
+        let qLower = q.lowercased()
+        let mentioned = people.filter { person in
+            person.name.lowercased().split(whereSeparator: { !$0.isLetter }).contains { token in
+                token.count >= 3 && qLower.contains(token)
+            }
+        }.prefix(2)
+        for person in mentioned {
+            for thread in threads(forPerson: person.id).prefix(3) {
+                for m in ((try? store.recentMessages(inThread: thread.id, limit: 12)) ?? []) { add(m) }
+            }
+        }
+
+        // 2. Keyword lane.
+        let stop: Set<String> = ["what", "did", "and", "the", "about", "talk", "last", "when",
+                                 "who", "how", "are", "was", "were", "with", "have", "has",
+                                 "does", "you", "your", "our", "for", "that", "this", "she",
+                                 "him", "her", "they", "them", "should", "could", "would",
+                                 "tell", "say", "said", "know", "anything", "everything"]
+        let keywords = qLower.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+            .map(String.init)
+            .filter { $0.count >= 3 && !stop.contains($0) }
+        for kw in keywords.prefix(4) {
+            for m in ((try? store.search(kw, limit: 8)) ?? []) { add(m) }
+        }
+
+        // 3. Recency lane — only when the specific lanes came back thin.
+        if out.count < 8 {
+            for card in queue.prefix(4) {
+                for m in ((try? store.recentMessages(inThread: card.threadID, limit: 6)) ?? []) { add(m) }
+            }
+        }
+        return Array(out.prefix(60))
+    }
+
     private func peopleDirectory() -> [String] {
         people.prefix(60).map { row in
             var bits = ["\(row.name)",
@@ -1813,8 +1878,13 @@ final class AppModel: ObservableObject {
             guard let last = try? store.lastMessage(inThread: thread.id) else { return nil }
             let contacts = (try? store.contacts(inThread: thread.id)) ?? []
             let personID = contacts.first?.personID
-            let name = (thread.title?.isEmpty == false ? thread.title : nil)
-                ?? contacts.first?.displayLabel ?? "New conversation"
+            // PERSON name first for 1:1s — an email thread's title is its
+            // SUBJECT, and "ceiling tiles is waiting on you" is not a person.
+            // Groups keep the title (the group's name IS the identity).
+            let personLabel = contacts.first?.displayLabel
+            let titleLabel = thread.title?.isEmpty == false ? thread.title : nil
+            let name = (thread.isGroup ? (titleLabel ?? personLabel)
+                                       : (personLabel ?? titleLabel)) ?? "New conversation"
             // Cache an avatar under the person/thread key for buildPeople.
             if let avatar = contacts.first(where: { $0.avatarData != nil })?.avatarData {
                 avatarByKey[personID ?? thread.id] = avatar

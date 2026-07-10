@@ -189,7 +189,7 @@ struct MainWindow: View {
     }
 
     @ViewBuilder private var detail: some View {
-        if !model.searchText.isEmpty {
+        if !model.searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             SearchResultsView()
         } else {
             switch model.section {

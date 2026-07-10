@@ -127,14 +127,14 @@ struct WhatsNewView: View {
 /// Release highlights. Update per version.
 enum Changelog {
     static let current: [(icon: String, title: String, detail: String)] = [
-        ("checkmark.seal", "Accounts & secure billing",
-         "Sign in with Apple, manage your plan, and a subscription that's tamper-resistant end to end."),
-        ("photo.on.rectangle", "Media everywhere",
-         "Photos, videos, files, and shared posts now render inline across every platform."),
-        ("bolt.badge.clock", "Autodraft on arrival",
-         "Osmo drafts a reply to priority conversations before you even open them."),
-        ("person.crop.circle", "Your voice profile",
-         "See how you actually text — and get message analysis before you hit send."),
+        ("arrow.triangle.2.circlepath", "Sync that self-heals",
+         "Messages keep flowing across restarts and reconnects — no more silent stalls, and connection status now tells the truth."),
+        ("bubble.left.and.text.bubble.right", "Ask, fixed",
+         "Ask about your conversations and get a real answer from your own data — the demo-mode mix-up is gone."),
+        ("macwindow", "Smoother window",
+         "Drag from anywhere along the top, no snap-back or stutter, even mid-sync."),
+        ("checkmark.shield", "Sturdier everywhere",
+         "Dozens of edge cases hardened — odd names, huge inboxes, flaky networks — so it holds up on real data."),
     ]
 }
 

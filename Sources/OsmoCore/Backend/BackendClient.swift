@@ -86,7 +86,18 @@ public actor BackendClient {
 
     /// True once registered against a keyless backend (drives the demo banner).
     public func isMockMode() async -> Bool {
-        (try? await registerIfNeeded())?.mode == "mock"
+        // Mode is a property of the SERVER, not the stored credential — a
+        // device registered once against a keyless dev server used to carry
+        // mode:"mock" forever, keeping canned demo answers even against
+        // production. Ask the backend; fall back to the stored flag offline.
+        struct VersionInfo: Decodable { let mode: String? }
+        if let (data, response) = try? await transport(request("GET", "/api/version")),
+           response.statusCode == 200,
+           let info = try? JSONDecoder.osmoWire.decode(VersionInfo.self, from: data),
+           let mode = info.mode {
+            return mode == "mock"
+        }
+        return (try? await registerIfNeeded())?.mode == "mock"
     }
 
     /// The current device token, if any — memory first, then the Keychain.

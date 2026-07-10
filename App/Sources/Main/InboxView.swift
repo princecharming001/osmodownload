@@ -39,11 +39,39 @@ struct InboxView: View {
                                        : "Only automated messages left — use Show all to see them.")
                 } else {
                     List(selection: $model.selectedThreadID) {
-                        ForEach(filteredThreads) { thread in
+                        ForEach(visibleThreads) { thread in
                             ThreadRow(thread: thread).tag(thread.id)
+                        }
+                        // Page the list: rendering EVERY thread makes the
+                        // window's accessibility tree scale with mailbox size
+                        // (thousands of rows -> multi-second AX walks, sluggish
+                        // VoiceOver, slow first paint on big stores).
+                        if filteredThreads.count > visibleCount {
+                            Button {
+                                visibleCount += Self.pageSize
+                            } label: {
+                                Text("Show \(min(Self.pageSize, filteredThreads.count - visibleCount)) more…")
+                                    .font(DS.Typography.captionEm)
+                                    .foregroundStyle(DS.Colors.accent)
+                                    .frame(maxWidth: .infinity, alignment: .center)
+                                    .padding(.vertical, DS.Space.s)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityIdentifier("inbox.showMore")
                         }
                     }
                     .listStyle(.inset)
+                    .onChange(of: model.inboxPlatformFilter) { _, _ in
+                        visibleCount = Self.pageSize
+                    }
+                    .onChange(of: model.selectedThreadID, initial: true) { _, id in
+                        // A selection landing beyond the rendered page (queue tap,
+                        // search jump) must grow the page or the row won't exist.
+                        guard let id, let idx = filteredThreads.firstIndex(where: { $0.id == id }),
+                              idx >= visibleCount else { return }
+                        visibleCount = ((idx / Self.pageSize) + 1) * Self.pageSize
+                    }
                 }
             }
         }
@@ -55,6 +83,15 @@ struct InboxView: View {
     /// Platforms that actually have threads, in a stable order. Computed over the
     /// human-filtered set so a chip only appears when it has real conversations.
     private var presentPlatforms: [Platform] { InboxFilter.present(in: model.humanFilteredThreads) }
+
+    private static let pageSize = 60
+    @State private var visibleCount = pageSize
+
+    /// The rendered page of the filtered list; selection jumps and filter
+    /// changes reset paging so the target row is always reachable.
+    private var visibleThreads: ArraySlice<OsmoThread> {
+        filteredThreads.prefix(visibleCount)
+    }
 
     private var filteredThreads: [OsmoThread] {
         InboxFilter.apply(model.inboxPlatformFilter, to: model.humanFilteredThreads)
