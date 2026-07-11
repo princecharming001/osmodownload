@@ -6,6 +6,25 @@ import OsmoCore
 @Suite("AI client: keyless mock, proxy shaping, router, service (O5)")
 struct GeneratorTests {
 
+    /// Records the purpose it was handed, to prove the router forwards it.
+    final class PurposeSpy: Generator, @unchecked Sendable {
+        var seenPurpose: String? = nil
+        var purposeWasSet = false
+        func generate(systemCore: String, userTurn: String, count: Int) async throws -> String { "x" }
+        func generate(systemCore: String, userTurn: String, count: Int, purpose: String?) async throws -> String {
+            seenPurpose = purpose; purposeWasSet = true; return "x"
+        }
+    }
+
+    @Test("GeneratorRouter forwards `purpose` to the live generator (not dropped)")
+    func routerForwardsPurpose() async throws {
+        let spy = PurposeSpy()
+        let router = GeneratorRouter(live: spy)
+        _ = try await router.generate(systemCore: "c", userTurn: "u", count: 1, purpose: "decision")
+        #expect(spy.purposeWasSet)
+        #expect(spy.seenPurpose == "decision")
+    }
+
     @Test("MockGenerator is keyless and yields three parseable slants")
     func mock() async throws {
         let raw = try await MockGenerator().generate(

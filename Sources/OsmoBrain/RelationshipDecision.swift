@@ -30,6 +30,15 @@ public struct RelationshipDecision: Equatable, Sendable {
             default: return false
             }
         }
+
+        /// The INFERRED sensitive kinds — read from ambiguous messages, so a wrong
+        /// reading is awful. These need corroboration + high confidence + a hedged
+        /// QUESTION. Birthday/anniversary are also sensitive but are anchored to a
+        /// FACTUAL stored date, so they're licensed by that date alone (a hedged
+        /// "did something happen with your birthday?" would be nonsense).
+        public var requiresHedgedCorroboration: Bool {
+            self == .condolence || self == .celebrate
+        }
     }
 
     public var action: Action

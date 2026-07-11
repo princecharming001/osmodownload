@@ -138,13 +138,22 @@ public struct GeneratorRouter: Generator {
     }
 
     public func generate(systemCore: String, userTurn: String, count: Int) async throws -> String {
+        try await generate(systemCore: systemCore, userTurn: userTurn, count: count, purpose: nil)
+    }
+
+    /// MUST forward `purpose` to the live generator — the default protocol
+    /// extension drops it, which would silently strip the brain's "decision"
+    /// purpose on the whole real client path (defeating the server kill-switch,
+    /// the non-draft quota lane, and the larger max_tokens).
+    public func generate(systemCore: String, userTurn: String, count: Int,
+                         purpose: String?) async throws -> String {
         if let live {
-            do { return try await live.generate(systemCore: systemCore, userTurn: userTurn, count: count) }
+            do { return try await live.generate(systemCore: systemCore, userTurn: userTurn, count: count, purpose: purpose) }
             catch GenerationError.notConfigured { /* not set up → mock */ }
             catch GenerationError.network where mockOnNetworkError { /* proxy unreachable → mock */ }
             catch is URLError where mockOnNetworkError { /* same, from a live gen that didn't map it */ }
         }
-        return try await mock.generate(systemCore: systemCore, userTurn: userTurn, count: count)
+        return try await mock.generate(systemCore: systemCore, userTurn: userTurn, count: count, purpose: purpose)
     }
 }
 

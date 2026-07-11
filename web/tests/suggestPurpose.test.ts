@@ -86,3 +86,29 @@ describe("suggest — background purposes do NOT consume the draft quota", () =>
     expect(sentBody.max_tokens).toBe(1200);
   });
 });
+
+describe("suggest — no ungated background bypass (review regression pins)", () => {
+  it('an unknown/speculative purpose ("mine") is METERED like a draft, not a free lane', async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    vi.stubGlobal("fetch", vi.fn(anthropicOk));
+    const token = await registered();
+    // "mine" is NOT a background lane — it must decrement the draft quota, so a
+    // registered device can't skip the weekly cap by tagging calls "mine".
+    const res = await suggest(npost({ systemCore: "x", userTurn: "Them: hi", purpose: "mine" }, token));
+    expect(res.headers.get("x-osmo-drafts-remaining")).toBe(String(FREE_DRAFTS_PER_WEEK - 1));
+  });
+
+  it("a prototype-key purpose (\"toString\") falls back to 700 and stays metered, no 500", async () => {
+    process.env.ANTHROPIC_API_KEY = "sk-test";
+    let sentBody: any = null;
+    vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+      sentBody = JSON.parse(init.body as string);
+      return anthropicOk();
+    }));
+    const token = await registered();
+    const res = await suggest(npost({ systemCore: "x", userTurn: "Them: hi", purpose: "toString" }, token));
+    expect(res.status).toBe(200);
+    expect(sentBody.max_tokens).toBe(700);   // safe fallback, not an inherited function
+    expect(res.headers.get("x-osmo-drafts-remaining")).toBe(String(FREE_DRAFTS_PER_WEEK - 1));
+  });
+});

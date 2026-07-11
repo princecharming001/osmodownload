@@ -38,11 +38,23 @@ public struct DecisionCandidate: Equatable, Sendable {
     public var score: Int
     public var inputHash: String
     public var isSensitive: Bool
+    /// Which sensitive gesture kinds the real evidence LICENSES — a corroborated
+    /// loss licenses `.condolence`, a corroborated celebration `.celebrate`, an
+    /// upcoming stored birthday `.birthday`, etc. The brain's output is held to
+    /// this: it can't answer a loss with a "celebrate", and can't invent a
+    /// birthday gesture with no date behind it.
+    public var allowedSensitiveKinds: Set<RelationshipDecision.GestureKind>
     public var context: String
 }
 
 public enum DecisionGate {
     public struct Config: Sendable {
+        /// Max candidates returned per `evaluate()` call. NOTE: this bounds ONE
+        /// run, not a true rolling day — successive runs drain different threads
+        /// (dedup keeps a decided state from re-billing for its TTL). A real
+        /// per-day spend ceiling is P6's DecisionBudget; until then the shadow
+        /// runner's 30-min throttle + 24h dedup bound first-day spend to roughly
+        /// the eligible-thread count, not this number.
         public var dailyBudget: Int
         public var hardCap: Int
         public var dateHorizon: TimeInterval
@@ -105,7 +117,9 @@ public enum DecisionGate {
             candidates.append(DecisionCandidate(
                 threadID: m.threadID, personID: m.personID, displayName: m.displayName,
                 isGroup: m.isGroup, triggers: triggers, score: score, inputHash: hash,
-                isSensitive: isSensitive, context: m.decisionContext(now: now)))
+                isSensitive: isSensitive,
+                allowedSensitiveKinds: allowedSensitiveKinds(m, now: now, config: config),
+                context: m.decisionContext(now: now)))
         }
 
         // Deterministic order: score desc, then threadID string asc (stable —
@@ -187,6 +201,27 @@ public enum DecisionGate {
         }
 
         return out
+    }
+
+    /// Which sensitive gesture kinds the evidence licenses. Corroborated
+    /// occasions license the inferred kinds (loss→condolence, celebration→
+    /// celebrate); an upcoming STORED birthday/anniversary licenses those.
+    private static func allowedSensitiveKinds(_ m: RelationshipModel, now: Date,
+                                              config: Config) -> Set<RelationshipDecision.GestureKind> {
+        var allowed: Set<RelationshipDecision.GestureKind> = []
+        if let occ = m.sensitiveOccasion,
+           occ.corroborationCount >= config.minSensitiveCorroboration,
+           occ.subjectIsParticipant {
+            if occ.kind == .possibleLoss { allowed.insert(.condolence) }
+            if occ.kind == .possibleCelebration { allowed.insert(.celebrate) }
+        }
+        for d in m.importantDates {
+            guard let next = d.nextOccurrence(after: now),
+                  next >= now, next.timeIntervalSince(now) <= config.dateHorizon else { continue }
+            if d.kind == .birthday { allowed.insert(.birthday) }
+            if d.kind == .anniversary { allowed.insert(.anniversary) }
+        }
+        return allowed
     }
 
     /// Cluster-aware total: MAX within each cluster, summed across clusters.

@@ -49,50 +49,77 @@ struct DecisionBrainTests {
 
     // MARK: enforce — the safety backstop
 
-    @Test("A well-supported hedged condolence on a sensitive candidate SURVIVES")
+    @Test("A well-supported hedged condolence LICENSED by a corroborated loss SURVIVES")
     func sensitiveSurvivesWhenValid() {
         let d = decision(.gesture(kind: .condolence, occasion: "her dad",
                                   framing: "Did something happen with your dad?"),
                          conf: 0.85, evidence: ["she said he passed away", "quiet for a week"])
-        let out = DecisionBrain.enforce(d, candidateIsSensitive: true)
+        let out = DecisionBrain.enforce(d, allowedSensitiveKinds: [.condolence])
         if case .gesture = out.action {} else { Issue.record("should have survived") }
     }
 
-    @Test("A sensitive gesture on a NON-sensitive candidate is downgraded to nothing")
-    func sensitiveDowngradedWhenCandidateNotSensitive() {
+    @Test("A sensitive gesture whose kind isn't licensed is downgraded to nothing")
+    func sensitiveDowngradedWhenKindNotAllowed() {
         let d = decision(.gesture(kind: .condolence, occasion: "x",
                                   framing: "Did something happen?"),
                          conf: 0.9, evidence: ["a", "b"])
-        #expect(DecisionBrain.enforce(d, candidateIsSensitive: false).action == .nothing)
+        #expect(DecisionBrain.enforce(d, allowedSensitiveKinds: []).action == .nothing)
     }
 
-    @Test("Low confidence downgrades a sensitive gesture")
+    @Test("A corroborated LOSS does NOT license a CELEBRATE gesture (wrong register)")
+    func lossDoesNotLicenseCelebrate() {
+        // allowed = [.condolence] (a loss was corroborated) but the model emitted
+        // a celebrate gesture — must be downgraded, not surfaced as a celebration.
+        let d = decision(.gesture(kind: .celebrate, occasion: "x", framing: "Did something great happen?"),
+                         conf: 0.95, evidence: ["a", "b"])
+        #expect(DecisionBrain.enforce(d, allowedSensitiveKinds: [.condolence]).action == .nothing)
+    }
+
+    @Test("Low confidence downgrades an inferred sensitive gesture")
     func lowConfidenceDowngrades() {
         let d = decision(.gesture(kind: .condolence, occasion: "x", framing: "Did something happen?"),
                          conf: 0.5, evidence: ["a", "b"])
-        #expect(DecisionBrain.enforce(d, candidateIsSensitive: true).action == .nothing)
+        #expect(DecisionBrain.enforce(d, allowedSensitiveKinds: [.condolence]).action == .nothing)
     }
 
-    @Test("Too little evidence downgrades a sensitive gesture")
+    @Test("Too little evidence downgrades an inferred sensitive gesture")
     func thinEvidenceDowngrades() {
         let d = decision(.gesture(kind: .celebrate, occasion: "x", framing: "Did something great happen?"),
                          conf: 0.9, evidence: ["only one"])
-        #expect(DecisionBrain.enforce(d, candidateIsSensitive: true).action == .nothing)
+        #expect(DecisionBrain.enforce(d, allowedSensitiveKinds: [.celebrate]).action == .nothing)
     }
 
-    @Test("Non-hedged (assertive) framing downgrades a sensitive gesture")
+    @Test("Non-hedged (assertive) framing downgrades an inferred sensitive gesture")
     func assertiveFramingDowngrades() {
         let d = decision(.gesture(kind: .condolence, occasion: "her dad",
                                   framing: "Send condolences about her father."),  // not a question
                          conf: 0.9, evidence: ["a", "b"])
-        #expect(DecisionBrain.enforce(d, candidateIsSensitive: true).action == .nothing)
+        #expect(DecisionBrain.enforce(d, allowedSensitiveKinds: [.condolence]).action == .nothing)
+    }
+
+    @Test("A birthday gesture LICENSED by a stored date survives WITHOUT the hedged bar")
+    func birthdayLicensedByDate() {
+        // Factual date kinds don't need a hedged question or ≥2 evidence — the
+        // stored date is the evidence. Low confidence, plain framing, no evidence.
+        let d = decision(.gesture(kind: .birthday, occasion: "her birthday", framing: "wish her happy birthday"),
+                         conf: 0.4, evidence: [])
+        if case .gesture = DecisionBrain.enforce(d, allowedSensitiveKinds: [.birthday]).action {} else {
+            Issue.record("a date-licensed birthday should survive")
+        }
+    }
+
+    @Test("A birthday gesture with NO date behind it is downgraded")
+    func birthdayWithoutDateDowngraded() {
+        let d = decision(.gesture(kind: .birthday, occasion: "?", framing: "wish them happy birthday"),
+                         conf: 0.9, evidence: [])
+        #expect(DecisionBrain.enforce(d, allowedSensitiveKinds: []).action == .nothing)
     }
 
     @Test("Non-sensitive gestures are NOT subject to the extra bar")
     func nonSensitivePassesThrough() {
         let d = decision(.gesture(kind: .planHangout, occasion: "coffee", framing: "grab coffee soon"),
                          conf: 0.4, evidence: [])
-        if case .gesture = DecisionBrain.enforce(d, candidateIsSensitive: false).action {} else {
+        if case .gesture = DecisionBrain.enforce(d, allowedSensitiveKinds: []).action {} else {
             Issue.record("non-sensitive gesture should pass through untouched")
         }
     }
@@ -101,7 +128,7 @@ struct DecisionBrainTests {
     func nonGestureUntouched() {
         for action: RelationshipDecision.Action in [.reachOut(move: "x"), .holdBack(untilDays: 2, why: "y"), .nothing] {
             let d = decision(action, conf: 0.1, evidence: [])
-            #expect(DecisionBrain.enforce(d, candidateIsSensitive: false).action == action)
+            #expect(DecisionBrain.enforce(d, allowedSensitiveKinds: []).action == action)
         }
     }
 }

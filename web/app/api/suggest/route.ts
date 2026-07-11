@@ -35,9 +35,13 @@ type Body = {
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
 
 // max_tokens per purpose. Decisions need room for evidence lines; a draft is short.
-const MAX_TOKENS_BY_PURPOSE: Record<string, number> = { draft: 700, decision: 1200, mine: 900 };
-// Purposes that are background brain work — NOT billed to the draft quota.
-const BACKGROUND_PURPOSES = new Set(["decision", "mine"]);
+// `Map` (not a plain object) so a client-supplied purpose can never collide with an
+// Object.prototype key ("toString" etc.) and resolve to a function.
+const MAX_TOKENS_BY_PURPOSE = new Map<string, number>([["draft", 700], ["decision", 1200]]);
+// Purposes that are background brain work — NOT billed to the draft quota. ONLY
+// "decision", and it is flag-gated below; any background lane MUST have a
+// kill-switch, or it becomes an ungated way to skip the per-user draft quota.
+const BACKGROUND_PURPOSES = new Set(["decision"]);
 
 // Prompt size caps — systemCore/userTurn are CLIENT-SUPPLIED, and every char
 // is billed against the server-side key. A multi-megabyte body must die here
@@ -82,7 +86,7 @@ export async function POST(req: NextRequest) {
   const model = typeof body.model === "string" ? body.model : DEFAULT_MODEL;
   const purpose = typeof body.purpose === "string" ? body.purpose : "draft";
   const isBackground = BACKGROUND_PURPOSES.has(purpose);
-  const maxTokens = MAX_TOKENS_BY_PURPOSE[purpose] ?? MAX_TOKENS_BY_PURPOSE.draft;
+  const maxTokens = MAX_TOKENS_BY_PURPOSE.get(purpose) ?? MAX_TOKENS_BY_PURPOSE.get("draft")!;
   if (!systemCore || !userTurn) {
     return NextResponse.json({ error: "missing prompt" }, { status: 400 });
   }

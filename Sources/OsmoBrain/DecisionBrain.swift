@@ -110,28 +110,37 @@ public enum DecisionBrain {
         return RelationshipDecision(action: built, confidence: confidence, evidence: evidence)
     }
 
-    /// The STRUCTURAL safety backstop, pure and unit-tested. A sensitive gesture
-    /// survives ONLY if:
-    ///   • the gate flagged this candidate sensitive (a corroborated occasion),
-    ///   • confidence clears the higher bar,
-    ///   • there are at least N independent evidence lines,
-    ///   • the framing is a hedged QUESTION (ends with "?"), not an assertion.
-    /// Otherwise it is downgraded to `nothing` — the model's prose can never
-    /// alone push a grief/birthday card to the user.
+    /// The STRUCTURAL safety backstop, pure and unit-tested. For a sensitive
+    /// gesture to survive:
+    ///   1. its KIND must be one the real evidence licenses (`allowedSensitiveKinds`
+    ///      from the gate) — a corroborated LOSS licenses only `.condolence`, never
+    ///      `.celebrate`; a stored birthday licenses only `.birthday`; and a kind
+    ///      with no evidence behind it is never allowed.
+    ///   2. the INFERRED kinds (condolence/celebrate — read from ambiguous
+    ///      messages) additionally need high confidence, ≥N evidence lines, and a
+    ///      hedged QUESTION. Factual date kinds (birthday/anniversary) are licensed
+    ///      by the date alone (a hedged question would be nonsense for them).
+    /// Anything failing is downgraded to `nothing`. The model's prose can never
+    /// alone push a mis-typed or unsupported grief/celebration card to a user.
     public static func enforce(_ decision: RelationshipDecision,
-                               candidateIsSensitive: Bool,
+                               allowedSensitiveKinds: Set<RelationshipDecision.GestureKind>,
                                config: Config = .init()) -> RelationshipDecision {
         guard case let .gesture(kind, _, framing) = decision.action, kind.isSensitive else {
             return decision
         }
-        let hedged = framing.trimmingCharacters(in: .whitespaces).hasSuffix("?")
-        let ok = candidateIsSensitive
-            && decision.confidence >= config.sensitiveMinConfidence
-            && decision.evidence.count >= config.sensitiveMinEvidence
-            && hedged
-        return ok ? decision : RelationshipDecision(action: .nothing,
-                                                    confidence: decision.confidence,
-                                                    evidence: decision.evidence)
+        func downgrade() -> RelationshipDecision {
+            RelationshipDecision(action: .nothing, confidence: decision.confidence, evidence: decision.evidence)
+        }
+        // 1. The kind must be licensed by real evidence.
+        guard allowedSensitiveKinds.contains(kind) else { return downgrade() }
+        // 2. Inferred kinds clear the higher, hedged bar.
+        if kind.requiresHedgedCorroboration {
+            let hedged = framing.trimmingCharacters(in: .whitespaces).hasSuffix("?")
+            guard decision.confidence >= config.sensitiveMinConfidence,
+                  decision.evidence.count >= config.sensitiveMinEvidence,
+                  hedged else { return downgrade() }
+        }
+        return decision
     }
 
     static let proxyPurpose = "decision"
@@ -170,6 +179,6 @@ extension SuggestionService {
             purpose: DecisionBrain.proxyPurpose)
         let parsed = DecisionBrain.parseResult(raw)
             ?? RelationshipDecision(action: .nothing, confidence: 0, evidence: [])
-        return DecisionBrain.enforce(parsed, candidateIsSensitive: candidate.isSensitive, config: config)
+        return DecisionBrain.enforce(parsed, allowedSensitiveKinds: candidate.allowedSensitiveKinds, config: config)
     }
 }

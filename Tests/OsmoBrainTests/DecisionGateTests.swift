@@ -202,4 +202,35 @@ struct DecisionGateTests {
         let m = model(dates: [bday], now: now)   // date + maybe cooling, but no sensitiveOccasion
         #expect(DecisionGate.evaluate([m], now: now).allSatisfy { !$0.isSensitive })
     }
+
+    // MARK: allowedSensitiveKinds — what the evidence licenses
+
+    @Test("A corroborated loss licenses ONLY condolence")
+    func lossLicensesCondolence() {
+        let now = at(day: 10)
+        let occ = SensitiveOccasion(kind: .possibleLoss, corroborationCount: 3,
+                                    subjectIsParticipant: true, evidence: ["dad passed away"])
+        let c = DecisionGate.evaluate([model(sensitive: occ, now: now)], now: now).first
+        #expect(c?.allowedSensitiveKinds == [.condolence])
+    }
+
+    @Test("An upcoming stored birthday licenses ONLY birthday")
+    func birthdayDateLicensesBirthday() {
+        let now = at(day: 10)
+        let bday = ImportantDate(id: "b", threadID: UUID(), kind: .birthday, label: "birthday",
+                                 month: 6, day: 15, recurring: true, source: .manual)
+        let c = DecisionGate.evaluate([model(dates: [bday], now: now)], now: now).first
+        #expect(c?.allowedSensitiveKinds == [.birthday])
+    }
+
+    @Test("A candidate with no sensitive evidence licenses no sensitive kinds")
+    func noEvidenceNoLicense() {
+        let now = at(day: 10)
+        // A deadline date (not birthday/anniversary) + a promise → fires, but
+        // licenses no sensitive gesture kind.
+        let deadline = ImportantDate(id: "d", threadID: UUID(), kind: .deadline, label: "grant",
+                                     date: at(day: 15), source: .manual)
+        let c = DecisionGate.evaluate([model(dates: [deadline], intel: ThreadIntel(commitments: ["send it"]), now: now)], now: now).first
+        #expect(c?.allowedSensitiveKinds.isEmpty == true)
+    }
 }
