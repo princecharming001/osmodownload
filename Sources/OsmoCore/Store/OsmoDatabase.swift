@@ -303,6 +303,18 @@ public enum OsmoDatabase {
                           on: "message", columns: ["threadID", "isFromMe"])
         }
 
+        // A stable idempotency key per queued send: a lost-response retry
+        // (drainSendQueue re-sending after a timeout where the server actually
+        // delivered) used to double-send to the real recipient — the server's
+        // sendOnce/recallSend machinery already existed but nothing on the
+        // client ever generated or persisted a key. The key is minted once
+        // when a send is first attempted and reused on every retry.
+        migrator.registerMigration("v14-send-idempotency") { db in
+            try db.alter(table: "send_queue") { t in
+                t.add(column: "idempotencyKey", .text)
+            }
+        }
+
         return migrator
     }
 }

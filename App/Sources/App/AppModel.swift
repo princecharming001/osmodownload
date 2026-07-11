@@ -762,8 +762,14 @@ final class AppModel: ObservableObject {
             guard let id = item.id else { continue }
             guard connections.canDirectSend(item.platform) else { continue }
             do {
+                // Reuse the SAME key across every retry of this queued item —
+                // that's what lets the server collapse a lost-response retry
+                // into a no-op instead of a second real delivery. Only a
+                // pre-migration row (idempotencyKey nil) mints one now.
+                let key = item.idempotencyKey ?? UUID().uuidString
                 let message = try await backend.send(
-                    platform: item.platform, platformThreadID: item.platformThreadID, text: item.text)
+                    platform: item.platform, platformThreadID: item.platformThreadID,
+                    text: item.text, idempotencyKey: key)
                 let normalized = BackendBatchNormalizer.normalize(
                     WireBatch(contacts: [], threads: [], messages: [message], cursor: "", hasMore: false))
                 for m in normalized.batch.messages { _ = try? store.ingest(m) }
@@ -1089,8 +1095,14 @@ final class AppModel: ObservableObject {
     ///    (returns the real message), then ingest the echo.
     ///  - else → false (caller copies / inserts).
     @discardableResult
-    func send(_ text: String, platform: Platform, target: String) async -> Bool {
+    func send(_ text: String, platform: Platform, target: String, isGroup: Bool = false) async -> Bool {
         if platform == .imessage {
+            // `target` is a single buddy HANDLE — for a group thread that's
+            // one arbitrary member, so a "send" here would silently mis-deliver
+            // a group reply as a 1:1 to the wrong person. Bail before ever
+            // calling AppleScript; the caller's existing false-path (copy to
+            // clipboard + "paste into iMessage" toast) is the honest fallback.
+            guard !isGroup else { return false }
             do { try await IMessageSender().send(text, to: target) }
             catch { return false }
             // The AppleScript send returns before Messages commits the row to
@@ -1102,8 +1114,13 @@ final class AppModel: ObservableObject {
             return true
         }
         guard connections.canDirectSend(platform), !target.isEmpty else { return false }
+        // Minted ONCE per logical send and reused on every retry (queued or
+        // drained) — the server collapses a retry after a lost response into
+        // the SAME delivery instead of a second real message to the recipient.
+        let idempotencyKey = UUID().uuidString
         do {
-            let message = try await backend.send(platform: platform, platformThreadID: target, text: text)
+            let message = try await backend.send(platform: platform, platformThreadID: target,
+                                                  text: text, idempotencyKey: idempotencyKey)
             let normalized = BackendBatchNormalizer.normalize(
                 WireBatch(contacts: [], threads: [], messages: [message], cursor: "", hasMore: false))
             for m in normalized.batch.messages { _ = try? store.ingest(m) }
@@ -1111,6 +1128,17 @@ final class AppModel: ObservableObject {
             // A successful live send is a good moment to flush anything queued.
             await drainSendQueue()
             return true
+        } catch let BackendClient.BackendError.badStatus(409) {
+            // 409 = the connection is degraded/paused SERVER-side (our local
+            // canDirectSend cache above was stale) — not the provider
+            // rejecting the message. Queue it so it drains once reconnected,
+            // and point at the real fix instead of the generic "may not
+            // accept messages" dead end.
+            try? store.enqueueSend(QueuedSend(
+                id: nil, platform: platform, platformThreadID: target,
+                text: text, queuedAt: Date(), attempts: 0, idempotencyKey: idempotencyKey))
+            toast = "\(platform.displayName) needs reconnecting — queued, sends once you reconnect."
+            return false
         } catch let BackendClient.BackendError.badStatus(code) where code >= 400 && code < 500 {
             // Provider REJECTED it (bad thread, outside session window, revoked
             // token). Not a connectivity problem — don't queue-and-retry forever;
@@ -1121,7 +1149,7 @@ final class AppModel: ObservableObject {
             // Network/offline → queue for later drain (foreground / sync / next send).
             try? store.enqueueSend(QueuedSend(
                 id: nil, platform: platform, platformThreadID: target,
-                text: text, queuedAt: Date(), attempts: 0))
+                text: text, queuedAt: Date(), attempts: 0, idempotencyKey: idempotencyKey))
             toast = "Offline — queued to send when you're back."
             return false
         }

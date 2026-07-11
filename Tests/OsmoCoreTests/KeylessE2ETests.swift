@@ -75,7 +75,8 @@ struct KeylessE2ETests {
         // 5. Send an (edited) reply → echo ingests → outbox records exact text.
         let sentText = "e2e edited reply \(UUID().uuidString.prefix(6))"
         let echo = try await client.send(platform: .linkedin,
-                                         platformThreadID: "demo-li-chat-1", text: sentText)
+                                         platformThreadID: "demo-li-chat-1", text: sentText,
+                                         idempotencyKey: UUID().uuidString)
         #expect(echo.isFromMe)
         let normalized = BackendBatchNormalizer.normalize(
             WireBatch(contacts: [], threads: [], messages: [echo], cursor: "", hasMore: false))

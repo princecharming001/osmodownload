@@ -163,7 +163,7 @@ struct ExpandedPanel: View {
     @State private var selectedTone: ToneOption = .balanced
     @State private var draftVersion = 0
     // Resolved once (store queries are synchronous) instead of on every render.
-    @State private var resolved: (context: SuggestionContext, target: String)?
+    @State private var resolved: (context: SuggestionContext, target: String, isGroup: Bool)?
     // The editable message the user will send.
     @State private var draft: String = ""
     // "Read before you send" result (cleared whenever the draft changes).
@@ -201,7 +201,7 @@ struct ExpandedPanel: View {
                         SuggestionStrip(
                             context: resolved.context,
                             platform: platform,
-                            sendTarget: resolved.target,
+                            sendTarget: resolved.target, isGroup: resolved.isGroup,
                             onPick: { text in draft = text; showSuggestions = false },
                             onSent: { PillController.shared.escape() })
                             .environmentObject(model)
@@ -492,7 +492,8 @@ struct ExpandedPanel: View {
             var ctx = assembler.context(threadID: threadID, platform: platform,
                                         personName: person.displayName, toneOverride: selectedTone.hint)
             if !submittedIntent.isEmpty { ctx.userIntent = submittedIntent }
-            resolved = (ctx, assembler.sendTarget(threadID: threadID, platform: platform))
+            let isGroup = (try? model.store.thread(id: threadID))?.isGroup ?? false
+            resolved = (ctx, assembler.sendTarget(threadID: threadID, platform: platform), isGroup)
             return
         }
         var ctx = assembler.context(pill: context, toneOverride: selectedTone.hint)
@@ -500,7 +501,8 @@ struct ExpandedPanel: View {
         let threadID = context.matchedThreadID
             ?? assembler.matchThread(name: context.partnerName, platform: platform)
         let target = threadID.map { assembler.sendTarget(threadID: $0, platform: platform) } ?? ""
-        resolved = (ctx, target)
+        let isGroup = threadID.flatMap { try? model.store.thread(id: $0) }?.isGroup ?? false
+        resolved = (ctx, target, isGroup)
     }
 
     /// The chosen person's most relevant thread — same platform if any, else most
@@ -535,8 +537,14 @@ struct ExpandedPanel: View {
     private func sendDirect() {
         let text = draft.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty, let resolved else { return }
+        if platform == .x, text.count > 1_000 {
+            model.toast = "That's over X's 1,000-character DM limit — inserted into the field instead."
+            PillController.shared.insertIntoFocusedField(text)
+            PillController.shared.escape()
+            return
+        }
         Task {
-            let ok = await model.send(text, platform: platform, target: resolved.target)
+            let ok = await model.send(text, platform: platform, target: resolved.target, isGroup: resolved.isGroup)
             await MainActor.run {
                 if !ok { PillController.shared.insertIntoFocusedField(text) }
                 PillController.shared.escape()

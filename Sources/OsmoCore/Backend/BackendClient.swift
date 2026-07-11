@@ -168,11 +168,13 @@ public actor BackendClient {
                          query: [("since", since.isEmpty ? "0" : since), ("limit", String(limit))])
     }
 
-    public func send(platform: Platform, platformThreadID: String, text: String) async throws -> WireMessage {
+    public func send(platform: Platform, platformThreadID: String, text: String,
+                     idempotencyKey: String) async throws -> WireMessage {
         let envelope: SendEnvelope = try await authed("POST", "/api/sync/send", body: [
             "platform": platform.rawValue,
             "platformThreadID": platformThreadID,
             "text": text,
+            "idempotencyKey": idempotencyKey,
         ])
         return envelope.message
     }

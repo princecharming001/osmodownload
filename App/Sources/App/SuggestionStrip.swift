@@ -13,6 +13,10 @@ struct SuggestionStrip: View {
     let platform: Platform
     /// Where a direct send routes (thread id / handle). Empty → copy/insert.
     var sendTarget: String
+    /// iMessage groups can't direct-send (one buddy handle can't address a
+    /// group) — passed through so `send()` takes the honest copy-fallback
+    /// path instead of silently mis-delivering to one member.
+    var isGroup: Bool = false
     /// Called when a take is chosen for editing (fills a compose box).
     var onPick: ((String) -> Void)?
     /// Called after a successful send.
@@ -154,8 +158,13 @@ struct SuggestionStrip: View {
     }
 
     private func send(_ take: SuggestionTake) {
+        if platform == .x, take.text.count > 1_000 {
+            model.toast = "That draft is over X's 1,000-character DM limit — copy and trim it instead."
+            copy(take.text)
+            return
+        }
         Task {
-            let ok = await model.send(take.text, platform: platform, target: sendTarget)
+            let ok = await model.send(take.text, platform: platform, target: sendTarget, isGroup: isGroup)
             await MainActor.run {
                 if ok { sentSlant = take.slant; onSent?() } else { copy(take.text) }
             }

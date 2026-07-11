@@ -107,13 +107,20 @@ struct BackendClientTests {
                             ("sync/send", 200, echo)]
         let client = BackendClient(baseURL: URL(string: "http://test")!,
                                    tokenStore: MemoryDeviceToken(), transport: transport.handler())
-        let message = try await client.send(platform: .linkedin, platformThreadID: "t1", text: "hi there")
+        let message = try await client.send(platform: .linkedin, platformThreadID: "t1", text: "hi there",
+                                            idempotencyKey: "test-key-1")
         #expect(message.platformMessageID == "real-9")
         #expect(message.isFromMe)
 
         let sendReq = transport.requests.first { $0.url!.path.contains("sync/send") }
         let body = try JSONSerialization.jsonObject(with: sendReq!.httpBody!) as! [String: String]
-        #expect(body == ["platform": "linkedin", "platformThreadID": "t1", "text": "hi there"])
+        // idempotencyKey MUST be on the wire — this is the whole point of
+        // threading it through. It went missing once already (the server's
+        // sendOnce/recallSend dedup existed but nothing on the client ever
+        // sent a key), and a retry after a lost response double-sent to the
+        // real recipient. This assertion is what would have caught that.
+        #expect(body == ["platform": "linkedin", "platformThreadID": "t1", "text": "hi there",
+                         "idempotencyKey": "test-key-1"])
     }
 
     @Test("registeredToken reads the current credential without any network call")

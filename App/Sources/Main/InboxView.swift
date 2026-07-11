@@ -760,7 +760,7 @@ struct ThreadDetailView: View {
         if let context = suggestionContext {
             SuggestionStrip(
                 context: context, platform: thread?.platform ?? .imessage,
-                sendTarget: sendTarget,
+                sendTarget: sendTarget, isGroup: thread?.isGroup ?? false,
                 onPick: { draft = $0 },
                 onSent: { load(); showAssist = false })
                 .padding(DS.Space.l)
@@ -781,6 +781,7 @@ struct ThreadDetailView: View {
     }
 
     @State private var toneCheck: ToneCheck?
+    @State private var sending = false
 
     private var composeRow: some View {
         HStack(alignment: .bottom, spacing: DS.Space.s) {
@@ -812,10 +813,23 @@ struct ThreadDetailView: View {
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.l).stroke(DS.Colors.hairline, lineWidth: 1))
 
             let canSend = model.connections.canDirectSend(thread?.platform ?? .imessage)
-            PillButton(canSend ? "Send" : "Copy", icon: canSend ? "paperplane.fill" : "doc.on.doc") {
-                sendOrCopy()
+            if sending {
+                // A live send blocks 1–3s (Gmail fetches the thread + profile
+                // before it can even post) — this used to be a silent freeze
+                // with zero feedback.
+                HStack(spacing: DS.Space.xs) {
+                    ProgressView().controlSize(.small)
+                    Text("Sending…").font(DS.Typography.captionEm)
+                }
+                .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)
+                .foregroundStyle(DS.Colors.muted)
+                .background(DS.Colors.chip, in: Capsule())
+            } else {
+                PillButton(canSend ? "Send" : "Copy", icon: canSend ? "paperplane.fill" : "doc.on.doc") {
+                    sendOrCopy()
+                }
+                .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
             }
-            .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
         }
     }
 
@@ -868,9 +882,18 @@ struct ThreadDetailView: View {
     private func sendOrCopy() {
         let text = draft
         let platform = thread?.platform ?? .imessage
+        let isGroup = thread?.isGroup ?? false
+        // Pre-flight: X DMs hard-cap at 1000 chars — catch it before a wasted
+        // round trip that would just come back as a confusing 422 rejection.
+        if platform == .x, text.count > 1_000 {
+            model.toast = "That's \(text.count - 1_000) characters over X's 1,000-character DM limit."
+            return
+        }
+        sending = true
         Task {
-            let ok = await model.send(text, platform: platform, target: sendTarget)
+            let ok = await model.send(text, platform: platform, target: sendTarget, isGroup: isGroup)
             await MainActor.run {
+                sending = false
                 if ok { draft = ""; try? model.store.saveDraft("", forThread: threadID); load() }
                 else {
                     NSPasteboard.general.clearContents()

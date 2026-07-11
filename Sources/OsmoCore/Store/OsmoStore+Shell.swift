@@ -46,11 +46,17 @@ public struct QueuedSend: Codable, Equatable, Sendable, FetchableRecord, Persist
     public var text: String
     public var queuedAt: Date
     public var attempts: Int
+    /// Minted once when the send is first attempted, reused on every retry —
+    /// the server dedupes on it so a lost-response retry can never double-send
+    /// to the real recipient. Optional only so pre-migration rows decode.
+    public var idempotencyKey: String?
     public static let databaseTableName = "send_queue"
     public init(id: Int64? = nil, platform: Platform, platformThreadID: String,
-                text: String, queuedAt: Date = Date(), attempts: Int = 0) {
+                text: String, queuedAt: Date = Date(), attempts: Int = 0,
+                idempotencyKey: String? = nil) {
         self.id = id; self.platform = platform; self.platformThreadID = platformThreadID
         self.text = text; self.queuedAt = queuedAt; self.attempts = attempts
+        self.idempotencyKey = idempotencyKey
     }
     public mutating func didInsert(_ inserted: InsertionSuccess) {
         id = inserted.rowID
