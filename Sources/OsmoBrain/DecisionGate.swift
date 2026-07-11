@@ -19,7 +19,7 @@ import OsmoCore
 /// actual participant), never from a noisy heuristic, and a candidate that has
 /// only heuristic triggers can never be marked sensitive.
 public enum DecisionCluster: String, Sendable, CaseIterable {
-    case date, promise, silence, cooling, effort, sensitive
+    case date, promise, silence, cooling, effort, bid, sensitive
 }
 
 public struct DecisionTrigger: Equatable, Sendable {
@@ -91,6 +91,7 @@ public enum DecisionGate {
     static let scoreTrajectoryCooling = 25
     static let scoreVibeCooling = 25
     static let scoreEffortImbalance = 15
+    static let scoreBidNeglect = 28   // a psychologically-weighted connection signal
     static let scoreSensitive = 60   // highest, but gated hardest
 
     public static func evaluate(_ models: [RelationshipModel], now: Date,
@@ -216,6 +217,15 @@ public enum DecisionGate {
             out.append(.init(cluster: .effort, kind: "effortImbalance",
                              score: scoreEffortImbalance,
                              evidence: "they've been putting in less lately"))
+        }
+
+        // — bid cluster (Gottman): the USER has been turning away from this
+        //   person's bids for connection — a relational-erosion signal that
+        //   reply-timing alone can't see. Direction: the user is under-tending,
+        //   so a warmer re-engagement is the move. —
+        if let rate = m.bids.turnTowardRate, rate < 0.5, !m.bids.isEmpty {
+            out.append(.init(cluster: .bid, kind: "bidNeglect", score: scoreBidNeglect,
+                             evidence: "turning toward only ~\(Int(rate * 100))% of their bids lately"))
         }
 
         // — sensitive tier: ONLY from a corroborated occasion about the actual

@@ -25,6 +25,11 @@ public struct RelationshipModel: Equatable, Sendable {
     public var rhythm: ResponseRhythm
     public var effort: EffortBalance
     public var vibe: VibeSeries
+    /// Bids for connection — are their reaches being turned toward?
+    public var bids: BidRead
+    /// Attachment-flavored read: pursue/withdraw + whether they need space or
+    /// reassurance. The lens that makes "reach out vs hold back" attuned to them.
+    public var style: RelationalStyle
 
     // Cached LLM layer (nil until an intel pass has run for this thread).
     public var intel: ThreadIntel?
@@ -75,6 +80,8 @@ public struct RelationshipModel: Equatable, Sendable {
             rhythm: ResponseRhythm.read(turns, now: now),
             effort: EffortBalance.read(turns),
             vibe: VibeSeries.read(vibeSamples, now: now),
+            bids: BidDetector.read(turns, now: now),
+            style: RelationalStyle.read(turns, now: now),
             intel: intel,
             memory: memory,
             importantDates: importantDates,
@@ -130,6 +137,21 @@ public struct RelationshipModel: Equatable, Sendable {
         // Vibe trend.
         if vibe.trend == .cooling { lines.append("Vibe: cooling over the last couple of weeks.") }
         else if vibe.trend == .warming { lines.append("Vibe: warming lately.") }
+
+        // Bids for connection (Gottman) — a reach that went unanswered, and the
+        // longer-run turn-toward pattern.
+        if bids.lastBidMissed {
+            let what = bids.lastBidType.map { " (\($0.rawValue))" } ?? ""
+            lines.append("Missed bid: their last message was a reach for connection\(what) that hasn't been met.")
+        }
+        if let rate = bids.turnTowardRate, rate < 0.5 {
+            lines.append("Bid pattern: you've been turning toward only ~\(Int(rate * 100))% of their bids lately — the connection is being under-tended.")
+        }
+
+        // Attachment-flavored read — how to WEIGHT reaching out vs holding back.
+        if let note = style.note {
+            lines.append("How they relate: \(note).")
+        }
 
         // Upcoming dates.
         let upcoming = importantDates

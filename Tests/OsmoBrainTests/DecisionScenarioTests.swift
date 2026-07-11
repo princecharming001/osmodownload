@@ -162,6 +162,25 @@ struct DecisionScenarioTests {
         #expect(fired || !unfired)   // with a receipt it can fire; without, it never does
     }
 
+    @Test("A NEGLECTED friend (their bids keep going unmet) surfaces a bidNeglect candidate")
+    func bidNeglect() {
+        // They repeatedly reach — questions, sharing — and I keep turning away with
+        // a filler one-word reply. Gottman's turn-toward rate craters; that erosion
+        // is a real reason to reach out, and reply-timing math alone would miss it.
+        var turns: [ThreadTurn] = []
+        for i in 0..<8 {
+            let base = daysAgo(Double(40 - i * 4), hour: 10)
+            turns.append(turn(false, "hey! how did your big presentation go today?", base))  // a bid
+            turns.append(turn(true, "ok", base.addingTimeInterval(1800)))                    // turned away
+        }
+        let m = model("Devon", turns: turns)
+        #expect((m.bids.turnTowardRate ?? 1) < 0.5)
+        let c = DecisionGate.evaluate([m], now: now).first
+        #expect(c?.triggers.contains { $0.cluster == .bid } == true)
+        // …and the LLM context spells the pattern out in plain language.
+        #expect(m.decisionContext(now: now).contains("Bid pattern"))
+    }
+
     @Test("The decision context handed to the LLM names the person and never fabricates")
     func contextQuality() {
         let occ = SensitiveOccasion(kind: .possibleLoss, corroborationCount: 3, subjectIsParticipant: true,
