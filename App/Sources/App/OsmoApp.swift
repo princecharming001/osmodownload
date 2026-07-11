@@ -95,8 +95,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var detector: TypingDetector?
     private var activated = false
 
+    /// The UI-probe harness launches with OSMO_PROBE=1. Under it we skip ONLY the
+    /// global hotkey registration: the `KeyboardShortcuts` listener requests macOS
+    /// Input Monitoring (kTCCServiceListenEvent) at launch, which pops a SECURE
+    /// system prompt a headless AX probe physically cannot click — blocking every
+    /// scenario behind it (and Input Monitoring is cdhash-pinned, so it re-prompts
+    /// on every dev rebuild; trusting the signing cert doesn't help). The pill
+    /// itself still attaches normally so the main window's key/AX-ready timing is
+    /// unchanged (skipping the whole pill made the modals probe flaky — it drives
+    /// the main window before it became key). Real launches (no env var) are
+    /// unaffected; the probe never exercises the hotkey.
+    static var isProbe: Bool { ProcessInfo.processInfo.environment["OSMO_PROBE"] == "1" }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        HotkeyCenter.install { PillController.shared.handleHotkey() }
+        if !Self.isProbe {
+            HotkeyCenter.install { PillController.shared.handleHotkey() }
+        }
         NotificationCenter.default.addObserver(
             self, selector: #selector(didBecomeActive),
             name: NSApplication.didBecomeActiveNotification, object: nil)

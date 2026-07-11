@@ -315,6 +315,42 @@ public enum OsmoDatabase {
             }
         }
 
+        // Relationship Brain context layers (W3 P1). Both device-local UX/telemetry
+        // state — no sync columns; a fresh install starts a fresh series. Low-risk
+        // additive tables (higher-risk decision/outcome tables land in later phases,
+        // each in its own migration).
+        migrator.registerMigration("v15-brain-context") { db in
+            // Time series of a thread's emotional temperature (VibeSeries reads it).
+            try db.create(table: "vibe_sample") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("threadID", .text).notNull()
+                t.column("sampledAt", .datetime).notNull()
+                t.column("score", .double).notNull()
+                t.column("source", .text).notNull()
+            }
+            try db.create(index: "idx_vibe_sample_thread_time",
+                          on: "vibe_sample", columns: ["threadID", "sampledAt"])
+
+            // Important dates for a relationship (birthdays, anniversaries,
+            // deadlines, promises). Deduped by the deterministic text PK.
+            try db.create(table: "important_date") { t in
+                t.primaryKey("id", .text)
+                t.column("threadID", .text).notNull()
+                t.column("personID", .text)
+                t.column("kind", .text).notNull()
+                t.column("label", .text).notNull()
+                t.column("date", .datetime)
+                t.column("month", .integer)
+                t.column("day", .integer)
+                t.column("recurring", .boolean).notNull().defaults(to: false)
+                t.column("source", .text).notNull()
+                t.column("evidence", .text)
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.create(index: "idx_important_date_thread",
+                          on: "important_date", columns: ["threadID"])
+        }
+
         return migrator
     }
 }

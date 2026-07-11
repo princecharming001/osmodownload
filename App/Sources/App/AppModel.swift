@@ -1009,6 +1009,52 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Per-thread watermark of the last message time we've already sampled a
+    /// vibe for — so the capture sweep only writes when a thread actually has
+    /// new activity, not on every reload.
+    private var vibeWatermark: [UUID: Date] = [:]
+
+    /// Map the LLM's categorical temperature to the numeric vibe scale.
+    static func vibeScore(_ t: IntelTemperature) -> Double {
+        switch t {
+        case .warm: return 1
+        case .neutral: return 0
+        case .cool: return -1
+        }
+    }
+
+    /// Capture a vibe sample for threads with NEW activity. Deliberately
+    /// decoupled from the Pro/UI-visibility gate that `ensureIntel` sits behind:
+    /// it runs on the deterministic keyword sentiment (all tiers, dormant threads
+    /// included), only upgrading to the LLM temperature when intel happens to be
+    /// present. Bounded: recent threads only, capped per reload, pruned to a
+    /// fixed window. Flag-gated so it is a complete no-op until the Relationship
+    /// Brain is switched on server-side.
+    private func captureDeterministicVibes() {
+        guard flag("relationshipBrain", default: false) else { return }
+        let now = Date()
+        let horizon = now.addingTimeInterval(-30 * 86_400)
+        let due = threads
+            .filter { ($0.lastMessageAt ?? .distantPast) >= horizon }
+            .filter { ($0.lastMessageAt ?? .distantPast) > (vibeWatermark[$0.id] ?? .distantPast) }
+            .sorted { ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast) }
+            .prefix(25)   // drain any first-run backlog over successive reloads
+        for t in due {
+            let ts = turns(forThread: t.id)
+            guard !ts.isEmpty else { continue }
+            let score: Double
+            let source: VibeSource
+            if let temp = intelByThread[t.id]?.temperature {
+                score = Self.vibeScore(temp); source = .llmTemperature
+            } else {
+                score = ThreadRead.read(ts, now: now).sentiment; source = .keywordSentiment
+            }
+            try? store.appendVibeSample(.init(threadID: t.id, sampledAt: now, score: score, source: source))
+            try? store.pruneVibeSamples(forThread: t.id)
+            vibeWatermark[t.id] = t.lastMessageAt ?? now
+        }
+    }
+
     func reload() {
         lastReloadAt = Date()
         let snoozed = (try? store.snoozedThreadIDs()) ?? []
@@ -1072,6 +1118,7 @@ final class AppModel: ObservableObject {
         queue = MorningQueue.build(snapshots: snapshots, projects: projects)
         rebuildQueueRowMeta()
         people = buildPeople(snapshots: snapshots)
+        captureDeterministicVibes()   // flag-gated no-op until the brain is on
 
         // Today-header pulse.
         newInbound24h = (try? store.inboundMessageCount(since: Date().addingTimeInterval(-86_400))) ?? 0
@@ -1933,7 +1980,8 @@ final class AppModel: ObservableObject {
         return ((try? store.recentMessages(inThread: threadID, limit: limit)) ?? [])
             .reversed()
             .map { ThreadTurn(fromMe: $0.isFromMe, text: $0.text, sentAt: $0.sentAt,
-                              senderName: $0.isFromMe ? nil : $0.senderContactID.flatMap { senderNames?[$0] }) }
+                              senderName: $0.isFromMe ? nil : $0.senderContactID.flatMap { senderNames?[$0] },
+                              readAt: $0.readAt) }
     }
 
     /// The explicit reach-out call for a thread: nudge, give it space, lay back,

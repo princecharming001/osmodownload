@@ -11,12 +11,20 @@ public struct ThreadTurn: Equatable, Sendable {
     /// renderers can label each speaker; nil in 1:1 threads (or when unknown),
     /// where "Them" is unambiguous.
     public var senderName: String?
+    /// Real read-receipt time where the platform exposes it (iMessage
+    /// `date_read`, carried on `OsmoMessage.readAt`). For MY messages this is
+    /// when THEY read it (deliberation vs neglect); nil when the platform
+    /// doesn't expose receipts or hasn't been read yet. Additive + defaulted so
+    /// every existing `ThreadTurn(...)` call site is unaffected.
+    public var readAt: Date?
 
-    public init(fromMe: Bool, text: String, sentAt: Date? = nil, senderName: String? = nil) {
+    public init(fromMe: Bool, text: String, sentAt: Date? = nil,
+                senderName: String? = nil, readAt: Date? = nil) {
         self.fromMe = fromMe
         self.text = text
         self.sentAt = sentAt
         self.senderName = senderName
+        self.readAt = readAt
     }
 }
 

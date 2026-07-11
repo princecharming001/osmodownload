@@ -96,7 +96,7 @@ d["backendCursor"] = "0"
 json.dump(d, open(p, "w"))
 PY
 fi
-open "$APP_PATH"
+open --env OSMO_PROBE=1 "$APP_PATH"
 ready=0
 for _ in $(seq 1 40); do
   if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
