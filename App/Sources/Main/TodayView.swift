@@ -55,7 +55,7 @@ struct TodayView: View {
                             .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
                     }
                     Spacer()
-                    PillButton("See plans") { model.activeSheet = .account }
+                    PillButton("See plans") { model.present(.account) }
                     Button { winBackDismissed = true } label: {
                         Image(systemName: "xmark").font(.system(size: 10, weight: .medium))
                     }.buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
@@ -209,8 +209,21 @@ struct QueueCardRow: View {
     var body: some View {
         Button { openThread() } label: {
             HStack(alignment: .top, spacing: DS.Space.m) {
-                AvatarView(name: card.personName,
-                           data: model.avatarData(forPerson: card.personID), size: 32)
+                if card.isGroup {
+                    // A group is a place, not a person — never wear one member's
+                    // face. Mirrors the Inbox's group treatment at queue size.
+                    ZStack {
+                        Circle().fill(DS.Colors.ink.opacity(0.06))
+                        Image(systemName: "person.2.fill")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(DS.Colors.muted)
+                    }
+                    .frame(width: 32, height: 32)
+                    .accessibilityLabel("Group conversation")
+                } else {
+                    AvatarView(name: card.personName,
+                               data: model.avatarData(forPerson: card.personID), size: 32)
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     header
                     snippetLine
@@ -481,11 +494,55 @@ struct AskOsmoBox: View {
             ForEach(Array(model.askExchanges.enumerated()), id: \.offset) { _, ex in
                 userBubble(ex.q)
                 answerRow(ex.a, isError: ex.isError)
+                if !ex.actions.isEmpty { actionChips(ex.actions) }
             }
             if let pending {
                 userBubble(pending)
                 thinkingRow
             }
+        }
+    }
+
+    /// The chat DOES things: chips parsed from the answer, each landing in a
+    /// real app function (open/draft the thread, arm a reminder, snooze).
+    private func actionChips(_ actions: [AskAction]) -> some View {
+        HStack(spacing: DS.Space.s) {
+            ForEach(actions) { action in
+                Button { model.perform(action) } label: {
+                    HStack(spacing: 4) {
+                        Image(systemName: icon(for: action.kind)).font(.system(size: 10, weight: .medium))
+                        Text(label(for: action)).font(DS.Typography.captionEm)
+                    }
+                    .padding(.horizontal, DS.Space.s).padding(.vertical, 5)
+                    .background(DS.Colors.accent.opacity(0.10), in: Capsule())
+                    .overlay(Capsule().stroke(DS.Colors.accent.opacity(0.35), lineWidth: 1))
+                    .foregroundStyle(DS.Colors.accent)
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("ask.action.\(action.kind.rawValue)")
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.leading, 28)   // aligns under the answer text, past the orb
+    }
+
+    private func icon(for kind: AskAction.Kind) -> String {
+        switch kind {
+        case .draft: "square.and.pencil"
+        case .open: "bubble.left.and.bubble.right"
+        case .remind: "bell.badge"
+        case .snooze: "moon.zzz"
+        }
+    }
+
+    private func label(for action: AskAction) -> String {
+        let first = action.person.split(separator: " ").first.map(String.init) ?? action.person
+        switch action.kind {
+        case .draft: return "Draft reply to \(first)"
+        case .open: return "Open \(first)'s thread"
+        case .remind: return "Remind me in \(action.days ?? 3)d"
+        case .snooze: return "Snooze \(action.days ?? 1)d"
         }
     }
 
@@ -594,7 +651,7 @@ struct SetupChecklistCard: View {
     private var connected: Bool { model.connections.phases.values.contains { $0.isActive } }
     private var items: [(label: String, done: Bool, act: () -> Void)] {
         [
-            ("Sign in to save your account", model.account.isSignedIn, { model.activeSheet = .account }),
+            ("Sign in to save your account", model.account.isSignedIn, { model.present(.account) }),
             ("Connect a platform", connected, { model.section = .connections }),
             ("Grant Accessibility for the pill", AXPermission.isTrusted, { AXPermission.promptIfNeeded() }),
             ("Turn on reply reminders", model.notifier.authorized, { Task { await model.notifier.requestAuthorization() } }),

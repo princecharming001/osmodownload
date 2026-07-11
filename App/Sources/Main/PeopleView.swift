@@ -426,7 +426,7 @@ struct PersonDetailView: View {
                         VStack(spacing: DS.Space.s) {
                             Text("Osmo has a read on \(person.name.split(separator: " ").first.map(String.init) ?? person.name).")
                                 .font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
-                            PillButton("Unlock with Pro", icon: "sparkles") { model.activeSheet = .paywall }
+                            PillButton("Unlock with Pro", icon: "sparkles") { model.present(.paywall) }
                         }
                     }
                 }
@@ -476,9 +476,11 @@ struct PersonDetailView: View {
     /// sample. Bounded so the page stays instant.
     private func combinedTurns() -> [ThreadTurn] {
         threads.prefix(4).flatMap { thread in
-            ((try? model.store.recentMessages(inThread: thread.id, limit: 80)) ?? [])
+            let senderNames = groupSenderNames(store: model.store, threadID: thread.id)
+            return ((try? model.store.recentMessages(inThread: thread.id, limit: 80)) ?? [])
                 .reversed()
-                .map { ThreadTurn(fromMe: $0.isFromMe, text: $0.text, sentAt: $0.sentAt) }
+                .map { ThreadTurn(fromMe: $0.isFromMe, text: $0.text, sentAt: $0.sentAt,
+                                  senderName: $0.isFromMe ? nil : $0.senderContactID.flatMap { senderNames?[$0] }) }
         }
     }
 

@@ -11,25 +11,73 @@ import type { UnipileChat, UnipileMessage } from "./client";
     file_size|size). `post`/`link`-typed entries (shared posts, IG reels) map
     to kind "link" with the destination `url` and a `title`, since there are no
     bytes to fetch. */
+/** First http(s) URL anywhere in a payload subtree — canonical keys first,
+    then a bounded deep scan. Instagram/LinkedIn share payloads vary too much
+    to enumerate (permalink vs share_url vs nested story objects); a real link
+    the user can OPEN beats a null every time. */
+export function firstHTTPURL(value: unknown, depth = 0): string | null {
+  if (depth > 4 || value == null) return null;
+  if (typeof value === "string") {
+    const m = value.match(/https?:\/\/[^\s"'<>)\]]+/);
+    return m ? m[0] : null;
+  }
+  if (Array.isArray(value)) {
+    for (const v of value) { const u = firstHTTPURL(v, depth + 1); if (u) return u; }
+    return null;
+  }
+  if (typeof value === "object") {
+    const o = value as Record<string, unknown>;
+    for (const k of ["permalink", "share_url", "external_url", "expanded_url", "link", "url", "href"]) {
+      const v = o[k];
+      if (typeof v === "string" && v.startsWith("http")) return v;
+    }
+    for (const v of Object.values(o)) { const u = firstHTTPURL(v, depth + 1); if (u) return u; }
+  }
+  return null;
+}
+
+function shareTitle(a: Record<string, unknown>): string | null {
+  for (const k of ["title", "name", "caption", "text", "description", "story_title"]) {
+    const v = a[k];
+    if (typeof v === "string" && v.trim()) return v.trim().slice(0, 120);
+  }
+  return null;
+}
+
 export function readAttachments(msg: Record<string, unknown>): WireAttachment[] | undefined {
   const raw = (msg.attachments ?? msg.files) as unknown;
-  if (!Array.isArray(raw) || raw.length === 0) return undefined;
   const out: WireAttachment[] = [];
-  for (const a of raw as Record<string, unknown>[]) {
-    const id = (a.id ?? a.attachment_id ?? a.provider_id) as string | undefined;
-    if (!id) continue;
-    const mime = (a.mimetype ?? a.mime_type) as string | undefined;
-    const kind = kindFromMime(a.type as string | undefined, mime);
-    const size = (a.file_size ?? a.size) as unknown;
-    out.push({
-      id: String(id), kind,
-      mimeType: mime ?? null,
-      filename: ((a.file_name ?? a.filename) as string | undefined) ?? null,
-      sizeBytes: typeof size === "number" ? size : null,
-      remoteRef: kind === "link" ? null : String(id),
-      url: kind === "link" ? ((a.url as string | undefined) ?? null) : null,
-      title: ((a.title ?? a.name) as string | undefined) ?? null,
-    });
+  if (Array.isArray(raw)) {
+    for (const a of raw as Record<string, unknown>[]) {
+      const id = (a.id ?? a.attachment_id ?? a.provider_id) as string | undefined;
+      if (!id) continue;
+      const mime = (a.mimetype ?? a.mime_type) as string | undefined;
+      const kind = kindFromMime(a.type as string | undefined, mime);
+      const size = (a.file_size ?? a.size) as unknown;
+      out.push({
+        id: String(id), kind,
+        mimeType: mime ?? null,
+        filename: ((a.file_name ?? a.filename) as string | undefined) ?? null,
+        sizeBytes: typeof size === "number" ? size : null,
+        remoteRef: kind === "link" ? null : String(id),
+        url: kind === "link" ? firstHTTPURL(a) : null,
+        title: shareTitle(a),
+      });
+    }
+  }
+  // A share with NO attachments array and NO text used to become an invisible
+  // message (49 of them in one real store). Synthesize a link attachment from
+  // any URL the payload carries so the bubble always shows SOMETHING.
+  const text = (msg.text ?? msg.body ?? "") as string;
+  if (out.length === 0 && (!text || !String(text).trim())) {
+    const url = firstHTTPURL({ ...msg, text: undefined, sender: undefined, reactions: undefined });
+    if (url) {
+      const mid = (msg.id ?? msg.provider_id ?? "share") as string;
+      out.push({
+        id: `${mid}-share`, kind: "link", mimeType: null, filename: null,
+        sizeBytes: null, remoteRef: null, url, title: shareTitle(msg),
+      });
+    }
   }
   return out.length > 0 ? out : undefined;
 }
@@ -126,6 +174,24 @@ export function normalizeUnipileMessage(
     lastMessageAt: sentAt,
     providerThreadID: chat?.providerId ?? null,
   }];
+  // Instagram (and some WhatsApp exports) deliver likes as STANDALONE
+  // messages ("Liked a message") instead of reaction records. When the
+  // target is known, fold it into a real reaction on that message; a full
+  // bubble for a like reads as spam. Unfoldable echoes still ship as
+  // messages — the client renders them as a system line, not a bubble.
+  const echo = /^(liked|loved|laughed at|emphasized|disliked|reacted to) a message$/i.test(text.trim());
+  const replyTo = readReplyTo(msg);
+  if (echo && replyTo) {
+    const messages: WireMessage[] = [{
+      platform, platformMessageID: replyTo, platformThreadID: chatId,
+      senderHandle: null, isFromMe: false, text: "", sentAt, readAt: null,
+      // Patch-style row: dedup by deterministic id merges this reaction onto
+      // the existing target message row.
+      reactions: [{ emoji: "❤️", senderHandle: isFromMe ? null : (senderHandle ?? null), isFromMe }],
+      replyToMessageID: null, attachments: undefined,
+    }];
+    return { contacts, threads, messages };
+  }
   const messages: WireMessage[] = [{
     platform, platformMessageID: messageId, platformThreadID: chatId,
     senderHandle: isFromMe ? null : (senderHandle ?? null),

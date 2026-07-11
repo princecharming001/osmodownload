@@ -79,8 +79,10 @@ struct StoreInvariantTests {
         var handles: Set<String> = []
         let elapsed = try clock.measure { handles = try store.outboundCounterpartyHandles() }
         #expect(handles.count == 1667)                   // ceil(5000/3) replied threads
-        // Target is <100ms on the v13 indexes; the bound is generous for CI noise.
-        #expect(elapsed < .milliseconds(500), "reciprocity scan took \(elapsed)")
+        // Target is <100ms on the v13 indexes; the bound is generous because
+        // gates run alongside builds/servers on a loaded dev Mac (saw 0.7s under
+        // full load). The un-indexed regression this guards was >10s.
+        #expect(elapsed < .seconds(2), "reciprocity scan took \(elapsed)")
     }
 
     @Test("ingesting the identical message 50x leaves ONE row and never advances the clock")

@@ -29,9 +29,11 @@ struct ContextAssembler {
         let personID = contacts.first?.personID
         let project = personID.flatMap { pid in projects.first { $0.personID == pid } }
         let memory = personID.flatMap { try? store.memory(forPerson: $0) }
+        let senderNames = groupSenderNames(store: store, threadID: threadID)
         let transcript = ((try? store.messages(inThread: threadID)) ?? [])
             .suffix(20)
-            .map { ThreadTurn(fromMe: $0.isFromMe, text: $0.text, sentAt: $0.sentAt) }
+            .map { ThreadTurn(fromMe: $0.isFromMe, text: $0.text, sentAt: $0.sentAt,
+                              senderName: $0.isFromMe ? nil : $0.senderContactID.flatMap { senderNames?[$0] }) }
         // Public identity (enrichment) — a draft to a VC shouldn't read like
         // one to a gym buddy.
         let enrichment = personID.flatMap { try? store.enrichment(forPerson: $0) }

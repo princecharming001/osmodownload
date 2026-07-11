@@ -37,12 +37,12 @@ struct OsmoApp: App {
             CommandGroup(after: .appInfo) {
                 Button("Check for Updates…") { updater.checkForUpdates() }
                     .disabled(!updater.canCheckForUpdates)
-                Button("My Account…") { model.activeSheet = .account }
+                Button("My Account…") { model.present(.account) }
                 Button("Replay Welcome…") { hasOnboarded = false }
             }
             CommandGroup(replacing: .help) {
-                Button("Osmo Help") { model.activeSheet = .help }
-                Button("Send Feedback…") { model.activeSheet = .feedback }
+                Button("Osmo Help") { model.present(.help) }
+                Button("Send Feedback…") { model.present(.feedback) }
                 Divider()
                 Button("Terms of Service") {
                     if let u = URL(string: "https://osmo.app/terms") { NSWorkspace.shared.open(u) }

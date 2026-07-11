@@ -1,14 +1,14 @@
 // GET /api/version — the app's manual update-check stub (Sparkle later).
 
+import { getUnipile } from "@/lib/unipile/client";
+import { isLiveOAuth } from "@/lib/oauth/providers";
+
 const CURRENT = {
   version: "0.2.0",
   build: 2,
   downloadURL: "https://osmo.app/download",
   notes: "Consumer redesign: platform connections, liquid-glass pill, new onboarding.",
 };
-
-import { getUnipile } from "@/lib/unipile/client";
-import { isLiveOAuth } from "@/lib/oauth/providers";
 
 export async function GET(): Promise<Response> {
   // `mode` is SERVER truth: any live provider (Unipile or OAuth) means real

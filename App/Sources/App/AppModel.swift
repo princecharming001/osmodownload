@@ -56,10 +56,41 @@ final class AppModel: ObservableObject {
     /// Close the current sheet, then present `next` shortly after — so SwiftUI
     /// fully tears the first one down before standing up the next. Never
     /// present a sheet directly from within another sheet's view tree.
-    func handoff(to next: AppSheet) {
-        activeSheet = nil
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            self?.activeSheet = next
+    /// What is ACTUALLY presented (stamped by the sheet content's onAppear) —
+    /// the only reliable signal that a present wasn't silently dropped by the
+    /// dismiss/present race under load.
+    var sheetOnScreen: AppSheet?
+
+    /// THE way to show a sheet. macOS SwiftUI drops `.sheet(item:)` presents
+    /// under main-thread load — from nil AND on in-place swaps — leaving the
+    /// item set with nothing on screen (a dead button to the user). Setting
+    /// the item is therefore present-AND-VERIFY: the sheet content stamps
+    /// `sheetOnScreen` on appear; if the stamp hasn't landed, cycle the
+    /// binding, bounded.
+    func present(_ sheet: AppSheet) {
+        activeSheet = sheet
+        verifyPresented(sheet, attempt: 0)
+    }
+
+    /// Sheet-to-sheet navigation — same mechanism (in-place identity swap).
+    func handoff(to next: AppSheet) { present(next) }
+
+    private func verifyPresented(_ sheet: AppSheet, attempt: Int) {
+        // Patient first look + a grace recheck: cycling too eagerly DISMISSES
+        // a sheet that is merely presenting slowly under load — the safety net
+        // must never cause the flicker it exists to cure.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard let self, self.activeSheet == sheet, self.sheetOnScreen != sheet,
+                  attempt < 2 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                guard self.activeSheet == sheet, self.sheetOnScreen != sheet else { return }
+                self.activeSheet = nil
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    guard self.activeSheet == nil else { return }   // user opened something else
+                    self.activeSheet = sheet
+                    self.verifyPresented(sheet, attempt: attempt + 1)
+                }
+            }
         }
     }
 
@@ -194,7 +225,7 @@ final class AppModel: ObservableObject {
         let decision = Entitlements.decideDraft(entitlements, now: Date())
         entitlements = decision.newState
         Self.saveEntitlements(decision.newState)
-        if !decision.allowed { activeSheet = .paywall }
+        if !decision.allowed { present(.paywall) }
         return decision.allowed
     }
 
@@ -299,7 +330,7 @@ final class AppModel: ObservableObject {
     /// onboarding covers that).
     private func checkWhatsNew() {
         let last = UserDefaults.standard.string(forKey: "lastSeenVersion")
-        if let last, last != appVersion { activeSheet = .whatsNew }
+        if let last, last != appVersion { present(.whatsNew) }
         else if last == nil { UserDefaults.standard.set(appVersion, forKey: "lastSeenVersion") }
     }
     /// Persist the seen version. Presentation is NOT touched here — the sheet's
@@ -1003,7 +1034,18 @@ final class AppModel: ObservableObject {
         // changed, or when a merge/reject explicitly asks for it.
         let contactCount = (try? store.contactCount()) ?? 0
         if forceGraphRebuild || contactCount != lastGraphContactCount {
-            mergeSuggestions = (try? store.rebuildIdentityGraph()) ?? []
+            // Merge review is for PEOPLE: drop pairs involving groups or
+            // classified-automated threads ("Google & Google — same person?"),
+            // and self-pairs (identical names both sides, no shared evidence).
+            let groupOrBotNames: Set<String> = Set(threads.compactMap { t -> String? in
+                guard t.isGroup || humanByThread[t.id] == false else { return nil }
+                return (t.title?.isEmpty == false ? t.title : nil)
+            })
+            mergeSuggestions = ((try? store.rebuildIdentityGraph()) ?? []).filter { sug in
+                !groupOrBotNames.contains(sug.displayNameA)
+                    && !groupOrBotNames.contains(sug.displayNameB)
+                    && sug.displayNameA != sug.displayNameB
+            }
             lastGraphContactCount = contactCount
             forceGraphRebuild = false
         }
@@ -1305,7 +1347,13 @@ final class AppModel: ObservableObject {
     /// One Ask exchange. `isError` marks an answer that's a surfaced failure
     /// (offline, quota, sign-in) so the transcript can render it as a warning
     /// rather than a normal grounded answer.
-    struct AskExchange { let q: String; let a: String; var isError: Bool = false }
+    struct AskExchange {
+        let q: String
+        let a: String
+        var isError: Bool = false
+        /// Tappable next steps parsed from the answer (draft/open/remind/snooze).
+        var actions: [AskAction] = []
+    }
 
     /// Question/answer exchanges this session (newest last) + in-flight state.
     @Published private(set) var askExchanges: [AskExchange] = []
@@ -1321,15 +1369,19 @@ final class AppModel: ObservableObject {
 
         // Keyless/demo: never dead-end — answer honestly from what we can see.
         if isMockMode {
-            askExchanges.append(AskExchange(q: q, a: mockAnswer(for: q)))
+            let (prose, actions) = Ask.split(answer: mockAnswer(for: q))
+            askExchanges.append(AskExchange(q: q, a: prose, actions: resolvable(actions)))
             return
         }
 
-        guard isPro else { activeSheet = .paywall; return }
+        guard isPro else { present(.paywall); return }
         askBusy = true
         let snippets = askSnippets(for: q)
+        let history = askExchanges.suffix(3).flatMap { ["Q: \($0.q)", "A: \(String($0.a.prefix(280)))"] }
         let ctx = AskContext(question: q, snippets: snippets, people: peopleDirectory(),
-                             about: onboardingProfile.promptPreamble)
+                             about: [userIdentityLine(), onboardingProfile.promptPreamble]
+                                 .filter { !$0.isEmpty }.joined(separator: "\n"),
+                             history: history)
         Task { [weak self] in
             guard let self else { return }
             do {
@@ -1348,7 +1400,8 @@ final class AppModel: ObservableObject {
                 }
                 await MainActor.run {
                     self.askBusy = false
-                    self.askExchanges.append(AskExchange(q: q, a: answer))
+                    let (prose, actions) = Ask.split(answer: answer)
+                    self.askExchanges.append(AskExchange(q: q, a: prose, actions: self.resolvable(actions)))
                 }
             } catch {
                 await MainActor.run {
@@ -1378,6 +1431,22 @@ final class AppModel: ObservableObject {
     /// Deterministic, honest answers for demo/mock mode — read straight from the
     /// local queue + counts, no model call.
     private func mockAnswer(for question: String) -> String {
+        // Action-shaped asks get a real ACTIONS block so the keyless E2E
+        // probe exercises parse → chip → perform end to end.
+        let qLower = question.lowercased()
+        if qLower.contains("draft") || qLower.contains("remind") || qLower.contains("snooze") {
+            if let person = people.first(where: { row in
+                row.name.lowercased().split(whereSeparator: { !$0.isLetter }).contains { token in
+                    token.count >= 3 && qLower.contains(token)
+                }
+            }) {
+                let kind = qLower.contains("draft") ? "draft" : (qLower.contains("remind") ? "remind" : "snooze")
+                let days = kind == "draft" ? "" : ",\"days\":3"
+                return "On it — \(person.name) is a good one to move on.\n" +
+                       "ACTIONS: [{\"kind\":\"\(kind)\",\"person\":\"\(person.name)\"\(days)}]"
+            }
+        }
+
         let ql = question.lowercased()
         func names(_ cards: [QueueCard]) -> [String] {
             var seen = Set<String>(); var out: [String] = []
@@ -1433,6 +1502,18 @@ final class AppModel: ObservableObject {
             }
         }
 
+        // 1b. Group lane — groups aren't in `people`, but "what's happening
+        // in <group name>?" should still pull that thread's conversation.
+        for thread in threads where thread.isGroup {
+            guard let title = thread.title?.lowercased(), title.count >= 3 else { continue }
+            let titleTokens = title.split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+                .filter { $0.count >= 3 }
+            guard !titleTokens.isEmpty,
+                  titleTokens.allSatisfy({ qLower.contains($0) }) || qLower.contains(title)
+            else { continue }
+            for m in ((try? store.recentMessages(inThread: thread.id, limit: 15)) ?? []) { add(m) }
+        }
+
         // 2. Keyword lane.
         let stop: Set<String> = ["what", "did", "and", "the", "about", "talk", "last", "when",
                                  "who", "how", "are", "was", "were", "with", "have", "has",
@@ -1453,6 +1534,64 @@ final class AppModel: ObservableObject {
             }
         }
         return Array(out.prefix(60))
+    }
+
+    /// Who the user IS — their name and own addresses — so Ask never narrates
+    /// them in third person ("asking Anish to make a group chat" when the user
+    /// IS Anish). Built from the signed-in account plus the store's own-side
+    /// handles.
+    // MARK: Ask actions — the chat DOES things, grounded in real app functions.
+
+    /// Keep only actions whose person resolves to a real thread — a button
+    /// that can't act is worse than no button.
+    private func resolvable(_ actions: [AskAction]) -> [AskAction] {
+        actions.filter { resolveThread(personNamed: $0.person) != nil }
+    }
+
+    private func resolveThread(personNamed name: String) -> UUID? {
+        let needle = name.lowercased()
+        let match = people.first { $0.name.lowercased() == needle }
+            ?? people.first { person in
+                person.name.lowercased().split(whereSeparator: { !$0.isLetter }).contains { token in
+                    token.count >= 3 && needle.contains(token)
+                }
+            }
+        guard let match else { return nil }
+        if let thread = threads(forPerson: match.id).first?.id { return thread }
+        // Unresolved contacts have no Person row — their PersonRow.id IS the
+        // thread id (buildPeople keys by personID ?? threadID).
+        return (try? store.thread(id: match.id)) != nil ? match.id : nil
+    }
+
+    /// Execute a chip. Every branch lands in EXISTING behavior: the inbox
+    /// deep-link, the follow-up armer, the snooze store.
+    func perform(_ action: AskAction) {
+        guard let threadID = resolveThread(personNamed: action.person) else {
+            toast = "Couldn’t find \(action.person)’s conversation"
+            return
+        }
+        switch action.kind {
+        case .draft, .open:
+            focusedThreadID = threadID
+            section = .inbox
+            selectedThreadID = threadID
+        case .remind:
+            let days = action.days ?? 3
+            armFollowup(thread: threadID, after: TimeInterval(days) * 86_400)
+            toast = "I’ll nudge you about \(action.person) in \(days)d"
+        case .snooze:
+            let days = action.days ?? 1
+            try? store.snooze(thread: threadID, until: Date().addingTimeInterval(TimeInterval(days) * 86_400))
+            reload()
+            toast = "\(action.person) snoozed for \(days)d"
+        }
+    }
+
+    private func userIdentityLine() -> String {
+        let name = account.displayName.trimmingCharacters(in: .whitespaces)
+        guard !name.isEmpty else { return "" }
+        return "The user's name is \(name). Messages marked \"You:\" are theirs; "
+            + "when someone addresses \(name) in a message, they are addressing the user."
     }
 
     private func peopleDirectory() -> [String] {
@@ -1753,10 +1892,14 @@ final class AppModel: ObservableObject {
     // MARK: - Timing intelligence for views
 
     /// Recent turns for a thread, chronological (bounded — view-grade sample).
+    /// Group threads carry per-turn sender names so downstream prompts can say
+    /// which person said what; 1:1 threads leave senderName nil.
     func turns(forThread threadID: UUID, limit: Int = 60) -> [ThreadTurn] {
-        ((try? store.recentMessages(inThread: threadID, limit: limit)) ?? [])
+        let senderNames = groupSenderNames(store: store, threadID: threadID)
+        return ((try? store.recentMessages(inThread: threadID, limit: limit)) ?? [])
             .reversed()
-            .map { ThreadTurn(fromMe: $0.isFromMe, text: $0.text, sentAt: $0.sentAt) }
+            .map { ThreadTurn(fromMe: $0.isFromMe, text: $0.text, sentAt: $0.sentAt,
+                              senderName: $0.isFromMe ? nil : $0.senderContactID.flatMap { senderNames?[$0] }) }
     }
 
     /// The explicit reach-out call for a thread: nudge, give it space, lay back,
@@ -1936,7 +2079,7 @@ final class AppModel: ObservableObject {
                 lastFromMe: last.isFromMe, lastMessageAt: last.sentAt,
                 myLastReadByThem: last.isFromMe ? last.readAt : nil,
                 theirLastText: last.isFromMe ? nil : last.text,
-                isLikelyHuman: human, nonHumanReason: reason)
+                isLikelyHuman: human, nonHumanReason: reason, isGroup: thread.isGroup)
         }
         detIntelByThread = newDetIntel
         return snapshots
@@ -1944,7 +2087,9 @@ final class AppModel: ObservableObject {
 
     private func buildPeople(snapshots: [ThreadSnapshot]) -> [PersonRow] {
         var rows: [UUID: PersonRow] = [:]
-        for s in snapshots {
+        // Groups are conversations, not people — they live in the Inbox, never
+        // the directory ("sf summermaxxing" is not someone you know).
+        for s in snapshots where !s.isGroup {
             let status = TextingStatus.derive(s)
             let key = s.personID ?? s.threadID
             if var existing = rows[key] {

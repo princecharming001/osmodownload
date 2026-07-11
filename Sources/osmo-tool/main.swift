@@ -1,5 +1,6 @@
 import Foundation
 import GRDB
+import OsmoCore
 
 // osmo-tool — maintenance CLI for the local Osmo store.
 //
@@ -21,8 +22,8 @@ let dbURL = supportDir.appendingPathComponent("osmo.db")
 let keyURL = supportDir.appendingPathComponent(".dbkey")
 
 let args = CommandLine.arguments.dropFirst()
-guard let cmd = args.first, ["purge-demo", "inspect"].contains(cmd) else {
-    print("usage: osmo-tool purge-demo [--apply] | inspect [name-fragment]"); exit(2)
+guard let cmd = args.first, ["purge-demo", "inspect", "media", "groups", "probe-chatdb"].contains(cmd) else {
+    print("usage: osmo-tool purge-demo [--apply] | inspect [name-fragment] | media | groups | probe-chatdb"); exit(2)
 }
 let apply = args.contains("--apply")
 
@@ -65,6 +66,134 @@ if cmd == "inspect" {
             }
         }
     } catch { print("✗ inspect failed: \(error)"); exit(1) }
+    exit(0)
+}
+
+// groups — read-only probe: are group chats detected, and is every incoming
+// group message attributed to a named sender? (The AI layer labels group turns
+// by sender, so unattributed incoming messages in groups = degraded context.)
+// probe-chatdb — read-only: run the CURRENT reader+normalizer over the real
+// Messages chat.db and report how many threads would be groups. Never writes.
+if cmd == "probe-chatdb" {
+    let home = FileManager.default.homeDirectoryForCurrentUser
+    let chatDB = home.appendingPathComponent("Library/Messages/chat.db")
+    do {
+        // Recent slice only — a full readAll blows the SQL-variable cap in the
+        // attachment batch join on very large DBs (the app imports in chunks).
+        let sinceRow = Int64(255549 - 2500)
+        let (raws, _) = try ChatDBReader(path: chatDB).readSince(rowID: sinceRow)
+        let batch = IMessageNormalizer.normalize(raws)
+        let groups = batch.threads.filter(\.isGroup)
+        print("raw rows: \(raws.count)")
+        print("normalized: \(batch.threads.count) threads (\(groups.count) group), \(batch.messages.count) messages, \(batch.contacts.count) contacts")
+        let attributed = batch.messages.filter { !$0.isFromMe && $0.senderContactID != nil }.count
+        let incoming = batch.messages.filter { !$0.isFromMe }.count
+        print("incoming messages: \(incoming), sender-attributed: \(attributed)")
+        for g in groups.sorted(by: { ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast) }).prefix(5) {
+            print("  group: \(g.title ?? "(untitled)") [\(g.platformThreadID.prefix(18))…]")
+        }
+    } catch { print("✗ probe failed: \(error)"); exit(1) }
+    exit(0)
+}
+
+if cmd == "groups" {
+    do {
+        try dbQueue.read { db in
+            let total = try Int.fetchOne(db, sql: "select count(*) from thread where deletedAt is null") ?? 0
+            let groups = try Int.fetchOne(db, sql: "select count(*) from thread where isGroup = 1 and deletedAt is null") ?? 0
+            print("threads: \(total) total, \(groups) group")
+
+            let cov = try Row.fetchOne(db, sql: """
+                select count(*) n,
+                       sum(case when m.senderContactID is not null then 1 else 0 end) attributed
+                from message m join thread t on t.id = m.threadID
+                where t.isGroup = 1 and m.isFromMe = 0 and m.deletedAt is null
+                """)
+            let n = (cov?["n"] as Int?) ?? 0
+            let attributed = (cov?["attributed"] as Int?) ?? 0
+            print("incoming group messages: \(n), sender-attributed: \(attributed)"
+                  + (n > 0 ? String(format: " (%.1f%%)", 100.0 * Double(attributed) / Double(n)) : ""))
+
+            print("\ntop group threads:")
+            for r in try Row.fetchAll(db, sql: """
+                select t.id, t.title, t.platform, t.lastMessageAt,
+                       (select count(distinct m.senderContactID) from message m
+                        where m.threadID = t.id and m.senderContactID is not null) senders,
+                       (select count(*) from message m where m.threadID = t.id and m.deletedAt is null) msgs
+                from thread t where t.isGroup = 1 and t.deletedAt is null
+                order by t.lastMessageAt desc limit 10
+                """) {
+                let tid = r["id"] as String? ?? ""
+                print("  [\(r["platform"] as String? ?? "?")] \(r["title"] as String? ?? "(untitled)") — \(r["msgs"] as Int? ?? 0) msgs, \(r["senders"] as Int? ?? 0) senders")
+                for m in try Row.fetchAll(db, sql: """
+                    select coalesce(c.displayName, c.handle, case when m.isFromMe = 1 then 'me' else '???' end) who,
+                           count(*) n
+                    from message m left join contact c on c.id = m.senderContactID
+                    where m.threadID = ? and m.deletedAt is null
+                    group by who order by n desc limit 6
+                    """, arguments: [tid]) {
+                    print("      \(m["who"] as String? ?? "?"): \(m["n"] as Int? ?? 0)")
+                }
+            }
+        }
+    } catch { print("✗ groups failed: \(error)"); exit(1) }
+    exit(0)
+}
+
+if cmd == "media" {
+    do {
+        try dbQueue.read { db in
+            print("── attachments by kind × platform ──")
+            for r in try Row.fetchAll(db, sql: """
+                select m.platform, a.kind, count(*) n from message_attachment a
+                join message m on m.id = a.messageID
+                group by m.platform, a.kind order by n desc limit 20
+                """) {
+                print("  \(r["platform"] as String? ?? "?") \(r["kind"] as String? ?? "?"): \(r["n"] as Int? ?? 0)")
+            }
+            print("── attachment total ──")
+            print("  \(try Int.fetchOne(db, sql: "select count(*) from message_attachment") ?? 0)")
+            print("── empty-text messages by platform (media-only?) ──")
+            for r in try Row.fetchAll(db, sql: """
+                select platform, count(*) n from message
+                where length(trim(text)) = 0 group by platform order by n desc limit 8
+                """) {
+                print("  \(r["platform"] as String? ?? "?"): \(r["n"] as Int? ?? 0)")
+            }
+            print("── messages with URLs by platform ──")
+            for r in try Row.fetchAll(db, sql: """
+                select platform, count(*) n from message
+                where text like '%http%' group by platform order by n desc limit 8
+                """) {
+                print("  \(r["platform"] as String? ?? "?"): \(r["n"] as Int? ?? 0)")
+            }
+            print("── empty-text messages WITHOUT any attachment row (invisible bubbles) ──")
+            for r in try Row.fetchAll(db, sql: """
+                select m.platform, count(*) n from message m
+                where length(trim(m.text)) = 0 and m.deletedAt is null
+                  and not exists (select 1 from message_attachment a where a.messageID = m.id)
+                group by m.platform order by n desc limit 8
+                """) {
+                print("  \(r["platform"] as String? ?? "?"): \(r["n"] as Int? ?? 0)")
+            }
+            print("── sample link-attachment titles/urls (instagram) ──")
+            for r in try Row.fetchAll(db, sql: """
+                select substr(coalesce(a.title,'-'),1,40) t, substr(coalesce(a.linkURL,'-'),1,70) u
+                from message_attachment a join message m on m.id = a.messageID
+                where a.kind = 'link' and m.platform = 'instagram' limit 6
+                """) {
+                print("  title=\(r["t"] as String? ?? "-") url=\(r["u"] as String? ?? "-")")
+            }
+            print("── instagram/whatsapp sample texts (recent 8) ──")
+            for r in try Row.fetchAll(db, sql: """
+                select platform, substr(replace(text, char(10), ' '), 1, 90) t from message
+                where platform in ('instagram','whatsapp') and deletedAt is null
+                order by sentAt desc limit 8
+                """) {
+                print("  [\(r["platform"] as String? ?? "?")] \(r["t"] as String? ?? "")")
+            }
+        }
+    } catch { print("✗ media census failed: \(error)"); exit(1) }
     exit(0)
 }
 

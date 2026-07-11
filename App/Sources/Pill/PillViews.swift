@@ -218,7 +218,7 @@ struct ExpandedPanel: View {
                             Text("\(remaining) free draft\(remaining == 1 ? "" : "s") left this week")
                                 .font(DS.Typography.eyebrow).foregroundStyle(DS.Colors.muted)
                             Spacer()
-                            Button("Go unlimited") { model.activeSheet = .paywall }
+                            Button("Go unlimited") { model.present(.paywall) }
                                 .buttonStyle(.plain).font(DS.Typography.eyebrow)
                                 .foregroundStyle(DS.Colors.accent)
                         }

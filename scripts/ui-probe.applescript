@@ -110,7 +110,29 @@ end runSettle
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Scenario: modals — the original sheet click-through (regression guard).
 -- ═══════════════════════════════════════════════════════════════════════════
+-- Block until the app answers AX queries QUICKLY (a fresh launch on a real
+-- store spends its first minute importing/classifying — walks are slow and
+-- probe steps race the warm-up). Warm = a known-good id found in under ~3s,
+-- twice in a row. Budget-bounded; proceeds regardless after 90s.
+on waitWarm()
+	set warmStreak to 0
+	set deadline to (current date) + 90
+	repeat while (current date) < deadline
+		set t0 to current date
+		set found to my hasIdentifier("sidebar.account")
+		set dt to (current date) - t0
+		if found and dt ≤ 3 then
+			set warmStreak to warmStreak + 1
+			if warmStreak ≥ 2 then return
+		else
+			set warmStreak to 0
+		end if
+		delay 2
+	end repeat
+end waitWarm
+
 on runModals(stepLog)
+	my waitWarm()
 	tell application "System Events"
 		tell process "Osmo"
 			-- Step 1: consent sheet (only present pre-acceptance — tolerate
@@ -164,10 +186,13 @@ end runModals
 -- call), so this exercises the whole Ask surface without any credentials.
 -- ═══════════════════════════════════════════════════════════════════════════
 on runAsk(stepLog)
+	tell application "Osmo" to activate
+	delay 1
+	my waitWarm()
 	tell application "System Events"
 		tell process "Osmo"
 			key code 18 using {command down}   -- ⌘1 → Today
-			my waitFor("ask.input", 12)
+			my waitFor("ask.input", 30)
 			set end of stepLog to "PASS navigated to Today, ask.input present"
 
 			-- Write the question straight into the field's AX value: a plain AX
@@ -183,6 +208,7 @@ on runAsk(stepLog)
 			-- The answer bubble must materialize.
 			my waitFor("ask.answer", 15)
 			set end of stepLog to "PASS ask.answer rendered"
+
 		end tell
 	end tell
 end runAsk
@@ -194,6 +220,9 @@ end runAsk
 -- leaves for a browser.
 -- ═══════════════════════════════════════════════════════════════════════════
 on runConnections(stepLog)
+	tell application "Osmo" to activate
+	delay 1
+	my waitWarm()
 	tell application "System Events"
 		tell process "Osmo"
 			key code 23 using {command down}   -- ⌘5 → Connections
@@ -233,6 +262,9 @@ end runConnections
 -- mail out of the human queue.
 -- ═══════════════════════════════════════════════════════════════════════════
 on runQueueHumanFilter(stepLog)
+	tell application "Osmo" to activate
+	delay 1
+	my waitWarm()
 	tell application "System Events"
 		tell process "Osmo"
 			-- Pull the emitted messages in now (⌘R), then open Today (⌘1).
@@ -253,6 +285,19 @@ on runQueueHumanFilter(stepLog)
 				error "queue.card.poker* present — automated email leaked into the human reply queue."
 			end if
 			set end of stepLog to "PASS automated sender (Poker Night) correctly filtered out"
+			-- ACTIONS: with Sam guaranteed in the store (emitted above), an
+			-- action-shaped ask must yield a chip that deep-links to the thread.
+			key code 18 using {command down}   -- ⌘1 → Today (ask card)
+			my waitFor("ask.input", 30)
+			my setValueByIdentifier("ask.input", "Draft a reply to Sam")
+			delay 0.4
+			my waitFor("ask.send", 12)
+			my clickIdentifier("ask.send")
+			my waitFor("ask.action.draft", 20)
+			set end of stepLog to "PASS action chip rendered (draft)"
+			my clickIdentifier("ask.action.draft")
+			my waitFor("inbox.compose", 15)
+			set end of stepLog to "PASS action chip opened the conversation (inbox.compose)"
 		end tell
 	end tell
 end runQueueHumanFilter
@@ -343,6 +388,10 @@ on hasIdentifierPrefix(prefix)
 end hasIdentifierPrefix
 
 on clickIdentifier(ident)
+	-- Every click gets the full waitFor tolerance first: a freshly-presented
+	-- sheet's subtree can take many seconds to materialize for AX under load,
+	-- and each click that races it is one more flaky gate.
+	my waitFor(ident, 12)
 	set found to my findAcrossWindows(ident)
 	if found is missing value then error "Could not find AX element with identifier: " & ident
 	tell application "System Events" to click found
@@ -351,7 +400,12 @@ end clickIdentifier
 -- Set a text field's value directly by identifier (used when a click+keystroke
 -- would be flaky). SwiftUI TextFields honor AXValue writes for their binding.
 on setValueByIdentifier(ident, newValue)
-	set found to my findAcrossWindows(ident)
+	set found to missing value
+	repeat with attempt from 1 to 3
+		set found to my findAcrossWindows(ident)
+		if found is not missing value then exit repeat
+		delay 1.2
+	end repeat
 	if found is missing value then error "Could not find AX element with identifier: " & ident
 	tell application "System Events"
 		-- Focus first: a SwiftUI TextField only bridges an AXValue write into its
@@ -365,12 +419,15 @@ on setValueByIdentifier(ident, newValue)
 end setValueByIdentifier
 
 on waitFor(ident, timeoutSeconds)
-	-- WALL-CLOCK deadline: each AX tree walk can take seconds on a busy app
-	-- (the walk itself forces SwiftUI to materialize accessibility nodes), so
-	-- counting iterations would stretch a "10s timeout" into many minutes.
+	-- WALL-CLOCK deadline (iteration counting stretches timeouts into minutes
+	-- when walks are slow) — BUT with a minimum attempt count: a single walk
+	-- during app churn can take 30-40s, and one slow walk must not eat the
+	-- whole budget and report "frozen" when attempt 2 would have found it.
 	set deadline to (current date) + timeoutSeconds
-	repeat while (current date) < deadline
+	set attempts to 0
+	repeat while ((current date) < deadline) or (attempts < 3)
 		if my hasIdentifier(ident) then return true
+		set attempts to attempts + 1
 		delay 1.2
 	end repeat
 	error "Timed out waiting for '" & ident & "' to appear — an action had no effect (frozen surface?)."
@@ -378,8 +435,10 @@ end waitFor
 
 on waitForPrefix(prefix, timeoutSeconds)
 	set deadline to (current date) + timeoutSeconds
-	repeat while (current date) < deadline
+	set attempts to 0
+	repeat while ((current date) < deadline) or (attempts < 3)
 		if my hasIdentifierPrefix(prefix) then return true
+		set attempts to attempts + 1
 		delay 1.2
 	end repeat
 	error "Timed out waiting for an id starting with '" & prefix & "' — an action had no effect (frozen surface?)."

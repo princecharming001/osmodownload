@@ -23,6 +23,18 @@ if [ ! -d "$APP_PATH" ]; then
   exit 1
 fi
 
+
+# ── Probes ALWAYS run against the LOCAL mock backend ─────────────────────────
+# The dev app's config.json may point at production (a real data session);
+# probing prod would click real connect flows and miss dev/emit. Swap in a
+# localhost config for the probe's lifetime, restore the user's on exit.
+CONFIG="$HOME/Library/Application Support/Osmo/config.json"
+if [ -f "$CONFIG" ]; then
+  cp "$CONFIG" "$CONFIG.probe-backup"
+  trap 'mv -f "$CONFIG.probe-backup" "$CONFIG" 2>/dev/null || true' EXIT
+fi
+printf '%s' '{"proxyURL":"http://localhost:3000/api/suggest","authToken":"local-dev","model":"claude-sonnet-5","backendURL":"http://localhost:3000"}' > "$CONFIG"
+
 echo "→ relaunching $APP_NAME…"
 pkill -x "$APP_NAME" >/dev/null 2>&1
 sleep 1

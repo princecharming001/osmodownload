@@ -757,6 +757,7 @@ struct ThreadDetailView: View {
             }
             composeRow
         }
+        .accessibilityIdentifier("inbox.compose")
         .padding(DS.Space.m)
     }
 
@@ -885,7 +886,30 @@ struct MessageBubble: View {
 
     private var showSender: Bool { isGroup && !message.isFromMe && senderName != nil }
 
+    /// "Liked a message" delivered as a standalone message (Instagram history
+    /// does this) — render as a quiet system line, never a full bubble.
+    private var isReactionEcho: Bool {
+        guard attachments.isEmpty, replyParent == nil else { return false }
+        let t = message.text.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return t.range(of: #"^(liked|loved|laughed at|emphasized|disliked|reacted to) a message$"#,
+                       options: .regularExpression) != nil
+    }
+
     var body: some View {
+        if isReactionEcho {
+            HStack {
+                Spacer(minLength: 0)
+                Text("\(message.isFromMe ? "You" : (senderName ?? "They")) \(message.text.lowercased())")
+                    .font(DS.Typography.eyebrow).foregroundStyle(DS.Colors.muted)
+                Spacer(minLength: 0)
+            }
+            .padding(.vertical, 2)
+        } else {
+            bubbleBody
+        }
+    }
+
+    private var bubbleBody: some View {
         HStack(alignment: .bottom, spacing: DS.Space.xs) {
             if message.isFromMe { Spacer(minLength: 60) }
             else if isGroup {
@@ -910,6 +934,21 @@ struct MessageBubble: View {
                         .overlay(alignment: message.isFromMe ? .topLeading : .topTrailing) {
                             reactionCluster.offset(x: message.isFromMe ? -8 : 8, y: -12)
                         }
+                } else {
+                    // No text AND no attachments — a share type the provider
+                    // didn't expose. An invisible bubble reads as a sync hole;
+                    // an honest chip reads as what it is.
+                    HStack(spacing: 4) {
+                        Image(systemName: "shippingbox").font(.system(size: 11))
+                        Text("Shared content — no preview available")
+                            .font(DS.Typography.caption).italic()
+                    }
+                    .foregroundStyle(DS.Colors.muted)
+                    .padding(.horizontal, DS.Space.s).padding(.vertical, DS.Space.xs)
+                    .background(DS.Colors.chip, in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
+                    .overlay(alignment: message.isFromMe ? .topLeading : .topTrailing) {
+                        reactionCluster.offset(x: message.isFromMe ? -8 : 8, y: -12)
+                    }
                 }
                 if let timeText {
                     Text(timeText).font(.system(size: 9))
@@ -922,7 +961,7 @@ struct MessageBubble: View {
     }
 
     private var bubble: some View {
-        Text(message.text)
+        Text(Self.linkified(message.text))
             .font(DS.Typography.body)
             .foregroundStyle(message.isFromMe ? .white : DS.Colors.ink)
             .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)
@@ -938,6 +977,45 @@ struct MessageBubble: View {
                     }
                 }
             }
+    }
+
+    /// Bubble text with live links: `[label](url)` markdown artifacts (HTML
+    /// email conversions) collapse to a tappable label, and bare URLs become
+    /// tappable. Bounded — a pathological megabyte body renders as plain text.
+    static func linkified(_ text: String) -> AttributedString {
+        guard text.count <= 4_000 else { return AttributedString(text) }
+        var working = text
+        var links: [(label: String, url: String)] = []
+        // Collapse [label](url) first so its url isn't double-detected.
+        while let m = working.range(of: #"\[([^\]]{1,120})\]\((https?://[^)\s]+)\)"#, options: .regularExpression) {
+            let match = String(working[m])
+            let label = match.dropFirst().prefix(while: { $0 != "]" })
+            let url = match.split(separator: "(").last.map { String($0.dropLast()) } ?? ""
+            let token = "\u{FFFC}\(links.count)\u{FFFC}"
+            links.append((String(label), url))
+            working.replaceSubrange(m, with: token)
+        }
+        var out = AttributedString(working)
+        for (i, link) in links.enumerated() {
+            let token = "\u{FFFC}\(i)\u{FFFC}"
+            if let r = out.range(of: token) {
+                var replacement = AttributedString(link.label)
+                replacement.link = URL(string: link.url)
+                replacement.underlineStyle = .single
+                out.replaceSubrange(r, with: replacement)
+            }
+        }
+        // Bare URLs.
+        if let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) {
+            let plain = String(out.characters)
+            for m in detector.matches(in: plain, range: NSRange(plain.startIndex..., in: plain)).reversed() {
+                guard let url = m.url, let swiftRange = Range(m.range, in: plain),
+                      let attrRange = out.range(of: String(plain[swiftRange])) else { continue }
+                out[attrRange].link = url
+                out[attrRange].underlineStyle = .single
+            }
+        }
+        return out
     }
 
     /// Up to 4 attachments in a stack, "+N" for the rest — never a wall of media.
@@ -1245,18 +1323,65 @@ struct FileAttachmentChip: View {
 struct LinkAttachmentRow: View {
     let attachment: OsmoAttachment
 
+    /// The URL a tap should open. Handles the legacy `att://<thread>/<base64>`
+    /// refs from the pre-Unipile importers — the base64 payload IS the real
+    /// https URL, so decode instead of rendering a dead chip.
+    private var resolvedURL: URL? {
+        guard let raw = attachment.linkURL else { return nil }
+        if raw.hasPrefix("att://") {
+            // att://<thread-id>/<base64-of-https-url> — the payload is FULL
+            // base64 (it contains '/' and '='), so split only on the first
+            // separator after the thread id, never on every slash.
+            let rest = raw.dropFirst("att://".count)
+            guard let slash = rest.firstIndex(of: "/") else { return nil }
+            var b64 = String(rest[rest.index(after: slash)...])
+            // Tolerate URL-safe base64 and stripped padding.
+            b64 = b64.replacingOccurrences(of: "-", with: "+")
+                     .replacingOccurrences(of: "_", with: "/")
+            if b64.count % 4 != 0 { b64 += String(repeating: "=", count: 4 - b64.count % 4) }
+            guard let data = Data(base64Encoded: b64),
+                  let decoded = String(data: data, encoding: .utf8),
+                  decoded.hasPrefix("http") else { return nil }   // never hand att:// to macOS
+            return URL(string: decoded)
+        }
+        return URL(string: raw)
+    }
+
+    /// Platform-aware label: "Instagram reel" beats "Shared post" for a reel.
+    private var label: String {
+        if let t = attachment.title, !t.isEmpty { return t }
+        guard let host = resolvedURL?.host()?.lowercased() else { return "Shared post" }
+        if host.contains("instagram") {
+            return (resolvedURL?.path().contains("/reel") == true) ? "Instagram reel" : "Instagram post"
+        }
+        if host.contains("tiktok") { return "TikTok" }
+        if host.contains("youtu") { return "YouTube video" }
+        if host.contains("cdninstagram") || host.contains("fbcdn") { return "Instagram media" }
+        return host.replacingOccurrences(of: "www.", with: "")
+    }
+
+    private var glyph: String {
+        guard let host = resolvedURL?.host()?.lowercased() else { return "link" }
+        if host.contains("instagram") || host.contains("tiktok") || host.contains("youtu")
+            || host.contains("cdninstagram") || host.contains("fbcdn") { return "play.rectangle.fill" }
+        return "link"
+    }
+
     var body: some View {
         Button {
-            guard let s = attachment.linkURL, let url = URL(string: s) else { return }
-            NSWorkspace.shared.open(url)
+            if let url = resolvedURL { NSWorkspace.shared.open(url) }
         } label: {
             HStack(spacing: 6) {
-                Image(systemName: "link").font(.system(size: 12)).foregroundStyle(DS.Colors.accent)
+                Image(systemName: resolvedURL == nil ? "shippingbox" : glyph)
+                    .font(.system(size: 12))
+                    .foregroundStyle(resolvedURL == nil ? DS.Colors.muted : DS.Colors.accent)
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(attachment.title ?? "Shared post").font(DS.Typography.captionEm)
-                        .foregroundStyle(DS.Colors.ink).lineLimit(1)
-                    if let s = attachment.linkURL {
-                        Text(s).font(.system(size: 10)).foregroundStyle(DS.Colors.muted).lineLimit(1)
+                    Text(resolvedURL == nil ? "Shared post — no preview available" : label)
+                        .font(DS.Typography.captionEm)
+                        .foregroundStyle(resolvedURL == nil ? DS.Colors.muted : DS.Colors.ink).lineLimit(1)
+                    if let url = resolvedURL {
+                        Text(url.host() ?? url.absoluteString)
+                            .font(.system(size: 10)).foregroundStyle(DS.Colors.muted).lineLimit(1)
                     }
                 }
             }
@@ -1264,6 +1389,7 @@ struct LinkAttachmentRow: View {
             .background(DS.Colors.chip, in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
         }
         .buttonStyle(.plain)
+        .disabled(resolvedURL == nil)
         .frame(maxWidth: 240, alignment: .leading)
     }
 }

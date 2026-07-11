@@ -23,6 +23,8 @@ public struct QueueCard: Equatable, Sendable, Identifiable {
     public var priority: Double
     /// The project this card advances, if any.
     public var projectID: UUID?
+    /// Group thread — render with group treatment, phrase as a place not a person.
+    public var isGroup: Bool = false
 }
 
 /// Assembles the morning queue: who you owe, who to nudge toward a goal, who's
@@ -55,12 +57,14 @@ public enum MorningQueue {
             switch status {
             case .needsReply:
                 cards.append(card(s, .reply, status, project,
-                                  reason: "\(firstName(s.personName)) is waiting on you",
-                                  move: "reply to their last message",
+                                  reason: s.isGroup ? "New messages in \(s.personName)"
+                                                    : "\(firstName(s.personName)) is waiting on you",
+                                  move: s.isGroup ? "reply in the group" : "reply to their last message",
                                   base: 100, boost: hasProject ? 30 : 0, idle: idle))
             case .leftOnRead:
                 cards.append(card(s, .leftOnRead, status, project,
-                                  reason: "\(firstName(s.personName)) read it \(ago(idle)) ago — a light nudge could help",
+                                  reason: s.isGroup ? "\(s.personName) went quiet after your message"
+                                                    : "\(firstName(s.personName)) read it \(ago(idle)) ago — a light nudge could help",
                                   move: "follow up gently, zero guilt",
                                   base: 68, boost: hasProject ? 22 : 0, idle: idle))
             case .waiting, .ghosted, .quiet:
@@ -108,7 +112,8 @@ public enum MorningQueue {
         let recency = max(0, 10 - idle / 86_400)
         return QueueCard(threadID: s.threadID, personID: s.personID, personName: s.personName,
                          platform: s.platform, kind: kind, status: status, reason: reason,
-                         suggestedMove: move, priority: base + boost + recency, projectID: project?.id)
+                         suggestedMove: move, priority: base + boost + recency, projectID: project?.id,
+                         isGroup: s.isGroup)
     }
 
     static func firstName(_ name: String) -> String {

@@ -155,7 +155,7 @@ public enum PromptComposer {
     }
 
     static func render(_ turns: [ThreadTurn]) -> String {
-        turns.suffix(20).map { ($0.fromMe ? "You: " : "Them: ") + $0.text }
+        turns.suffix(20).map { ($0.fromMe ? "You: " : "\(($0.senderName ?? "Them")): ") + $0.text }
             .joined(separator: "\n")
     }
 

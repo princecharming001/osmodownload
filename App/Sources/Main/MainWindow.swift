@@ -27,7 +27,7 @@ struct MainWindow: View {
         .sheet(item: $model.activeSheet) { sheet in sheetContent(sheet) }
         .onAppear {
             model.reload()
-            if !acceptedLegal { model.activeSheet = .consent }
+            if !acceptedLegal { model.present(.consent) }
         }
     }
 
@@ -48,6 +48,12 @@ struct MainWindow: View {
     }
 
     @ViewBuilder private func sheetContent(_ sheet: AppModel.AppSheet) -> some View {
+        sheetBody(sheet)
+            .onAppear { model.sheetOnScreen = sheet }
+            .onDisappear { if model.sheetOnScreen == sheet { model.sheetOnScreen = nil } }
+    }
+
+    @ViewBuilder private func sheetBody(_ sheet: AppModel.AppSheet) -> some View {
         switch sheet {
         case .consent:
             LegalConsentView { acceptedLegal = true; model.activeSheet = nil }
@@ -145,7 +151,7 @@ struct MainWindow: View {
 
     /// The account footer — avatar + name + plan chip, opens the profile sheet.
     private var accountRow: some View {
-        Button { model.activeSheet = .account } label: {
+        Button { model.present(.account) } label: {
             HStack(spacing: DS.Space.s) {
                 AvatarView(name: model.account.displayName.isEmpty ? "You" : model.account.displayName,
                            data: model.account.avatarData, size: 28)

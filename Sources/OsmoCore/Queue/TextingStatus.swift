@@ -22,12 +22,16 @@ public struct ThreadSnapshot: Equatable, Sendable {
     public var isLikelyHuman: Bool
     /// Short reason it was judged non-human (for the "why hidden" affordance).
     public var nonHumanReason: String?
+    /// Group thread — the name is the GROUP's, not a person's. Surfaces that
+    /// list people (directory, queue phrasing) must not present it as one.
+    public var isGroup: Bool
 
     public init(threadID: UUID, personID: UUID? = nil, personName: String,
                 platform: Platform, isEmpty: Bool = false, lastFromMe: Bool,
                 lastMessageAt: Date? = nil, myLastReadByThem: Date? = nil,
                 theirLastText: String? = nil,
-                isLikelyHuman: Bool = true, nonHumanReason: String? = nil) {
+                isLikelyHuman: Bool = true, nonHumanReason: String? = nil,
+                isGroup: Bool = false) {
         self.threadID = threadID
         self.personID = personID
         self.personName = personName
@@ -39,6 +43,7 @@ public struct ThreadSnapshot: Equatable, Sendable {
         self.theirLastText = theirLastText
         self.isLikelyHuman = isLikelyHuman
         self.nonHumanReason = nonHumanReason
+        self.isGroup = isGroup
     }
 }
 

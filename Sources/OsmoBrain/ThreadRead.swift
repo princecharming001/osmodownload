@@ -7,11 +7,16 @@ public struct ThreadTurn: Equatable, Sendable {
     public var fromMe: Bool
     public var text: String
     public var sentAt: Date?
+    /// Who sent this turn (display name) — set for GROUP threads so prompt
+    /// renderers can label each speaker; nil in 1:1 threads (or when unknown),
+    /// where "Them" is unambiguous.
+    public var senderName: String?
 
-    public init(fromMe: Bool, text: String, sentAt: Date? = nil) {
+    public init(fromMe: Bool, text: String, sentAt: Date? = nil, senderName: String? = nil) {
         self.fromMe = fromMe
         self.text = text
         self.sentAt = sentAt
+        self.senderName = senderName
     }
 }
 

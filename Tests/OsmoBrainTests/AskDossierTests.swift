@@ -15,7 +15,7 @@ struct AskTests {
         #expect(p.userTurn.contains("who do I know in tech in SF?"))
         #expect(p.userTurn.contains("Jay Pao · LinkedIn/iMessage"))
         #expect(p.userTurn.contains("anthropic gig"))
-        #expect(p.systemCore.contains("never invent"))  // refusal-biased
+        #expect(p.systemCore.contains("Never invent"))  // refusal-biased
     }
 
     @Test("Empty retrieval still composes (model must say it can't see it)")

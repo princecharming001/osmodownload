@@ -49,7 +49,7 @@ public enum Insight {
         if !ctx.transcript.isEmpty {
             s.append("CONVERSATION (most recent last):")
             s.append(ctx.transcript.suffix(10)
-                .map { ($0.fromMe ? "You: " : "Them: ") + $0.text }
+                .map { ($0.fromMe ? "You: " : "\(($0.senderName ?? "Them")): ") + $0.text }
                 .joined(separator: "\n"))
         }
         s.append("Write the TOPIC and BRIEF lines.")

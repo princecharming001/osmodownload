@@ -36,7 +36,7 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "osmo-tool",
-            dependencies: [.product(name: "GRDB", package: "GRDB")]),
+            dependencies: ["OsmoCore", .product(name: "GRDB", package: "GRDB")]),
 
         .target(
             name: "OsmoCore",

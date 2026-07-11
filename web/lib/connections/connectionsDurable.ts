@@ -46,7 +46,7 @@ export async function ensureConnectionsLoaded(deviceId: string): Promise<void> {
   const durable = await getAccounts().connectionsForDevice(deviceId);
   for (const c of durable) {
     if (!isValidDurableConnection(c)) continue;   // tolerate partial/corrupt rows
-    store.hydrateConnection(sanitizeDurableConnection(c));
+    store.hydrateConnection(demoteStaleBackfill(sanitizeDurableConnection(c)));
   }
 }
 
@@ -59,6 +59,14 @@ export async function ensureConnectionById(id: string): Promise<Connection | nul
   if (warm) return warm;
   const durable = await getAccounts().connectionById(id).catch(() => null);
   if (!isValidDurableConnection(durable)) return null;
-  store.hydrateConnection(sanitizeDurableConnection(durable));
+  store.hydrateConnection(demoteStaleBackfill(sanitizeDurableConnection(durable)));
   return store.connectionById(id);
+}
+
+/** An import does not survive the process — a REHYDRATED "backfilling" row is
+    a lie (the X connect stuck at "Importing history… 0%" forever). Demote to
+    degraded so the UI offers Reconnect instead of an infinite spinner. */
+function demoteStaleBackfill(c: Connection): Connection {
+  if (c.status !== "backfilling") return c;
+  return { ...c, status: "degraded" };
 }

@@ -43,29 +43,44 @@ export async function sendGmail(tokens: unknown, threadId: string, text: string)
   const auth = { Authorization: `Bearer ${token}` };
   const api = "https://gmail.googleapis.com/gmail/v1/users/me";
 
-  // Fetch the thread's last message to get To (their From), Subject, Message-ID.
+  // The user's own address — a reply must go to the last COUNTERPARTY, not
+  // "whoever last wrote" (after your own reply, that's YOU: the second send
+  // in a row used to email the user themselves).
+  const profile = await fetch(`${api}/profile`, { headers: auth })
+    .then(r => r.json()).catch(() => ({})) as { emailAddress?: string };
+  const selfAddr = (profile.emailAddress ?? "").toLowerCase();
+
   const thread = await fetch(
-    `${api}/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject&metadataHeaders=Message-ID`,
+    `${api}/threads/${threadId}?format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Reply-To&metadataHeaders=Subject&metadataHeaders=Message-ID`,
     { headers: auth },
   ).then(r => r.json()) as { messages?: { payload?: { headers?: { name: string; value: string }[] } }[] };
-  const last = thread.messages?.[thread.messages.length - 1];
-  const headers = last?.payload?.headers ?? [];
-  const h = (n: string) => headers.find(x => x.name.toLowerCase() === n)?.value ?? "";
+  const msgs = thread.messages ?? [];
+  const headerValue = (m: typeof msgs[number] | undefined, n: string) =>
+    m?.payload?.headers?.find(x => x.name.toLowerCase() === n.toLowerCase())?.value ?? "";
+  const isFromSelf = (m: typeof msgs[number]) =>
+    selfAddr !== "" && headerValue(m, "from").toLowerCase().includes(selfAddr);
 
-  const to = h("from");                       // reply goes back to whoever last wrote
-  const subjectRaw = h("subject");
+  // Last message from someone else; if the whole thread is self (note-to-self),
+  // fall back to the last message of any kind.
+  const counterpart = [...msgs].reverse().find(m => !isFromSelf(m)) ?? msgs[msgs.length - 1];
+  const last = msgs[msgs.length - 1];
+
+  const to = headerValue(counterpart, "reply-to") || headerValue(counterpart, "from");
+  const subjectRaw = headerValue(last, "subject") || headerValue(counterpart, "subject");
   const subject = subjectRaw.toLowerCase().startsWith("re:") ? subjectRaw : `Re: ${subjectRaw}`;
-  const inReplyTo = h("message-id");
+  const inReplyTo = headerValue(last, "message-id");
 
-  const mime = [
+  // NOTE: the blank line separating headers from body is STRUCTURAL — it must
+  // never pass through a filter (a filter(Boolean) here once stripped it and
+  // every email went out with an EMPTY body).
+  const headerLines = [
     `To: ${to}`,
     `Subject: ${subject}`,
     inReplyTo ? `In-Reply-To: ${inReplyTo}` : "",
     inReplyTo ? `References: ${inReplyTo}` : "",
     "Content-Type: text/plain; charset=UTF-8",
-    "",
-    text,
-  ].filter(Boolean).join("\r\n");
+  ].filter(Boolean);
+  const mime = headerLines.join("\r\n") + "\r\n\r\n" + text;
 
   // base64url, no padding — Gmail's raw format.
   const raw = Buffer.from(mime, "utf8").toString("base64")

@@ -10,6 +10,18 @@ extension OsmoContact {
     }
 }
 
+/// Per-sender display names for a GROUP thread's messages, keyed by contact id —
+/// nil for 1:1 threads so `ThreadTurn.senderName` stays nil there ("Them" is
+/// unambiguous). Feed the result into `ThreadTurn(senderName:)` so the AI layer
+/// (drafts, dossier, insights, judge) knows WHICH person said what in a group.
+func groupSenderNames(store: OsmoStore, threadID: UUID) -> [UUID: String]? {
+    guard let thread = try? store.thread(id: threadID), thread.isGroup else { return nil }
+    let contacts = (try? store.contacts(inThread: threadID)) ?? []
+    var names: [UUID: String] = [:]
+    for c in contacts { names[c.id] = c.displayLabel }
+    return names.isEmpty ? nil : names
+}
+
 enum HandleFormat {
     /// Prettify a raw handle for display. Emails pass through; US phone numbers
     /// get (xxx) xxx-xxxx formatting; anything else is shown as-is.
