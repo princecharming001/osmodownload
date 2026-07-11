@@ -10,6 +10,7 @@ import { stopDrip } from "@/lib/unipile/mock";
 import { accountIsHealthy, getUnipile } from "@/lib/unipile/client";
 import { platformForProvider } from "@/lib/unipile/normalize";
 import { backfillConnection } from "@/lib/connections/backfill";
+import { resyncConnection } from "@/lib/connections/resync";
 import { verifyConnections } from "@/lib/connections/liveness";
 import type { AccountsResponse, Connection } from "@/lib/connections/types";
 import { readJsonObject } from "@/lib/http";
@@ -92,6 +93,14 @@ export async function PATCH(req: Request): Promise<Response> {
       type: "connection.status", platform: conn.platform,
       status: action === "pause" ? "paused" : "connected", connectionId: id,
     });
+    if (action === "resume") {
+      // Webhooks that arrived WHILE paused were hard-dropped (unipile/route.ts)
+      // rather than buffered — resuming must actively catch up on whatever
+      // was missed instead of silently waiting for the next incidental
+      // message. Fire-and-forget, same dispatch as "re-import history";
+      // idempotent, so catching up on nothing costs nothing but a scan.
+      void resyncConnection(device.id, id, conn.platform);
+    }
     return Response.json({ ok: true });
   } catch (e) {
     if (e instanceof AuthError) return unauthorized();

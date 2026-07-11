@@ -42,6 +42,15 @@ function sanitizeDurableConnection(c: Connection): Connection {
 
 export async function ensureConnectionsLoaded(deviceId: string): Promise<void> {
   const store = getStore();
+  // Per-DEVICE gate, not per-connection: if this process has cached ANY of
+  // the device's connections it assumes it has them all. True as long as a
+  // device's connections only ever land in the process that handled their
+  // connect flow AND Render stays the single always-on instance render.yaml
+  // mandates. If that ever becomes >1 instance, a device split across
+  // instances (e.g. gmail connected via instance A, slack via instance B)
+  // can permanently miss the second instance's rehydration for connections
+  // it never independently saw — see build/REVISED-PLAN.md's open item on
+  // enforcing the one-instance invariant as a hard deploy guard.
   if (store.connections(deviceId).length > 0) return; // already warm in this process
   const durable = await getAccounts().connectionsForDevice(deviceId);
   for (const c of durable) {

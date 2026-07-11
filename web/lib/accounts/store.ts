@@ -97,6 +97,11 @@ export interface AccountsStore {
       (webhooks arrive keyed by account id, with no device in hand). */
   connectionById(id: string): Promise<Connection | null>;
   deleteConnection(id: string): Promise<void>;
+  /** Every CONNECTED row across every device for the given platforms — the
+      incremental sync scheduler's fan-out seam (it runs once per server
+      process, not once per device request, so it can't go through the
+      per-device rehydration path). */
+  connectedConnectionsByPlatforms(platforms: string[]): Promise<Connection[]>;
 
   // durable webhook idempotency (osmo_processed_events): returns true the FIRST
   // time an event id is seen (process it), false on redelivery (dedup).
@@ -260,6 +265,10 @@ class MemoryAccountsStore implements AccountsStore {
   async upsertConnection(c: Connection): Promise<void> { this.m.conns.set(c.id, { ...c }); }
   async connectionsForDevice(deviceId: string): Promise<Connection[]> {
     return [...this.m.conns.values()].filter((c) => c.deviceId === deviceId);
+  }
+  async connectedConnectionsByPlatforms(platforms: string[]): Promise<Connection[]> {
+    const set = new Set(platforms);
+    return [...this.m.conns.values()].filter((c) => set.has(c.platform) && c.status === "connected");
   }
   async connectionById(id: string): Promise<Connection | null> {
     const c = this.m.conns.get(id);
@@ -497,6 +506,11 @@ export class SupabaseAccountsStore implements AccountsStore {
   });
   async connectionsForDevice(deviceId: string): Promise<Connection[]> {
     const { data } = await this.sb.from("osmo_connections").select("*").eq("device_id", deviceId);
+    return (data ?? []).map(this.mapConn);
+  }
+  async connectedConnectionsByPlatforms(platforms: string[]): Promise<Connection[]> {
+    const { data } = await this.sb.from("osmo_connections").select("*")
+      .in("platform", platforms).eq("status", "connected");
     return (data ?? []).map(this.mapConn);
   }
   async connectionById(id: string): Promise<Connection | null> {
