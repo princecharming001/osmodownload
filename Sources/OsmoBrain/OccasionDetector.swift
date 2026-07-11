@@ -40,6 +40,27 @@ public struct OccasionCandidate: Equatable, Sendable {
     }
 }
 
+/// A sensitive life event (loss/celebration) that has been CORROBORATED beyond a
+/// single keyword hit — the only thing allowed to justify a sensitive-tier
+/// decision. Produced by the LLM-confirmation pass (a later phase); the gate
+/// only ever reads it, and enforces that heuristics can never fabricate one.
+public struct SensitiveOccasion: Equatable, Sendable {
+    public var kind: OccasionCandidate.Kind   // .possibleLoss or .possibleCelebration
+    /// How many independent inbound messages support this reading (≥2 to fire).
+    public var corroborationCount: Int
+    /// The event is about the THREAD PARTICIPANT, not a third party they mentioned.
+    public var subjectIsParticipant: Bool
+    public var evidence: [String]
+
+    public init(kind: OccasionCandidate.Kind, corroborationCount: Int,
+                subjectIsParticipant: Bool, evidence: [String]) {
+        self.kind = kind
+        self.corroborationCount = corroborationCount
+        self.subjectIsParticipant = subjectIsParticipant
+        self.evidence = evidence
+    }
+}
+
 public enum OccasionDetector {
     // Unambiguous LOSS phrases only — every one is multi-word or a fixed idiom
     // that cannot appear in an achievement/mundane sentence. NEVER bare "passed",

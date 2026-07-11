@@ -32,6 +32,10 @@ public struct RelationshipModel: Equatable, Sendable {
     // Durable, user/LLM-contributed layers.
     public var memory: RelationshipMemory?
     public var importantDates: [ImportantDate]
+    /// A corroborated sensitive event (loss/celebration), set only by the
+    /// LLM-confirmation pass — never by heuristics. The gate reads it to allow a
+    /// sensitive-tier decision; nil the rest of the time.
+    public var sensitiveOccasion: SensitiveOccasion?
 
     /// When the last message in the thread landed — the anchor for silence math.
     public var lastMessageAt: Date?
@@ -46,6 +50,7 @@ public struct RelationshipModel: Equatable, Sendable {
         importantDates: [ImportantDate] = [],
         memory: RelationshipMemory? = nil,
         intel: ThreadIntel? = nil,
+        sensitiveOccasion: SensitiveOccasion? = nil,
         now: Date = Date()
     ) -> RelationshipModel {
         let read = ThreadRead.read(turns, now: now)
@@ -65,6 +70,7 @@ public struct RelationshipModel: Equatable, Sendable {
             intel: intel,
             memory: memory,
             importantDates: importantDates,
+            sensitiveOccasion: sensitiveOccasion,
             lastMessageAt: turns.compactMap(\.sentAt).max())
     }
 
