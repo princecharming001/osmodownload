@@ -34,9 +34,11 @@ public struct PersonPrior: Equatable, Sendable {
         public var quietAfterIgnores = 3
         public var quietDays = 14.0
         public var suppressGestureAfter = 2
-        /// Never category-blacklist these — a wrong dismissal shouldn't mute a
-        /// future real birthday/loss.
-        public var neverSuppressedGestures: Set<String> = ["condolence", "birthday", "anniversary"]
+        /// Never category-blacklist any LIFE-EVENT gesture — a couple of
+        /// dismissals must not mute a future real loss/birthday/anniversary/
+        /// celebration (a new baby, an engagement). `celebrate` belongs here for
+        /// the same reason as `condolence`: both are the inferred-sensitive tier.
+        public var neverSuppressedGestures: Set<String> = ["condolence", "celebrate", "birthday", "anniversary"]
         public init() {}
     }
 
@@ -61,16 +63,20 @@ public struct PersonPrior: Equatable, Sendable {
             case .acted:
                 w *= config.actMultiplier
                 ignoreRun[fam] = 0
-            case .dismissedSeen, .ignoredSeen:
+            case .dismissedSeen:
+                // An ACTIVE rejection: lowers weight AND advances the quiet run.
                 w *= config.ignoreMultiplier
                 let run = (ignoreRun[fam] ?? 0) + 1
                 ignoreRun[fam] = run
-                if o.outcome == .dismissedSeen, run >= config.quietAfterIgnores {
+                if run >= config.quietAfterIgnores {
                     quietUntil[fam] = o.createdAt.addingTimeInterval(config.quietDays * 86_400)
                 }
-                if o.outcome == .dismissedSeen, let g = o.gestureKind {
-                    gestureDismissals[g, default: 0] += 1
-                }
+                if let g = o.gestureKind { gestureDismissals[g, default: 0] += 1 }
+            case .ignoredSeen:
+                // A PASSIVE miss (surfaced, aged out unacted): a soft weight
+                // signal, but it must NOT advance the quiet run — quieting a
+                // person entirely is reserved for real, active dismissals.
+                w *= config.ignoreMultiplier
             case .expiredUnseen:
                 continue   // NEUTRAL — no weight change, no run advance
             }

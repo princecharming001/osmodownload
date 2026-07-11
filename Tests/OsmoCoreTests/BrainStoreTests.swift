@@ -176,13 +176,17 @@ struct BrainStoreTests {
         #expect(try store.decision(forThread: t3)?.status == .acted)
     }
 
-    @Test("activeDecisionInputHashes returns only fresh/surfaced hashes")
+    @Test("activeDecisionInputHashes covers every non-expired state (so a dismissed decision can't resurrect)")
     func activeHashes() throws {
         let store = try newStore()
         try store.upsertDecision(decision(UUID(), hash: "fresh1", status: .fresh, expiresAt: at(day: 20)))
         try store.upsertDecision(decision(UUID(), hash: "surf1", status: .surfaced, expiresAt: at(day: 20)))
         try store.upsertDecision(decision(UUID(), hash: "acted1", status: .acted, expiresAt: at(day: 20)))
-        #expect(try store.activeDecisionInputHashes() == ["fresh1", "surf1"])
+        try store.upsertDecision(decision(UUID(), hash: "dismissed1", status: .dismissed, expiresAt: at(day: 20)))
+        try store.upsertDecision(decision(UUID(), hash: "expired1", status: .expired, expiresAt: at(day: 1)))
+        // Everything except the expired one — an acted/dismissed state stays
+        // suppressed so the same suggestion never comes back for the same state.
+        #expect(try store.activeDecisionInputHashes() == ["fresh1", "surf1", "acted1", "dismissed1"])
     }
 
     // MARK: Feedback outcomes (v17) + decision family (v18)

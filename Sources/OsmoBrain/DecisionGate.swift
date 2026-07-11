@@ -119,8 +119,11 @@ public enum DecisionGate {
             if !hasHardTrigger, let prior, prior.isQuiet(family: dominant.rawValue, now: now) { continue }
 
             // Weight the score by what we've learned about nudging this person on
-            // this family.
-            let weight = prior?.nudgeWeight(family: dominant.rawValue) ?? 1.0
+            // this family — but ONLY for heuristic candidates. A hard trigger
+            // (real date / promise / sensitive) keeps its full score so learned
+            // dislike of this person's cooling nudges can never push their actual
+            // birthday below other people's routine nudges and off the budget cut.
+            let weight = hasHardTrigger ? 1.0 : (prior?.nudgeWeight(family: dominant.rawValue) ?? 1.0)
             let score = Int((Double(clusterScore(triggers)) * weight).rounded())
             let isSensitive = triggers.contains { $0.cluster == .sensitive }
             let hash = inputHash(m, triggers: triggers)
@@ -185,8 +188,11 @@ public enum DecisionGate {
                                  score: scoreGoodTimeSilence,
                                  evidence: "well past their rhythm — a nudge lands as thoughtful"))
         }
-        // Left on read: I sent last, they READ it, and it's past 2× their p75.
-        if m.read.ball == .mine, silenceState == .unusual {
+        // Left on read: I sent last, they actually READ it (real receipt), and
+        // it's past 2× their p75. Without the read receipt this is just a normal
+        // conversation lull, not a snub — requiring it stops the trigger from
+        // over-firing on every thread that happens to have paused.
+        if m.read.ball == .mine, m.lastOutboundReadAt != nil, silenceState == .unusual {
             silence.append(.init(cluster: .silence, kind: "leftOnRead", score: scoreLeftOnRead,
                                  evidence: "read but unanswered well past their reply window"))
         }

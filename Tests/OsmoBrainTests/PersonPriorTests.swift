@@ -65,6 +65,27 @@ struct PersonPriorTests {
         #expect(!p.isQuiet(family: "silence", now: at(day: 5)))
     }
 
+    @Test("Passive misses (ignoredSeen) never quiet a person — only active dismissals do")
+    func passiveMissesDontQuiet() {
+        // 3 passive ignoredSeen (surfaced, aged out) must NOT open a quiet window.
+        let passive = PersonPrior.from([outcome(.ignoredSeen, 1), outcome(.ignoredSeen, 2), outcome(.ignoredSeen, 3)],
+                                       now: at(day: 4))
+        #expect(!passive.isQuiet(family: "silence", now: at(day: 4)))
+        // Two passive + one real dismissal is still only ONE active dismissal → no quiet.
+        let mixed = PersonPrior.from([outcome(.ignoredSeen, 1), outcome(.ignoredSeen, 2), outcome(.dismissedSeen, 3)],
+                                     now: at(day: 4))
+        #expect(!mixed.isQuiet(family: "silence", now: at(day: 4)))
+    }
+
+    @Test("A celebration gesture is NEVER category-suppressed (a real new-baby moment can't be muted)")
+    func celebrateNeverSuppressed() {
+        let p = PersonPrior.from([outcome(.dismissedSeen, 1, family: "sensitive", gesture: "celebrate"),
+                                  outcome(.dismissedSeen, 2, family: "sensitive", gesture: "celebrate"),
+                                  outcome(.dismissedSeen, 3, family: "sensitive", gesture: "celebrate")],
+                                 now: at(day: 4))
+        #expect(!p.suppressedGestureKinds.contains("celebrate"))
+    }
+
     @Test("Learning is per-family: ignoring 'effort' never quiets 'date'")
     func perFamilyIsolation() {
         let p = PersonPrior.from([outcome(.dismissedSeen, 1, family: "effort"),

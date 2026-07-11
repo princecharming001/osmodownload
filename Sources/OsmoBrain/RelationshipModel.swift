@@ -39,6 +39,11 @@ public struct RelationshipModel: Equatable, Sendable {
 
     /// When the last message in the thread landed — the anchor for silence math.
     public var lastMessageAt: Date?
+    /// If MY message is the last one and they READ it, when they read it — the
+    /// thing that makes "left on read" actually mean left-on-read (a real read
+    /// receipt), not just "unanswered". nil when they haven't read it or the last
+    /// message is theirs.
+    public var lastOutboundReadAt: Date?
 
     public static func assemble(
         threadID: UUID,
@@ -55,6 +60,9 @@ public struct RelationshipModel: Equatable, Sendable {
     ) -> RelationshipModel {
         let read = ThreadRead.read(turns, now: now)
         let partner = PartnerProfile.read(turns)
+        // "Left on read" needs a real read receipt: my message is last AND they read it.
+        let lastTurn = turns.max(by: { ($0.sentAt ?? .distantPast) < ($1.sentAt ?? .distantPast) })
+        let lastOutboundReadAt = (lastTurn?.fromMe == true) ? lastTurn?.readAt : nil
         return RelationshipModel(
             threadID: threadID,
             personID: personID,
@@ -71,7 +79,8 @@ public struct RelationshipModel: Equatable, Sendable {
             memory: memory,
             importantDates: importantDates,
             sensitiveOccasion: sensitiveOccasion,
-            lastMessageAt: turns.compactMap(\.sentAt).max())
+            lastMessageAt: turns.compactMap(\.sentAt).max(),
+            lastOutboundReadAt: lastOutboundReadAt)
     }
 
     /// The evidence block the Decision Engine reads — compact, labelled, and

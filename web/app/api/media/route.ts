@@ -67,8 +67,25 @@ export async function GET(req: Request): Promise<Response> {
       if (target.protocol !== "https:" || !avatarHostAllowed(target.hostname)) {
         return Response.json({ error: "untrusted host" }, { status: 400 });
       }
-      const res = await fetch(target.toString());
+      // Follow at most one redirect, RE-VALIDATING the target host each hop —
+      // `fetch`'s default redirect-follow would otherwise let an allowlisted CDN
+      // 302 us to an internal/metadata endpoint (SSRF), bypassing the host check.
+      let res = await fetch(target.toString(), { redirect: "manual" });
+      if (res.status >= 300 && res.status < 400) {
+        const loc = res.headers.get("location");
+        let hop: URL;
+        try { hop = new URL(loc ?? "", target); } catch { return placeholder(); }
+        if (hop.protocol !== "https:" || !avatarHostAllowed(hop.hostname)) {
+          return Response.json({ error: "untrusted redirect" }, { status: 400 });
+        }
+        res = await fetch(hop.toString(), { redirect: "error" });
+      }
       if (!res.ok) return placeholder();
+      // Reject an over-cap avatar BEFORE buffering it into memory when the server
+      // is honest about content-length (the common case); the post-buffer check
+      // remains as the backstop for chunked responses.
+      const declared = Number(res.headers.get("content-length") ?? "0");
+      if (declared > MAX_AVATAR_BYTES) return Response.json({ error: "too large" }, { status: 413 });
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.byteLength > MAX_AVATAR_BYTES) return Response.json({ error: "too large" }, { status: 413 });
       return new Response(buf, {

@@ -277,17 +277,37 @@ struct DecisionGateTests {
         #expect(!DecisionGate.evaluate([m], now: now, priors: [pid: prior]).isEmpty)
     }
 
-    @Test("A low nudge weight shrinks the score; a high one grows it")
+    @Test("A low nudge weight shrinks a HEURISTIC candidate's score")
     func nudgeWeightScales() {
+        let now = at(day: 10)
+        let pid = UUID()
+        // A terse-them / effort-imbalance history (heuristic 'effort' family).
+        var turns: [ThreadTurn] = []
+        for i in 0..<9 {
+            turns.append(turn(true, "hey! how are you, how's the new job going?", at(day: 1 + i, hour: 9)))
+            turns.append(turn(false, "fine", at(day: 1 + i, hour: 15)))
+        }
+        let m = RelationshipModel.assemble(threadID: UUID(), displayName: "P", isGroup: false,
+                                           personID: pid, turns: turns, now: now)
+        let base = DecisionGate.evaluate([m], now: now).first!.score
+        let lowP = PersonPrior(nudgeWeightByFamily: ["effort": 0.5], quietUntilByFamily: [:], suppressedGestureKinds: [])
+        let low = DecisionGate.evaluate([m], now: now, priors: [pid: lowP]).first!.score
+        #expect(low < base)
+    }
+
+    @Test("A HARD trigger (date) is EXEMPT from nudge-weight down-scaling")
+    func hardTriggerExemptFromWeight() {
         let now = at(day: 10)
         let pid = UUID()
         let bday = ImportantDate(id: "b", threadID: UUID(), kind: .birthday, label: "bday",
                                  month: 6, day: 15, recurring: true, source: .manual)
         let m = personModel(pid, dates: [bday], now: now)
         let base = DecisionGate.evaluate([m], now: now).first!.score
-        let lowP = PersonPrior(nudgeWeightByFamily: ["date": 0.5], quietUntilByFamily: [:], suppressedGestureKinds: [])
+        // Even a punishing weight on the date family must NOT shrink a real date's
+        // score — else a disliked person's actual birthday ranks off the budget cut.
+        let lowP = PersonPrior(nudgeWeightByFamily: ["date": 0.3], quietUntilByFamily: [:], suppressedGestureKinds: [])
         let low = DecisionGate.evaluate([m], now: now, priors: [pid: lowP]).first!.score
-        #expect(low < base)
+        #expect(low == base)
     }
 
     @Test("A suppressed gesture kind is removed from allowedSensitiveKinds")

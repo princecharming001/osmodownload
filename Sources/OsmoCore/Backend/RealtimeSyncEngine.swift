@@ -339,14 +339,38 @@ public actor RealtimeSyncEngine {
         guard !urlByKey.isEmpty else { return contacts }
 
         var out = contacts
+        // The URLs to fetch this pass (uncached, missing avatar). Deduped by URL.
+        var toFetch: Set<String> = []
         for i in out.indices where out[i].avatarData == nil {
             guard let url = urlByKey["\(out[i].platform.rawValue):\(out[i].handle)"] else { continue }
             if let cached = avatarCache[url] { out[i].avatarData = cached; continue }
-            // Route through the AUTHENTICATED media proxy: LinkedIn/Instagram
-            // signed CDN URLs 403 a bare GET, so a direct fetch left every
-            // non-connection a monogram. The proxy fetches server-side.
-            if let data = await client.fetchAvatar(url: url), data.count < 2_000_000 {
-                avatarCache[url] = data
+            toFetch.insert(url)
+        }
+        guard !toFetch.isEmpty else { return out }
+
+        // Fetch CONCURRENTLY with a cap — NOT one blocking round-trip per contact
+        // in series, which stalled the whole message-ingest path behind avatar
+        // I/O. fetchAvatar has its own short timeout, so a slow CDN can't hang it.
+        let fetched = await withTaskGroup(of: (String, Data?).self) { group -> [String: Data] in
+            var inFlight = 0
+            var iter = toFetch.makeIterator()
+            func addNext() {
+                guard let url = iter.next() else { return }
+                inFlight += 1
+                group.addTask { (url, await self.client.fetchAvatar(url: url)) }
+            }
+            for _ in 0..<min(6, toFetch.count) { addNext() }
+            var result: [String: Data] = [:]
+            while let (url, data) = await group.next() {
+                inFlight -= 1
+                if let data, data.count <= 5_000_000 { result[url] = data }
+                addNext()
+            }
+            return result
+        }
+        for (url, data) in fetched { avatarCache[url] = data }
+        for i in out.indices where out[i].avatarData == nil {
+            if let url = urlByKey["\(out[i].platform.rawValue):\(out[i].handle)"], let data = fetched[url] {
                 out[i].avatarData = data
             }
         }

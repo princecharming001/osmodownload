@@ -8,7 +8,7 @@ import OsmoShell
 /// brain feed + reply queue to keep the "N need you" count and the panel size
 /// live.
 @MainActor
-final class HUDController: ObservableObject {
+final class HUDController: NSObject, ObservableObject, NSWindowDelegate {
     static let shared = HUDController()
 
     @Published private(set) var state = HUDState()
@@ -16,10 +16,13 @@ final class HUDController: ObservableObject {
     private weak var model: AppModel?
     private var cancellables = Set<AnyCancellable>()
     private let positionKey = "hud.position"
+    private var attached = false
 
-    private init() {}
+    private override init() { super.init() }
 
     func attach(model: AppModel) {
+        guard !attached else { return }   // singleton — never double-subscribe
+        attached = true
         self.model = model
         // Owed-count = brain feed items + replies you owe.
         model.$brainFeed.combineLatest(model.$queue)
@@ -28,9 +31,32 @@ final class HUDController: ObservableObject {
                 guard let self else { return }
                 let owed = feed.count + queue.filter { $0.kind == .reply }.count
                 if self.state.owedCount != owed { self.state.owedCount = owed }
-                if self.panel?.isVisible == true { self.resize() }
+                if self.panel?.isVisible == true {
+                    self.resize()
+                    self.markImpressionIfVisible()
+                }
             }
             .store(in: &cancellables)
+    }
+
+    /// Confirmed impression: only when the OPEN feed is actually on screen do its
+    /// decisions become `.surfaced`. A decision the user never saw stays fresh and
+    /// expires neutral — it never counts as an ignored/soft-negative.
+    private func markImpressionIfVisible() {
+        guard panel?.isVisible == true, state.mode == .open, let model else { return }
+        model.markFeedImpression(model.brainFeed.map(\.id))
+    }
+
+    // MARK: NSWindowDelegate — persist a dragged position
+
+    private var moveSaveWork: DispatchWorkItem?
+    nonisolated func windowDidMove(_ notification: Notification) {
+        Task { @MainActor in
+            self.moveSaveWork?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.persistPosition() }
+            self.moveSaveWork = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+        }
     }
 
     // MARK: Toggle / show / hide
@@ -59,11 +85,12 @@ final class HUDController: ObservableObject {
         ensurePanel()
         position(initial: true)
         panel?.present()
+        markImpressionIfVisible()
     }
 
     func hide() { panel?.orderOut(nil) }
 
-    func expand() { state.mode = .open; resize() }
+    func expand() { state.mode = .open; resize(); markImpressionIfVisible() }
     func collapse() { state.mode = .bar; resize() }
 
     // MARK: Panel plumbing
@@ -75,6 +102,7 @@ final class HUDController: ObservableObject {
             HUDRootView(controller: self).environmentObject(model))
         hosting.autoresizingMask = [.width, .height]
         p.contentView = hosting
+        p.delegate = self   // windowDidMove → persist the dragged position
         panel = p
     }
 

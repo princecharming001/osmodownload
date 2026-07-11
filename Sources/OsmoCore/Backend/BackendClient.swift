@@ -289,8 +289,9 @@ public actor BackendClient {
     /// a missing avatar just falls back to a monogram, never an error.
     public func fetchAvatar(url: String) async -> Data? {
         guard let creds = try? await registerIfNeeded() else { return nil }
-        let req = request("GET", "/api/media", query: [("mode", "avatar"), ("url", url)],
+        var req = request("GET", "/api/media", query: [("mode", "avatar"), ("url", url)],
                           token: creds.deviceToken)
+        req.timeoutInterval = 8   // a slow CDN must never stall the sync path
         guard let (data, response) = try? await transport(req),
               (200..<300).contains(response.statusCode) else { return nil }
         return data

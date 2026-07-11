@@ -141,12 +141,15 @@ public extension OsmoStore {
         }
     }
 
-    /// inputHashes of decisions still "live" (fresh or surfaced) — the gate's
-    /// dedup set, so an unchanged state is never re-billed to the LLM.
+    /// inputHashes of decisions the user has already been given for this exact
+    /// state — the gate's dedup set. Includes acted/dismissed as well as
+    /// fresh/surfaced, so a suggestion the user already acted on or dismissed
+    /// does NOT regenerate (and resurrect) while the conversation state is
+    /// unchanged. Only `.expired` (aged out) states are allowed to re-bill.
     func activeDecisionInputHashes() throws -> Set<String> {
         try dbQueue.read { db in
             let rows = try StoredDecision
-                .filter(["fresh", "surfaced"].contains(Column("status")))
+                .filter(Column("status") != "expired")
                 .fetchAll(db)
             return Set(rows.map(\.inputHash))
         }

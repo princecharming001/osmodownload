@@ -57,4 +57,35 @@ describe("media avatar proxy", () => {
     expect(res.status).toBe(200);
     expect(res.headers.get("content-type")).toBe("image/png");   // placeholder
   });
+
+  it("a redirect to a NON-allowlisted host is rejected (no SSRF via 302)", async () => {
+    const device = getStore().registerDevice();
+    // First hop: allowlisted CDN 302s to an internal metadata endpoint.
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(null, {
+      status: 302, headers: { location: "https://169.254.169.254/latest/meta-data/" },
+    })));
+    const res = await media(get("mode=avatar&url=" + encodeURIComponent("https://media.licdn.com/x.jpg"), device.token));
+    expect(res.status).toBe(400);   // untrusted redirect, never followed to the internal host
+  });
+
+  it("a redirect to another ALLOWLISTED host is followed once", async () => {
+    const device = getStore().registerDevice();
+    const jpeg = new Uint8Array([0xff, 0xd8]);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(null, { status: 302, headers: { location: "https://pbs.twimg.com/real_400x400.jpg" } }))
+      .mockResolvedValueOnce(new Response(jpeg, { status: 200, headers: { "content-type": "image/jpeg" } }));
+    vi.stubGlobal("fetch", fetchMock);
+    const res = await media(get("mode=avatar&url=" + encodeURIComponent("https://media.licdn.com/x.jpg"), device.token));
+    expect(res.status).toBe(200);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("an over-cap content-length is rejected BEFORE buffering (413)", async () => {
+    const device = getStore().registerDevice();
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(new Uint8Array([1]), {
+      status: 200, headers: { "content-type": "image/jpeg", "content-length": String(9_000_000) },
+    })));
+    const res = await media(get("mode=avatar&url=" + encodeURIComponent("https://media.licdn.com/big.jpg"), device.token));
+    expect(res.status).toBe(413);
+  });
 });

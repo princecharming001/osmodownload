@@ -1154,14 +1154,31 @@ final class AppModel: ObservableObject {
     }
 
     /// Open a thread from the HUD: bring it up in the inbox and surface the main
-    /// window. Phase 1 relies on the window already existing (phase 2 adds the
-    /// on-demand window bridge).
+    /// window. Raises an existing main window; if the window was fully closed,
+    /// `reopenWindow` (App-provided) recreates it, and if that isn't wired the
+    /// user gets an honest toast instead of a silent dead click.
     func openThread(_ threadID: UUID) {
         focusedThreadID = threadID
         section = .inbox
         selectedThreadID = threadID
         NSApp.activate(ignoringOtherApps: true)
+        // Bring the real main window forward (title "Osmo", a standard window —
+        // not the HUD/pill panels).
+        let mainWindow = NSApp.windows.first { $0.isVisible && $0.styleMask.contains(.titled)
+            && !($0 is HUDPanel) && !($0 is PillPanel) }
+        if let mainWindow {
+            mainWindow.makeKeyAndOrderFront(nil)
+        } else if let reopen = reopenWindow {
+            reopen()
+        } else {
+            toast = "Open the Osmo window to see this conversation"
+        }
     }
+
+    /// Wired by the App scene to re-open the main WindowGroup window when it was
+    /// fully closed (a HUD deep-link should still work). Optional so the model
+    /// compiles without it.
+    var reopenWindow: (() -> Void)?
 
     /// Threads the brain currently says to GIVE SPACE. Empty (so queue/autodraft
     /// behave exactly as before) unless the relationshipBrain flag is on AND a
@@ -1174,38 +1191,60 @@ final class AppModel: ObservableObject {
             .map(\.threadID))
     }
 
-    /// Rebuild the proactive feed from stored decisions. Resolves display names
-    /// from the loaded threads. Empty whenever there are no live decisions (which
-    /// is always, until the brain flag is switched on).
+    /// Rebuild the proactive feed from stored decisions. FLAG-GATED: with the
+    /// brain off, the feed is force-emptied and nothing surfaces — a true
+    /// kill-switch even if decisions were persisted while it was on. Only
+    /// decisions for currently-LOADED threads surface (a snoozed/deleted thread's
+    /// decision would render a nameless card that opens nothing). Building the
+    /// feed does NOT mark anything surfaced — that only happens when the HUD
+    /// actually shows it (markFeedImpression), so an unseen decision never counts
+    /// as ignored.
     private func rebuildBrainFeed() {
-        let decisions = (try? store.decisions()) ?? []
+        guard flag("relationshipBrain", default: false) else {
+            if !brainFeed.isEmpty { brainFeed = [] }
+            return
+        }
+        let visible = Set(threads.map(\.id))
+        let decisions = ((try? store.decisions()) ?? []).filter { visible.contains($0.threadID) }
         guard !decisions.isEmpty else { if !brainFeed.isEmpty { brainFeed = [] }; return }
         var names: [UUID: String] = [:]
         for t in threads {
-            names[t.id] = t.title ?? (try? store.contacts(inThread: t.id))?.first?.displayName ?? "Them"
+            let name = (t.title?.isEmpty == false ? t.title : nil)
+                ?? (try? store.contacts(inThread: t.id))?.first?.displayName ?? "Them"
+            names[t.id] = name
         }
         let feed = SuggestionFeed.build(decisions: decisions, displayNames: names)
         if feed != brainFeed { brainFeed = feed }
-        // Mark surfaced decisions as such — a confirmed on-screen impression is
-        // required before any non-response can count against a suggestion (P6).
-        for item in feed {
-            try? store.setDecisionStatus(id: item.id, .surfaced)
+    }
+
+    /// Called by the HUD when its OPEN feed is actually on screen — the confirmed
+    /// impression. Only then does a fresh decision become `.surfaced`, so a
+    /// decision the user never saw expires as neutral (expiredUnseen), never as a
+    /// soft-negative that poisons the learning priors.
+    func markFeedImpression(_ ids: [String]) {
+        for id in ids {
+            if (try? store.decisionByID(id))?.status == .fresh {
+                try? store.setDecisionStatus(id: id, .surfaced)
+            }
         }
     }
 
     /// The HUD's whole action API. `.acted`/`.dismissed` are terminal, drop the
-    /// item, AND write a feedback outcome the learning loop reads. A dismissal
-    /// only counts because the item was, by definition, surfaced (seen) first.
+    /// item, AND write ONE feedback outcome the learning loop reads — but only if
+    /// the decision is still live (guards against double-counting when it already
+    /// expired or was acted on).
     func recordFeedAction(id: String, _ action: StoredDecisionStatus) {
-        if let d = try? store.decisionByID(id) {
-            let outcome: OutcomeKind? = action == .acted ? .acted
-                : action == .dismissed ? .dismissedSeen : nil
-            if let outcome {
-                try? store.recordOutcome(SuggestionOutcome(
-                    decisionID: d.id, threadID: d.threadID, personID: d.personID,
-                    decisionKind: d.kind, gestureKind: d.gestureKind, family: d.family,
-                    outcome: outcome))
-            }
+        guard let d = try? store.decisionByID(id), d.status == .fresh || d.status == .surfaced else {
+            brainFeed.removeAll { $0.id == id }
+            return
+        }
+        let outcome: OutcomeKind? = action == .acted ? .acted
+            : action == .dismissed ? .dismissedSeen : nil
+        if let outcome {
+            try? store.recordOutcome(SuggestionOutcome(
+                decisionID: d.id, threadID: d.threadID, personID: d.personID,
+                decisionKind: d.kind, gestureKind: d.gestureKind, family: d.family,
+                outcome: outcome))
         }
         try? store.setDecisionStatus(id: id, action)
         brainFeed.removeAll { $0.id == id }
@@ -1226,9 +1265,17 @@ final class AppModel: ObservableObject {
         case .gesture(let g, let occ, let framing):
             kind = "gesture"; move = framing; gestureKind = g.rawValue; occasion = occ; until = nil; why = nil
         }
+        let id = StoredDecision.makeID(threadID: c.threadID, inputHash: c.inputHash)
+        // Never resurrect a decision the user already acted on / dismissed for
+        // this exact state — the gate's dedup should prevent reaching here, but
+        // guard so a race or logic change can't overwrite a terminal status back
+        // to fresh.
+        if let existing = try? store.decisionByID(id),
+           existing.status == .acted || existing.status == .dismissed {
+            return
+        }
         let rec = StoredDecision(
-            id: StoredDecision.makeID(threadID: c.threadID, inputHash: c.inputHash),
-            threadID: c.threadID, personID: c.personID, kind: kind, move: move,
+            id: id, threadID: c.threadID, personID: c.personID, kind: kind, move: move,
             gestureKind: gestureKind, occasion: occasion, untilDays: until, why: why,
             confidence: d.confidence, evidence: d.evidence, inputHash: c.inputHash,
             isSensitive: d.isSensitive, family: dominantFamily(c), status: .fresh,
