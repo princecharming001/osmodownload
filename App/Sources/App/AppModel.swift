@@ -1153,6 +1153,16 @@ final class AppModel: ObservableObject {
         c.triggers.max(by: { $0.score < $1.score })?.cluster.rawValue ?? ""
     }
 
+    /// Open a thread from the HUD: bring it up in the inbox and surface the main
+    /// window. Phase 1 relies on the window already existing (phase 2 adds the
+    /// on-demand window bridge).
+    func openThread(_ threadID: UUID) {
+        focusedThreadID = threadID
+        section = .inbox
+        selectedThreadID = threadID
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
     /// Threads the brain currently says to GIVE SPACE. Empty (so queue/autodraft
     /// behave exactly as before) unless the relationshipBrain flag is on AND a
     /// live hold-back decision exists — the hot paths only change behind the flag.

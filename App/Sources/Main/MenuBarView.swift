@@ -47,6 +47,8 @@ struct MenuBarView: View {
             }
 
             Button("Summon Osmo (⌥Space)") { PillController.shared.handleHotkey() }
+            Button("Relationship HUD (⇧⌥Space)") { HUDController.shared.summon() }
+                .accessibilityIdentifier("menubar.hud")
             Button("Open Osmo") { NSApp.activate(ignoringOtherApps: true) }
             Divider()
             Button("Quit Osmo") { NSApp.terminate(nil) }

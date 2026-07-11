@@ -60,6 +60,8 @@ struct OsmoApp: App {
                     .keyboardShortcut("k", modifiers: .command)
                 Button("Summon Osmo") { PillController.shared.handleHotkey() }
                     .keyboardShortcut(.space, modifiers: .option)
+                Button("Toggle Relationship HUD") { HUDController.shared.toggle() }
+                    .keyboardShortcut(.space, modifiers: [.shift, .option])
                 Divider()
                 // Kinso-parity fast filters, one keystroke each.
                 Button(model.unansweredOnly ? "Show All Conversations" : "Unanswered Only") {
@@ -110,6 +112,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if !Self.isProbe {
             HotkeyCenter.install { PillController.shared.handleHotkey() }
+            HotkeyCenter.installHUD { HUDController.shared.toggle() }
         }
         NotificationCenter.default.addObserver(
             self, selector: #selector(didBecomeActive),
@@ -120,6 +123,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard !activated, let model else { return }
         activated = true
         PillController.shared.attach(model: model)
+        HUDController.shared.attach(model: model)   // no Input Monitoring — safe under probe
         startDetector()
     }
 
