@@ -41,8 +41,15 @@ public enum MorningQueue {
         }
     }
 
+    /// - Parameter holdBacks: threads the relationship brain says to deliberately
+    ///   GIVE SPACE right now. A held-back thread drops its nudge-style cards
+    ///   (leftOnRead / goalNudge / reconnect) — but NEVER its `.reply` card: you
+    ///   still owe a reply regardless of what the brain thinks about initiating.
+    ///   Defaults to empty, so every existing call site is unchanged; the app only
+    ///   passes a non-empty set behind the relationshipBrain flag.
     public static func build(snapshots: [ThreadSnapshot], projects: [Project],
-                             now: Date = Date(), config: Config = .init()) -> [QueueCard] {
+                             now: Date = Date(), config: Config = .init(),
+                             holdBacks: Set<UUID> = []) -> [QueueCard] {
         // Active projects indexed by person.
         let activeByPerson = Dictionary(grouping: projects.filter { $0.status == .active && !$0.sync.isDeleted },
                                         by: { $0.personID })
@@ -53,6 +60,7 @@ public enum MorningQueue {
             let project = s.personID.flatMap { activeByPerson[$0]?.first }
             let hasProject = project != nil
             let idle = s.lastMessageAt.map { now.timeIntervalSince($0) } ?? 0
+            let held = holdBacks.contains(s.threadID)
 
             switch status {
             case .needsReply:
@@ -62,12 +70,16 @@ public enum MorningQueue {
                                   move: s.isGroup ? "reply in the group" : "reply to their last message",
                                   base: 100, boost: hasProject ? 30 : 0, idle: idle))
             case .leftOnRead:
+                // Held back → don't nudge; the brain says give them space.
+                if held { continue }
                 cards.append(card(s, .leftOnRead, status, project,
                                   reason: s.isGroup ? "\(s.personName) went quiet after your message"
                                                     : "\(firstName(s.personName)) read it \(ago(idle)) ago — a light nudge could help",
                                   move: "follow up gently, zero guilt",
                                   base: 68, boost: hasProject ? 22 : 0, idle: idle))
             case .waiting, .ghosted, .quiet:
+                // Held back → suppress goal/reconnect nudges too.
+                if held { continue }
                 // Only surface if a project wants forward motion.
                 guard let project else { continue }
                 let kind: QueueCard.Kind

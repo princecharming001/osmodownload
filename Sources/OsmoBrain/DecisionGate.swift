@@ -95,7 +95,8 @@ public enum DecisionGate {
 
     public static func evaluate(_ models: [RelationshipModel], now: Date,
                                 config: Config = .init(),
-                                suppressors: Suppressors = .init()) -> [DecisionCandidate] {
+                                suppressors: Suppressors = .init(),
+                                priors: [UUID: PersonPrior] = [:]) -> [DecisionCandidate] {
         var candidates: [DecisionCandidate] = []
 
         for m in models {
@@ -107,18 +108,39 @@ public enum DecisionGate {
             let triggers = buildTriggers(m, now: now, config: config)
             guard !triggers.isEmpty else { continue }
 
-            let score = clusterScore(triggers)
+            let prior = m.personID.flatMap { priors[$0] }
+            let dominant = triggers.max(by: { $0.score < $1.score })?.cluster ?? .silence
+            // Date/promise/sensitive are concrete/important — exempt from the
+            // learned quiet windows (a real birthday still surfaces even if the
+            // user's been dismissing this person's cooling nudges).
+            let hasHardTrigger = triggers.contains {
+                $0.cluster == .date || $0.cluster == .promise || $0.cluster == .sensitive
+            }
+            if !hasHardTrigger, let prior, prior.isQuiet(family: dominant.rawValue, now: now) { continue }
+
+            // Weight the score by what we've learned about nudging this person on
+            // this family.
+            let weight = prior?.nudgeWeight(family: dominant.rawValue) ?? 1.0
+            let score = Int((Double(clusterScore(triggers)) * weight).rounded())
             let isSensitive = triggers.contains { $0.cluster == .sensitive }
             let hash = inputHash(m, triggers: triggers)
 
             // Already have a live decision for this exact state — don't re-bill.
             if suppressors.activeInputHashes.contains(hash) { continue }
 
+            // Drop gesture kinds the user has repeatedly dismissed (life-event
+            // kinds are never category-suppressed — see PersonPrior).
+            var allowed = allowedSensitiveKinds(m, now: now, config: config)
+            if let prior {
+                for raw in prior.suppressedGestureKinds {
+                    if let g = RelationshipDecision.GestureKind(rawValue: raw) { allowed.remove(g) }
+                }
+            }
+
             candidates.append(DecisionCandidate(
                 threadID: m.threadID, personID: m.personID, displayName: m.displayName,
                 isGroup: m.isGroup, triggers: triggers, score: score, inputHash: hash,
-                isSensitive: isSensitive,
-                allowedSensitiveKinds: allowedSensitiveKinds(m, now: now, config: config),
+                isSensitive: isSensitive, allowedSensitiveKinds: allowed,
                 context: m.decisionContext(now: now)))
         }
 

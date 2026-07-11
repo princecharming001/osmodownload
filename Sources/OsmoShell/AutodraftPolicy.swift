@@ -27,9 +27,14 @@ public enum AutodraftPolicy {
     /// `existingDraft` is nil when the thread has no saved draft; otherwise the
     /// current text + whether IT was itself an autodraft (never overwritten) or
     /// user-typed (never touched).
+    /// - Parameter heldBack: the relationship brain says to GIVE THIS PERSON SPACE.
+    ///   Even a needs-reply thread won't be auto-drafted while held. Defaults to
+    ///   false so every existing call site is unchanged; the app only passes true
+    ///   behind the relationshipBrain flag.
     public static func decide(enabled: Bool, isPro: Bool, isGroup: Bool, isHuman: Bool,
                               status: TextingStatus, existingDraft: (text: String, isAuto: Bool)?,
-                              cap: AutodraftCapState, now: Date, calendar: Calendar = .current) -> Decision {
+                              cap: AutodraftCapState, now: Date, calendar: Calendar = .current,
+                              heldBack: Bool = false) -> Decision {
         let todayKey = dayKey(now, calendar: calendar)
         // A cap from a previous day rolls over to zero-used today.
         let freshCap = cap.day == todayKey ? cap : AutodraftCapState(day: todayKey, used: 0)
@@ -37,6 +42,7 @@ public enum AutodraftPolicy {
         func no(_ reason: String) -> Decision { Decision(go: false, newCap: freshCap, reason: reason) }
 
         guard enabled else { return no("autodraft is off") }
+        guard !heldBack else { return no("held back — giving them space") }
         guard isPro else { return no("not Pro") }
         guard !isGroup else { return no("group thread") }
         guard isHuman else { return no("not a human thread") }

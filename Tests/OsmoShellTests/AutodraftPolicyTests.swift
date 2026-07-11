@@ -16,14 +16,20 @@ struct AutodraftPolicyTests {
     private func decide(enabled: Bool = true, isPro: Bool = true, isGroup: Bool = false,
                         isHuman: Bool = true, status: TextingStatus = .needsReply,
                         existingDraft: (text: String, isAuto: Bool)? = nil,
-                        cap: AutodraftCapState? = nil) -> AutodraftPolicy.Decision {
+                        cap: AutodraftCapState? = nil, heldBack: Bool = false) -> AutodraftPolicy.Decision {
         AutodraftPolicy.decide(enabled: enabled, isPro: isPro, isGroup: isGroup, isHuman: isHuman,
                                status: status, existingDraft: existingDraft,
-                               cap: cap ?? freshCap, now: now)
+                               cap: cap ?? freshCap, now: now, heldBack: heldBack)
     }
 
     @Test("The happy path: go") func happyPath() {
         #expect(decide().go == true)
+    }
+
+    @Test("Held back blocks even a needs-reply thread (give them space)") func heldBackBlocks() {
+        let d = decide(heldBack: true)
+        #expect(d.go == false)
+        #expect(d.reason == "held back — giving them space")
     }
 
     @Test("Disabled toggle blocks") func disabledBlocks() {

@@ -379,6 +379,33 @@ public enum OsmoDatabase {
                           on: "relationship_decision", columns: ["threadID"])
         }
 
+        // Feedback telemetry (W3 P6) — what became of each surfaced suggestion.
+        // Device-local; the learning loop reads it to compute per-person priors.
+        migrator.registerMigration("v17-suggestion-outcome") { db in
+            try db.create(table: "suggestion_outcome") { t in
+                t.autoIncrementedPrimaryKey("id")
+                t.column("decisionID", .text).notNull()
+                t.column("threadID", .text).notNull()
+                t.column("personID", .text)
+                t.column("decisionKind", .text).notNull()
+                t.column("gestureKind", .text)
+                t.column("family", .text).notNull()
+                t.column("outcome", .text).notNull()
+                t.column("createdAt", .datetime).notNull()
+            }
+            try db.create(index: "idx_outcome_person", on: "suggestion_outcome", columns: ["personID"])
+            try db.create(index: "idx_outcome_thread", on: "suggestion_outcome", columns: ["threadID"])
+        }
+
+        // The learning loop scopes feedback by trigger family; record it on the
+        // decision. Additive (v16 shipped without it) — device-local, so any
+        // pre-existing rows just decode family="".
+        migrator.registerMigration("v18-decision-family") { db in
+            try db.alter(table: "relationship_decision") { t in
+                t.add(column: "family", .text).notNull().defaults(to: "")
+            }
+        }
+
         return migrator
     }
 }

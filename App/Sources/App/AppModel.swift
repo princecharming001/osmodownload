@@ -130,6 +130,10 @@ final class AppModel: ObservableObject {
     @Published var section: Section = .today
     @Published var people: [PersonRow] = []
     @Published var queue: [QueueCard] = []
+    /// The proactive relationship-brain feed (the HUD's source). Empty until the
+    /// brain is switched on (no decisions → no feed); rebuilt from stored
+    /// decisions in reload().
+    @Published private(set) var brainFeed: [BrainFeedItem] = []
     @Published var projects: [Project] = []
     @Published var threads: [OsmoThread] = []
     @Published var searchText: String = ""
@@ -926,7 +930,8 @@ final class AppModel: ObservableObject {
         let decision = AutodraftPolicy.decide(
             enabled: autodraftEnabled, isPro: isPro, isGroup: thread.isGroup,
             isHuman: isHuman(threadID), status: statusByThread[threadID] ?? .sayHi,
-            existingDraft: existingDraft, cap: autodraftCap, now: Date())
+            existingDraft: existingDraft, cap: autodraftCap, now: Date(),
+            heldBack: heldBackThreadIDs().contains(threadID))
         autodraftCap = decision.newCap
         Self.saveAutodraftCap(decision.newCap)
         guard decision.go else { return }
@@ -1077,9 +1082,23 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Record the right feedback outcome for each decision about to expire, THEN
+    /// expire it. A surfaced-but-unacted decision is a soft negative (ignoredSeen);
+    /// a never-surfaced one is NEUTRAL (expiredUnseen) — being away from the app
+    /// never counts against a suggestion.
+    private func expireDecisionsWithOutcomes(now: Date) {
+        for d in (try? store.staleDecisions(now: now)) ?? [] where d.kind != "nothing" {
+            let outcome: OutcomeKind = d.status == .surfaced ? .ignoredSeen : .expiredUnseen
+            try? store.recordOutcome(SuggestionOutcome(
+                decisionID: d.id, threadID: d.threadID, personID: d.personID,
+                decisionKind: d.kind, gestureKind: d.gestureKind, family: d.family, outcome: outcome))
+        }
+        _ = try? store.expireDecisions(now: now)
+    }
+
     private func runDecisionBrainShadow() async {
         let now = Date()
-        _ = try? store.expireDecisions(now: now)
+        expireDecisionsWithOutcomes(now: now)
 
         // Build models for eligible threads: human, 1:1, active in the last 45d.
         let horizon = now.addingTimeInterval(-45 * 86_400)
@@ -1108,11 +1127,78 @@ final class AppModel: ObservableObject {
 
         let suppressors = DecisionGate.Suppressors(
             activeInputHashes: (try? store.activeDecisionInputHashes()) ?? [])
-        let candidates = DecisionGate.evaluate(models, now: now, suppressors: suppressors)
+
+        // Learning: per-person priors from the trailing 60d of outcomes, and a
+        // global daily budget scaled by the trailing act-rate (floored).
+        let priorWindow = now.addingTimeInterval(-60 * 86_400)
+        var priors: [UUID: PersonPrior] = [:]
+        for m in models {
+            guard let pid = m.personID, priors[pid] == nil else { continue }
+            let outcomes = (try? store.outcomes(personID: pid, since: priorWindow)) ?? []
+            priors[pid] = PersonPrior.from(outcomes, now: now)
+        }
+        let recent = (try? store.recentOutcomes(since: now.addingTimeInterval(-7 * 86_400))) ?? []
+        let gateConfig = DecisionGate.Config(dailyBudget: DecisionBudget.daily(recent, now: now))
+
+        let candidates = DecisionGate.evaluate(models, now: now, config: gateConfig,
+                                               suppressors: suppressors, priors: priors)
         for c in candidates {
             guard let decision = try? await service.decide(c, now: now) else { continue }
             await MainActor.run { self.persistShadowDecision(decision, candidate: c, now: now) }
         }
+    }
+
+    /// The dominant trigger family of a candidate — the learning key.
+    private func dominantFamily(_ c: DecisionCandidate) -> String {
+        c.triggers.max(by: { $0.score < $1.score })?.cluster.rawValue ?? ""
+    }
+
+    /// Threads the brain currently says to GIVE SPACE. Empty (so queue/autodraft
+    /// behave exactly as before) unless the relationshipBrain flag is on AND a
+    /// live hold-back decision exists — the hot paths only change behind the flag.
+    private func heldBackThreadIDs() -> Set<UUID> {
+        guard flag("relationshipBrain", default: false) else { return [] }
+        let decisions = (try? store.decisions()) ?? []
+        return Set(decisions
+            .filter { $0.kind == "holdBack" && ($0.status == .fresh || $0.status == .surfaced) }
+            .map(\.threadID))
+    }
+
+    /// Rebuild the proactive feed from stored decisions. Resolves display names
+    /// from the loaded threads. Empty whenever there are no live decisions (which
+    /// is always, until the brain flag is switched on).
+    private func rebuildBrainFeed() {
+        let decisions = (try? store.decisions()) ?? []
+        guard !decisions.isEmpty else { if !brainFeed.isEmpty { brainFeed = [] }; return }
+        var names: [UUID: String] = [:]
+        for t in threads {
+            names[t.id] = t.title ?? (try? store.contacts(inThread: t.id))?.first?.displayName ?? "Them"
+        }
+        let feed = SuggestionFeed.build(decisions: decisions, displayNames: names)
+        if feed != brainFeed { brainFeed = feed }
+        // Mark surfaced decisions as such — a confirmed on-screen impression is
+        // required before any non-response can count against a suggestion (P6).
+        for item in feed {
+            try? store.setDecisionStatus(id: item.id, .surfaced)
+        }
+    }
+
+    /// The HUD's whole action API. `.acted`/`.dismissed` are terminal, drop the
+    /// item, AND write a feedback outcome the learning loop reads. A dismissal
+    /// only counts because the item was, by definition, surfaced (seen) first.
+    func recordFeedAction(id: String, _ action: StoredDecisionStatus) {
+        if let d = try? store.decisionByID(id) {
+            let outcome: OutcomeKind? = action == .acted ? .acted
+                : action == .dismissed ? .dismissedSeen : nil
+            if let outcome {
+                try? store.recordOutcome(SuggestionOutcome(
+                    decisionID: d.id, threadID: d.threadID, personID: d.personID,
+                    decisionKind: d.kind, gestureKind: d.gestureKind, family: d.family,
+                    outcome: outcome))
+            }
+        }
+        try? store.setDecisionStatus(id: id, action)
+        brainFeed.removeAll { $0.id == id }
     }
 
     /// Flatten a typed decision into the store record. `.nothing` IS persisted
@@ -1135,8 +1221,8 @@ final class AppModel: ObservableObject {
             threadID: c.threadID, personID: c.personID, kind: kind, move: move,
             gestureKind: gestureKind, occasion: occasion, untilDays: until, why: why,
             confidence: d.confidence, evidence: d.evidence, inputHash: c.inputHash,
-            isSensitive: d.isSensitive, status: .fresh, createdAt: now,
-            expiresAt: now.addingTimeInterval(24 * 3600))
+            isSensitive: d.isSensitive, family: dominantFamily(c), status: .fresh,
+            createdAt: now, expiresAt: now.addingTimeInterval(24 * 3600))
         try? store.upsertDecision(rec)
     }
 
@@ -1200,11 +1286,13 @@ final class AppModel: ObservableObject {
         // humans only; "Show all" opens the automated ones too. Nothing is ever
         // deleted; this is a view filter over the same stored data.
         let snapshots = showNonHuman ? allSnapshots : allSnapshots.filter { $0.isLikelyHuman }
-        queue = MorningQueue.build(snapshots: snapshots, projects: projects)
+        queue = MorningQueue.build(snapshots: snapshots, projects: projects,
+                                   holdBacks: heldBackThreadIDs())
         rebuildQueueRowMeta()
         people = buildPeople(snapshots: snapshots)
         captureDeterministicVibes()   // flag-gated no-op until the brain is on
         maybeRunDecisionBrain()       // flag-gated shadow-mode brain; surfaces nothing
+        rebuildBrainFeed()            // empty until decisions exist (flag off → none)
 
         // Today-header pulse.
         newInbound24h = (try? store.inboundMessageCount(since: Date().addingTimeInterval(-86_400))) ?? 0

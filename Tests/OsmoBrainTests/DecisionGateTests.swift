@@ -233,4 +233,73 @@ struct DecisionGateTests {
         let c = DecisionGate.evaluate([model(dates: [deadline], intel: ThreadIntel(commitments: ["send it"]), now: now)], now: now).first
         #expect(c?.allowedSensitiveKinds.isEmpty == true)
     }
+
+    // MARK: Priors (the learning loop feeding back in)
+
+    func personModel(_ pid: UUID, threadID: UUID = UUID(), turns: [ThreadTurn] = [],
+                     dates: [ImportantDate] = [], now: Date) -> RelationshipModel {
+        RelationshipModel.assemble(threadID: threadID, displayName: "P", isGroup: false, personID: pid,
+                                   turns: turns.isEmpty ? [turn(false, "hey", at(day: 1))] : turns,
+                                   importantDates: dates, now: now)
+    }
+
+    @Test("A quieted family suppresses a heuristic candidate")
+    func quietFamilySuppresses() {
+        let now = at(day: 10)
+        let pid = UUID()
+        // Build a cooling model (heuristic-only, family=cooling).
+        var turns: [ThreadTurn] = []
+        for i in 0..<12 { turns.append(turn(false, "hey", at(day: 1 + i))) }
+        turns.append(turn(false, "sup", at(day: 40)))
+        let m = personModel(pid, turns: turns, now: at(day: 55))
+        // Only test if it actually produced a cooling candidate.
+        let baseline = DecisionGate.evaluate([m], now: at(day: 55))
+        guard let fam = baseline.first?.triggers.max(by: { $0.score < $1.score })?.cluster.rawValue,
+              fam != "date", fam != "promise", fam != "sensitive" else { return }
+        let prior = PersonPrior(nudgeWeightByFamily: [:],
+                                quietUntilByFamily: [fam: at(day: 60)], suppressedGestureKinds: [])
+        let suppressed = DecisionGate.evaluate([m], now: at(day: 55), priors: [pid: prior])
+        #expect(suppressed.isEmpty)
+    }
+
+    @Test("A quieted heuristic family does NOT suppress a date-triggered candidate")
+    func dateExemptFromQuiet() {
+        let now = at(day: 10)
+        let pid = UUID()
+        let bday = ImportantDate(id: "b", threadID: UUID(), kind: .birthday, label: "bday",
+                                 month: 6, day: 15, recurring: true, source: .manual)
+        let m = personModel(pid, dates: [bday], now: now)
+        // Quiet every heuristic family — the date trigger must still fire.
+        let prior = PersonPrior(nudgeWeightByFamily: [:],
+                                quietUntilByFamily: ["silence": at(day: 30), "cooling": at(day: 30),
+                                                     "effort": at(day: 30)],
+                                suppressedGestureKinds: [])
+        #expect(!DecisionGate.evaluate([m], now: now, priors: [pid: prior]).isEmpty)
+    }
+
+    @Test("A low nudge weight shrinks the score; a high one grows it")
+    func nudgeWeightScales() {
+        let now = at(day: 10)
+        let pid = UUID()
+        let bday = ImportantDate(id: "b", threadID: UUID(), kind: .birthday, label: "bday",
+                                 month: 6, day: 15, recurring: true, source: .manual)
+        let m = personModel(pid, dates: [bday], now: now)
+        let base = DecisionGate.evaluate([m], now: now).first!.score
+        let lowP = PersonPrior(nudgeWeightByFamily: ["date": 0.5], quietUntilByFamily: [:], suppressedGestureKinds: [])
+        let low = DecisionGate.evaluate([m], now: now, priors: [pid: lowP]).first!.score
+        #expect(low < base)
+    }
+
+    @Test("A suppressed gesture kind is removed from allowedSensitiveKinds")
+    func suppressedGestureRemoved() {
+        let now = at(day: 10)
+        let pid = UUID()
+        let bday = ImportantDate(id: "b", threadID: UUID(), kind: .birthday, label: "bday",
+                                 month: 6, day: 15, recurring: true, source: .manual)
+        let m = personModel(pid, dates: [bday], now: now)
+        let prior = PersonPrior(nudgeWeightByFamily: [:], quietUntilByFamily: [:],
+                                suppressedGestureKinds: ["birthday"])
+        let c = DecisionGate.evaluate([m], now: now, priors: [pid: prior]).first
+        #expect(c?.allowedSensitiveKinds.contains(.birthday) == false)
+    }
 }

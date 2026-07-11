@@ -103,6 +103,21 @@ public extension OsmoStore {
         }
     }
 
+    func decisionByID(_ id: String) throws -> StoredDecision? {
+        try dbQueue.read { db in try StoredDecision.fetchOne(db, key: id) }
+    }
+
+    /// Live decisions (fresh/surfaced) whose TTL has passed — the ones about to
+    /// expire, so the caller can record the right feedback outcome first.
+    func staleDecisions(now: Date = Date()) throws -> [StoredDecision] {
+        try dbQueue.read { db in
+            try StoredDecision
+                .filter(["fresh", "surfaced"].contains(Column("status")))
+                .filter(Column("expiresAt") < now)
+                .fetchAll(db)
+        }
+    }
+
     func setDecisionStatus(id: String, _ status: StoredDecisionStatus) throws {
         try dbQueue.write { db in
             if var d = try StoredDecision.fetchOne(db, key: id) {
@@ -134,6 +149,34 @@ public extension OsmoStore {
                 .filter(["fresh", "surfaced"].contains(Column("status")))
                 .fetchAll(db)
             return Set(rows.map(\.inputHash))
+        }
+    }
+
+    // MARK: Feedback outcomes (learning telemetry)
+
+    func recordOutcome(_ outcome: SuggestionOutcome) throws {
+        try dbQueue.write { db in var o = outcome; try o.insert(db) }
+    }
+
+    /// A person's outcome history within the trailing window (learning has a
+    /// 60-day memory; older signal has mean-reverted away anyway).
+    func outcomes(personID: UUID, since: Date) throws -> [SuggestionOutcome] {
+        try dbQueue.read { db in
+            try SuggestionOutcome
+                .filter(Column("personID") == personID)
+                .filter(Column("createdAt") >= since)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
+        }
+    }
+
+    /// All recent outcomes (for the global decision budget's act-rate).
+    func recentOutcomes(since: Date) throws -> [SuggestionOutcome] {
+        try dbQueue.read { db in
+            try SuggestionOutcome
+                .filter(Column("createdAt") >= since)
+                .order(Column("createdAt").asc)
+                .fetchAll(db)
         }
     }
 }

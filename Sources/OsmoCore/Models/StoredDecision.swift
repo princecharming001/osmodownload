@@ -29,6 +29,9 @@ public struct StoredDecision: Codable, Equatable, Sendable, FetchableRecord, Per
     public var evidence: [String]    // stored as JSON
     public var inputHash: String
     public var isSensitive: Bool
+    /// The dominant trigger family at decision time — the key the learning loop
+    /// scopes feedback by. Defaults to "" for tolerant decode of any older row.
+    public var family: String
     public var status: StoredDecisionStatus
     public var createdAt: Date
     public var expiresAt: Date
@@ -39,8 +42,8 @@ public struct StoredDecision: Codable, Equatable, Sendable, FetchableRecord, Per
                 move: String? = nil, gestureKind: String? = nil, occasion: String? = nil,
                 untilDays: Int? = nil, why: String? = nil, confidence: Double,
                 evidence: [String] = [], inputHash: String, isSensitive: Bool,
-                status: StoredDecisionStatus = .fresh, createdAt: Date = Date(),
-                expiresAt: Date) {
+                family: String = "", status: StoredDecisionStatus = .fresh,
+                createdAt: Date = Date(), expiresAt: Date) {
         self.id = id
         self.threadID = threadID
         self.personID = personID
@@ -54,6 +57,7 @@ public struct StoredDecision: Codable, Equatable, Sendable, FetchableRecord, Per
         self.evidence = evidence
         self.inputHash = inputHash
         self.isSensitive = isSensitive
+        self.family = family
         self.status = status
         self.createdAt = createdAt
         self.expiresAt = expiresAt

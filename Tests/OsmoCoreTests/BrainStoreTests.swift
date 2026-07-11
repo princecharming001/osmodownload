@@ -185,6 +185,39 @@ struct BrainStoreTests {
         #expect(try store.activeDecisionInputHashes() == ["fresh1", "surf1"])
     }
 
+    // MARK: Feedback outcomes (v17) + decision family (v18)
+
+    @Test("v17/v18 create the outcome table and the decision.family column")
+    func v17v18Migration() throws {
+        var config = Configuration(); config.foreignKeysEnabled = true
+        let queue = try DatabaseQueue(configuration: config)
+        try OsmoDatabase.migrator.migrate(queue)
+        let tables = try queue.read { db in
+            Set(try String.fetchAll(db, sql: "SELECT name FROM sqlite_master WHERE type='table'"))
+        }
+        #expect(tables.contains("suggestion_outcome"))
+        let cols = try queue.read { db in
+            try Row.fetchAll(db, sql: "PRAGMA table_info(relationship_decision)").map { $0["name"] as String }
+        }
+        #expect(cols.contains("family"))
+    }
+
+    @Test("Outcomes record and read back per person, time-windowed")
+    func outcomeRoundTrip() throws {
+        let store = try newStore()
+        let person = UUID()
+        try store.recordOutcome(.init(decisionID: "d1", threadID: UUID(), personID: person,
+                                      decisionKind: "reachOut", family: "silence", outcome: .acted,
+                                      createdAt: at(day: 5)))
+        try store.recordOutcome(.init(decisionID: "d2", threadID: UUID(), personID: person,
+                                      decisionKind: "gesture", gestureKind: "birthday", family: "date",
+                                      outcome: .dismissedSeen, createdAt: at(day: 1)))
+        let recent = try store.outcomes(personID: person, since: at(day: 3))
+        #expect(recent.count == 1)          // only the day-5 one is within the window
+        #expect(recent.first?.outcome == .acted)
+        #expect(try store.recentOutcomes(since: at(day: 0)).count == 2)
+    }
+
     @Test("nextOccurrence rolls a passed recurring date to next year")
     func nextOccurrenceRolls() throws {
         let jan1 = ImportantDate(id: "x", threadID: UUID(), kind: .birthday, label: "y",
