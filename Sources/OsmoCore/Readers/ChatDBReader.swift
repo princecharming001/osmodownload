@@ -112,10 +112,17 @@ public struct ChatDBReader: Sendable {
     /// date math), plus the new high-water mark. Each call runs in a fresh read
     /// transaction, so WAL content committed by Messages since the last poll is
     /// visible without reopening the file.
-    public func readSince(rowID: Int64) throws -> (rows: [RawIMessage], maxRowID: Int64) {
+    public func readSince(rowID: Int64, limit: Int = 2_000) throws -> (rows: [RawIMessage], maxRowID: Int64) {
+        // Paginated: a first-launch read (watermark 0) on a big chat.db is
+        // hundreds of thousands of rows — unbounded, the attachment join blew
+        // SQLite's variable cap, threw, and the poll loop silently retried
+        // forever (the "iMessage never imports" stall). The caller's watermark
+        // loop turns this limit into natural pagination: each poll ingests one
+        // page and advances the row-id cursor.
         try dbQueue.read { db in
             var maxRowID = rowID
-            var rows = try Row.fetchAll(db, sql: sinceQuery, arguments: [rowID]).map { row -> RawIMessage in
+            var rows = try Row.fetchAll(db, sql: sinceQuery + " LIMIT ?",
+                                        arguments: [rowID, limit]).map { row -> RawIMessage in
                 let raw = Self.rawMessage(from: row)
                 maxRowID = Swift.max(maxRowID, raw.rowID)
                 return raw
@@ -130,23 +137,26 @@ public struct ChatDBReader: Sendable {
     /// once per attachment). No-ops on a chat.db without the attachment tables.
     private func attach(_ rows: inout [RawIMessage], in db: Database) throws {
         guard hasAttachmentTables, !rows.isEmpty else { return }
-        let ids = rows.map(\.rowID)
-        let placeholders = ids.map { _ in "?" }.joined(separator: ",")
-        let sql = """
-            SELECT maj.message_id AS message_id, a.guid AS guid, a.filename AS filename,
-                   a.mime_type AS mime_type, a.transfer_name AS transfer_name,
-                   a.total_bytes AS total_bytes
-            FROM message_attachment_join maj
-            JOIN attachment a ON a.ROWID = maj.attachment_id
-            WHERE maj.message_id IN (\(placeholders))
-            """
-        let attRows = try Row.fetchAll(db, sql: sql, arguments: StatementArguments(ids))
+        // Chunked: one placeholder per id — an unbounded page exceeds SQLite's
+        // host-variable cap (~32k, 999 on old builds) and throws.
         var byMessage: [Int64: [RawAttachment]] = [:]
-        for r in attRows {
-            let messageID: Int64 = r["message_id"]
-            byMessage[messageID, default: []].append(RawAttachment(
-                guid: r["guid"], filename: r["filename"], mimeType: r["mime_type"],
-                transferName: r["transfer_name"], totalBytes: r["total_bytes"] ?? 0))
+        for chunk in stride(from: 0, to: rows.count, by: 500).map({ Array(rows[$0..<Swift.min($0 + 500, rows.count)]) }) {
+            let ids = chunk.map(\.rowID)
+            let placeholders = ids.map { _ in "?" }.joined(separator: ",")
+            let sql = """
+                SELECT maj.message_id AS message_id, a.guid AS guid, a.filename AS filename,
+                       a.mime_type AS mime_type, a.transfer_name AS transfer_name,
+                       a.total_bytes AS total_bytes
+                FROM message_attachment_join maj
+                JOIN attachment a ON a.ROWID = maj.attachment_id
+                WHERE maj.message_id IN (\(placeholders))
+                """
+            for r in try Row.fetchAll(db, sql: sql, arguments: StatementArguments(ids)) {
+                let messageID: Int64 = r["message_id"]
+                byMessage[messageID, default: []].append(RawAttachment(
+                    guid: r["guid"], filename: r["filename"], mimeType: r["mime_type"],
+                    transferName: r["transfer_name"], totalBytes: r["total_bytes"] ?? 0))
+            }
         }
         guard !byMessage.isEmpty else { return }
         for i in rows.indices {

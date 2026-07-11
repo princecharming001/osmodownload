@@ -88,6 +88,29 @@ extension OsmoStore {
 
     // MARK: - Snoozes
 
+    /// Ground-truth group inference: a messaging thread where 2+ DISTINCT
+    /// people (besides the user) have sent messages is a group, whatever the
+    /// provider's chat payload claimed (Unipile's `type` field burned us —
+    /// every IG group imported as a 1:1 and grew a person profile page).
+    /// Email is excluded: multi-sender email threads are normal threading,
+    /// not "group chats". Returns how many threads were flipped.
+    @discardableResult
+    public func repairGroupFlags() throws -> Int {
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                UPDATE thread SET isGroup = 1
+                WHERE isGroup = 0 AND deletedAt IS NULL
+                  AND platform IN ('imessage','whatsapp','instagram','linkedin','x')
+                  AND id IN (SELECT threadID FROM message
+                             WHERE isFromMe = 0 AND senderContactID IS NOT NULL
+                               AND deletedAt IS NULL
+                             GROUP BY threadID
+                             HAVING COUNT(DISTINCT senderContactID) >= 2)
+                """)
+            return db.changesCount
+        }
+    }
+
     public func snooze(thread threadID: UUID, until: Date) throws {
         try dbQueue.write { db in try ThreadSnooze(threadID: threadID, until: until).save(db) }
     }

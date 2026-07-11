@@ -301,6 +301,9 @@ public actor RealtimeSyncEngine {
         // reader-sourced row — its `preservingEnrichment` hook is what protects
         // an already-fetched `localPath`/`thumbnailData` from this re-ingest.
         for attachment in batch.attachmentAdds { _ = try? store.ingest(attachment) }
+        // Providers lie about group-ness; message evidence doesn't. Cheap
+        // (single UPDATE over an indexed aggregate) and idempotent.
+        _ = try? store.repairGroupFlags()
         return fresh
     }
 
@@ -380,51 +383,97 @@ public actor RealtimeSyncEngine {
     /// — or racing the background loop — can never duplicate a message.
     public func pollLocalNow() async { await pollChatDB() }
 
+    #if DEBUG
+    /// Breadcrumb for diagnosing import stalls — every branch of the poll
+    /// loop logs here. Silent in Release (the poll loop's failure paths are
+    /// otherwise entirely invisible: every one is a swallowed `try?`).
+    private func debugLog(_ line: String) {
+        let base = (try? FileManager.default.url(for: .applicationSupportDirectory,
+                     in: .userDomainMask, appropriateFor: nil, create: true))
+            ?? FileManager.default.temporaryDirectory
+        let url = base.appendingPathComponent("Osmo/.imessage-poll-debug.log")
+        let stamped = "\(Date()) \(line)\n"
+        if let data = stamped.data(using: .utf8) {
+            if let handle = try? FileHandle(forWritingTo: url) {
+                handle.seekToEndOfFile(); handle.write(data); try? handle.close()
+            } else {
+                try? data.write(to: url)
+            }
+        }
+    }
+    #else
+    private func debugLog(_ line: String) {}
+    #endif
+
+    /// Fixed page size for readSince — kept in sync with importTotalCount's
+    /// progress math (see below): a page shorter than this is the true tail.
+    private let chatDBPageLimit = 2_000
+
+    /// Snapshot of chat.db's total message count, taken once at the START of
+    /// a big first-launch import so progress is a real fraction across MANY
+    /// poll ticks — a paginated readSince (bounded so the attachment join
+    /// never blows SQLite's variable cap) returns at most `chatDBPageLimit`
+    /// rows per call, so a single page is no longer "the whole import."
+    private var importTotalCount: Int?
+
     private func pollChatDB() async {
-        if localMuted { return }   // user paused/disconnected iMessage
+        if localMuted { debugLog("skip: localMuted"); return }
         if chatReader == nil {
             // Reader opens lazily; FDA may be granted mid-session. Rely on the real
             // open (not isReadableFile, which TCC fools on the world-readable file).
-            guard let reader = try? ChatDBReader(path: iMessageDBPath) else { return }
-            chatReader = reader
+            do {
+                chatReader = try ChatDBReader(path: iMessageDBPath)
+                debugLog("reader-open OK")
+            } catch {
+                debugLog("reader-open FAILED path=\(iMessageDBPath.path) error=\(error)")
+                return
+            }
         }
         guard let reader = chatReader else { return }
 
         let watermark = cursorStore.loadChatDBRowID()
-        guard let (rows, maxRowID) = try? reader.readSince(rowID: watermark) else {
+        guard let (rows, maxRowID) = try? reader.readSince(rowID: watermark, limit: chatDBPageLimit) else {
             // The READ itself failed (vs. simply "no new rows"). A reader opened
             // before Full Disk Access became effective can't actually read — drop
             // it so the next tick reopens with current access. This lets iMessage
             // recover mid-session on macOS versions that propagate the FDA grant
             // without a relaunch (the relaunch affordance covers the rest).
+            debugLog("readSince THREW watermark=\(watermark) — dropping reader")
             chatReader = nil
             return
         }
+        debugLog("readSince ok watermark=\(watermark) rows=\(rows.count) maxRowID=\(maxRowID)")
         guard !rows.isEmpty else {
             // Nothing new. Signal "done" ONLY on the transition out of an import —
             // NOT on every empty poll. Firing 1.0 each poll made the app reload the
             // whole thread list every few seconds forever (the real CPU peg).
-            if wasImporting { onImportProgress?(.imessage, 1.0); wasImporting = false }
+            if wasImporting { onImportProgress?(.imessage, 1.0); wasImporting = false; importTotalCount = nil }
             return
         }
 
-        // First launch (watermark 0) can be tens of thousands of messages. Ingest
-        // in chunks — reporting progress + yielding between them — so the UI fills
-        // progressively and shows a real "importing X%" instead of freezing then
-        // dumping everything at once. Later polls are tiny and ingest in one shot.
-        if watermark == 0, rows.count > 1500 {
+        // A page exactly at the cap size means there's more behind it — stay
+        // in "importing" mode (real cumulative %) across ticks until a SHORT
+        // page proves we reached the tail. Entering on watermark==0 covers a
+        // cold start; staying via `wasImporting` covers every page after the
+        // first even once the watermark has moved off zero.
+        let isFullPage = rows.count == chatDBPageLimit
+        let bigImport = watermark == 0 || wasImporting
+        let batch = enrichWithContacts(IMessageNormalizer.normalize(rows))
+        let fresh = ingest(batch)
+        cursorStore.saveChatDBRowID(maxRowID)
+        for inbound in fresh { inboundContinuation?.yield(inbound) }
+        if !fresh.isEmpty { scheduleIdentityRebuild() }
+
+        if bigImport {
             wasImporting = true
-            await importInChunks(rows, maxRowID: maxRowID)
-            wasImporting = false
+            if importTotalCount == nil { importTotalCount = (try? reader.totalMessageCount()) ?? rows.count }
+            let total = max(importTotalCount ?? rows.count, 1)
+            let fraction = min(0.999, Double(maxRowID) / Double(total))
+            onImportProgress?(.imessage, isFullPage ? fraction : 1.0)
+            debugLog("import page ingested=\(rows.count) fraction=\(fraction) fullPage=\(isFullPage)")
+            if !isFullPage { wasImporting = false; importTotalCount = nil }
+            await Task.yield()
         } else {
-            let batch = enrichWithContacts(IMessageNormalizer.normalize(rows))
-            let fresh = ingest(batch)
-            cursorStore.saveChatDBRowID(maxRowID)
-            for inbound in fresh { inboundContinuation?.yield(inbound) }
-            if !fresh.isEmpty { scheduleIdentityRebuild() }
-            // We just ingested genuinely-new rows (past the !rows.isEmpty guard) —
-            // refresh the UI. This is naturally rate-limited to actual new messages,
-            // unlike the every-poll firing the empty branch used to do.
             onImportProgress?(.imessage, 1.0)
         }
     }
@@ -437,31 +486,4 @@ public actor RealtimeSyncEngine {
     private var localMuted = false
     public func setLocalMuted(_ muted: Bool) { localMuted = muted }
 
-    /// Ingest a large first-import in slices, reporting fractional progress and
-    /// yielding so the app stays responsive and the thread list fills as it goes.
-    private func importInChunks(_ rows: [RawIMessage], maxRowID: Int64) async {
-        let chunk = 2000
-        var i = 0
-        onImportProgress?(.imessage, 0.001)   // flip the UI into "importing" immediately
-        while i < rows.count {
-            let end = min(i + chunk, rows.count)
-            let slice = Array(rows[i..<end])
-            let batch = enrichWithContacts(IMessageNormalizer.normalize(slice))
-            _ = ingest(batch)
-            i = end
-            // Advance the watermark AFTER EACH CHUNK (rows are ROWID-ascending, so
-            // the slice's last row is its max). Ingest is idempotent, so if the app
-            // quits mid-import the next launch RESUMES from here instead of redoing
-            // the whole (potentially minutes-long) first import — which otherwise
-            // pegs the CPU on every restart until the user happens to let it finish.
-            if let lastRowID = slice.last?.rowID, lastRowID > 0 {
-                cursorStore.saveChatDBRowID(lastRowID)
-            }
-            onImportProgress?(.imessage, Double(i) / Double(rows.count))
-            await Task.yield()
-        }
-        cursorStore.saveChatDBRowID(maxRowID)
-        scheduleIdentityRebuild()
-        onImportProgress?(.imessage, 1.0)
-    }
 }

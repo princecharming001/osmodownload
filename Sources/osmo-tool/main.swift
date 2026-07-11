@@ -22,8 +22,8 @@ let dbURL = supportDir.appendingPathComponent("osmo.db")
 let keyURL = supportDir.appendingPathComponent(".dbkey")
 
 let args = CommandLine.arguments.dropFirst()
-guard let cmd = args.first, ["purge-demo", "inspect", "media", "groups", "probe-chatdb"].contains(cmd) else {
-    print("usage: osmo-tool purge-demo [--apply] | inspect [name-fragment] | media | groups | probe-chatdb"); exit(2)
+guard let cmd = args.first, ["purge-demo", "inspect", "media", "groups", "probe-chatdb", "repair-groups", "clear-enrichment"].contains(cmd) else {
+    print("usage: osmo-tool purge-demo [--apply] | inspect [name-fragment] | media | groups | probe-chatdb | repair-groups [--apply] | clear-enrichment [--apply]"); exit(2)
 }
 let apply = args.contains("--apply")
 
@@ -96,6 +96,66 @@ if cmd == "probe-chatdb" {
     exit(0)
 }
 
+if cmd == "repair-groups" {
+    // Same rule as OsmoStore.repairGroupFlags(): 2+ distinct non-me senders on
+    // a messaging platform = group, whatever the provider claimed.
+    do {
+        let candidates = try dbQueue.read { db in
+            try Row.fetchAll(db, sql: """
+                select t.id, t.platform, t.title,
+                       (select count(distinct m.senderContactID) from message m
+                        where m.threadID = t.id and m.isFromMe = 0
+                          and m.senderContactID is not null and m.deletedAt is null) senders
+                from thread t
+                where t.isGroup = 0 and t.deletedAt is null
+                  and t.platform in ('imessage','whatsapp','instagram','linkedin','x')
+                  and (select count(distinct m.senderContactID) from message m
+                       where m.threadID = t.id and m.isFromMe = 0
+                         and m.senderContactID is not null and m.deletedAt is null) >= 2
+                """)
+        }
+        print("\(candidates.count) thread(s) are actually groups:")
+        for r in candidates {
+            print("  [\(r["platform"] as String? ?? "?")] \(r["title"] as String? ?? "(untitled)") — \(r["senders"] as Int? ?? 0) senders")
+        }
+        guard !candidates.isEmpty else { exit(0) }
+        guard apply else { print("\ndry run — pass --apply to flip isGroup."); exit(0) }
+        try dbQueue.write { db in
+            try db.execute(sql: """
+                UPDATE thread SET isGroup = 1
+                WHERE isGroup = 0 AND deletedAt IS NULL
+                  AND platform IN ('imessage','whatsapp','instagram','linkedin','x')
+                  AND id IN (SELECT threadID FROM message
+                             WHERE isFromMe = 0 AND senderContactID IS NOT NULL
+                               AND deletedAt IS NULL
+                             GROUP BY threadID
+                             HAVING COUNT(DISTINCT senderContactID) >= 2)
+                """)
+            print("flipped \(db.changesCount) thread(s) to isGroup = 1.")
+        }
+    } catch { print("✗ repair failed: \(error)"); exit(1) }
+    exit(0)
+}
+
+if cmd == "clear-enrichment" {
+    // person_enrichment is a RE-FETCHABLE cache. Wiping it is the clean way
+    // out of poisoned rows (e.g. a group title "Tejas and Maddi" web-searched
+    // into fighter-jet facts) — profiles refetch lazily with correct names.
+    do {
+        let n = try dbQueue.read { db in
+            try Int.fetchOne(db, sql: "select count(*) from person_enrichment") ?? 0
+        }
+        print("\(n) cached enrichment row(s).")
+        guard n > 0 else { exit(0) }
+        guard apply else { print("dry run — pass --apply to clear the cache."); exit(0) }
+        try dbQueue.write { db in
+            try db.execute(sql: "DELETE FROM person_enrichment")
+            print("cleared \(db.changesCount) row(s) — they refetch lazily with correct names.")
+        }
+    } catch { print("✗ clear failed: \(error)"); exit(1) }
+    exit(0)
+}
+
 if cmd == "groups" {
     do {
         try dbQueue.read { db in
@@ -123,7 +183,7 @@ if cmd == "groups" {
                 from thread t where t.isGroup = 1 and t.deletedAt is null
                 order by t.lastMessageAt desc limit 10
                 """) {
-                let tid = r["id"] as String? ?? ""
+                let tid = (r["id"] as UUID?)?.uuidString ?? (r["id"] as String? ?? "")
                 print("  [\(r["platform"] as String? ?? "?")] \(r["title"] as String? ?? "(untitled)") — \(r["msgs"] as Int? ?? 0) msgs, \(r["senders"] as Int? ?? 0) senders")
                 for m in try Row.fetchAll(db, sql: """
                     select coalesce(c.displayName, c.handle, case when m.isFromMe = 1 then 'me' else '???' end) who,
@@ -131,7 +191,7 @@ if cmd == "groups" {
                     from message m left join contact c on c.id = m.senderContactID
                     where m.threadID = ? and m.deletedAt is null
                     group by who order by n desc limit 6
-                    """, arguments: [tid]) {
+                    """, arguments: [r["id"] as UUID? ?? tid]) {
                     print("      \(m["who"] as String? ?? "?"): \(m["n"] as Int? ?? 0)")
                 }
             }
@@ -225,7 +285,19 @@ do {
     for (platform, n) in byPlatform.sorted(by: { $0.key < $1.key }) {
         print("  \(platform): \(n)")
     }
-    guard !doomed.isEmpty else { print("nothing to purge."); exit(0) }
+
+    // person_enrichment is a SEPARATE cache from threads/messages — fabricated
+    // profiles ("Recruiter at Parallel AI", news.example.com links) fetched
+    // while the app mistakenly believed it was in mock mode (round-6 bug) and
+    // cached with source='mock'. It survives a thread purge untouched, so it
+    // needs its own sweep — this was the "still showing demo data" report
+    // AFTER the thread-level purge already read clean.
+    let mockEnrichmentCount = try dbQueue.read { db in
+        try Int.fetchOne(db, sql: "select count(*) from person_enrichment where source = 'mock'") ?? 0
+    }
+    print("\(mockEnrichmentCount) mock-origin person_enrichment row(s) (source='mock').")
+
+    guard !doomed.isEmpty || mockEnrichmentCount > 0 else { print("nothing to purge."); exit(0) }
     guard apply else { print("\ndry run — pass --apply to delete."); exit(0) }
 
     try dbQueue.write { db in
@@ -247,6 +319,7 @@ do {
               and (handle like 'urn:li:member:%' or handle like '+1415555%'
                    or handle like 'demo-%' or handle like '%pokernight%' or handle like 'noreply@updates.%')
             """,
+            "delete from person_enrichment where source = 'mock'",
         ] {
             try db.execute(sql: sql)
             print("  ✓ \(db.changesCount) rows: \(sql.prefix(58))…")

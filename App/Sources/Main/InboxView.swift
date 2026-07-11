@@ -531,7 +531,7 @@ struct ThreadDetailView: View {
                         MessageBubble(
                             message: message,
                             isGroup: thread?.isGroup ?? false,
-                            senderName: sender?.displayLabel,
+                            senderName: senderLabel(sender),
                             senderAvatar: sender?.avatarData,
                             reactions: reactionsByTarget[message.id] ?? [],
                             replyParent: message.inReplyToMessageID.flatMap { messagesByID[$0] },
@@ -552,7 +552,26 @@ struct ThreadDetailView: View {
     /// The conversation's counterpart, resolved to a person the People roster
     /// already knows (via `buildPeople`'s `personID ?? threadID` key) — nil
     /// when there's genuinely nothing to navigate to.
+    /// A group sender's visible label. Guards the pre-fix ingest era where a
+    /// group sender's displayName fell back to the CHAT TITLE — "ceiling
+    /// tiles said…" is worse than showing their raw handle. Re-backfill
+    /// heals the names; this keeps the transcript honest meanwhile.
+    private func senderLabel(_ sender: OsmoContact?) -> String? {
+        guard let sender else { return nil }
+        let label = sender.displayLabel
+        if let title = thread?.title, !title.isEmpty, label == title,
+           thread?.isGroup == true {
+            return sender.handle.isEmpty ? nil : String(sender.handle.prefix(24))
+        }
+        return label.isEmpty ? nil : label
+    }
+
     private var navigablePersonID: UUID? {
+        // A GROUP is not a person: clicking its header must never open a
+        // member's personal profile page as if it were the group's (that's
+        // how "Tejas and Maddi" grew a fighter-jet web profile). Members are
+        // reachable individually from their own 1:1 threads / People page.
+        if thread?.isGroup == true { return nil }
         let candidate = members.first(where: { !$0.isMe })?.personID ?? threadID
         return model.people.contains(where: { $0.id == candidate }) ? candidate : nil
     }
@@ -1041,7 +1060,7 @@ struct MessageBubble: View {
         case .file:
             FileAttachmentChip(message: message, attachment: attachment, icon: "doc.fill")
         case .link:
-            LinkAttachmentRow(attachment: attachment)
+            LinkAttachmentRow(message: message, attachment: attachment)
         }
     }
 
@@ -1321,7 +1340,14 @@ struct FileAttachmentChip: View {
 /// A shared post/reel row: title + destination URL, opens in the browser
 /// (there are no bytes to fetch for a `link`-kind attachment).
 struct LinkAttachmentRow: View {
+    @EnvironmentObject var model: AppModel
+    let message: OsmoMessage
     let attachment: OsmoAttachment
+    /// Share media (reel poster / shared image) fetched through the media
+    /// proxy — same pipeline as inline images. nil until loaded; a failed
+    /// fetch falls back to the plain link chip.
+    @State private var thumbnail: NSImage?
+    @State private var thumbTried = false
 
     /// The URL a tap should open. Handles the legacy `att://<thread>/<base64>`
     /// refs from the pre-Unipile importers — the base64 payload IS the real
@@ -1368,28 +1394,76 @@ struct LinkAttachmentRow: View {
     }
 
     var body: some View {
-        Button {
-            if let url = resolvedURL { NSWorkspace.shared.open(url) }
-        } label: {
-            HStack(spacing: 6) {
-                Image(systemName: resolvedURL == nil ? "shippingbox" : glyph)
-                    .font(.system(size: 12))
+        Button { open() } label: {
+            if let thumbnail {
+                // The post as it looked on the platform: media + caption,
+                // play badge for video-ish shares, tap → the real post.
+                VStack(alignment: .leading, spacing: 4) {
+                    Image(nsImage: thumbnail)
+                        .resizable().scaledToFill()
+                        .frame(maxWidth: 240, maxHeight: 200)
+                        .clipShape(RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
+                        .overlay(alignment: .center) {
+                            if glyph == "play.rectangle.fill" {
+                                Image(systemName: "play.circle.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundStyle(.white.opacity(0.9))
+                                    .shadow(radius: 4)
+                            }
+                        }
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.right").font(.system(size: 9, weight: .semibold))
+                        Text(label).font(DS.Typography.caption).lineLimit(1)
+                    }
                     .foregroundStyle(resolvedURL == nil ? DS.Colors.muted : DS.Colors.accent)
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(resolvedURL == nil ? "Shared post — no preview available" : label)
-                        .font(DS.Typography.captionEm)
-                        .foregroundStyle(resolvedURL == nil ? DS.Colors.muted : DS.Colors.ink).lineLimit(1)
-                    if let url = resolvedURL {
-                        Text(url.host() ?? url.absoluteString)
-                            .font(.system(size: 10)).foregroundStyle(DS.Colors.muted).lineLimit(1)
+                }
+            } else {
+                HStack(spacing: 6) {
+                    Image(systemName: resolvedURL == nil ? "shippingbox" : glyph)
+                        .font(.system(size: 12))
+                        .foregroundStyle(resolvedURL == nil ? DS.Colors.muted : DS.Colors.accent)
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(resolvedURL == nil ? "Shared post — no preview available" : label)
+                            .font(DS.Typography.captionEm)
+                            .foregroundStyle(resolvedURL == nil ? DS.Colors.muted : DS.Colors.ink).lineLimit(1)
+                        if let url = resolvedURL {
+                            Text(url.host() ?? url.absoluteString)
+                                .font(.system(size: 10)).foregroundStyle(DS.Colors.muted).lineLimit(1)
+                        }
                     }
                 }
+                .padding(.horizontal, DS.Space.s).padding(.vertical, DS.Space.xs)
+                .background(DS.Colors.chip, in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
             }
-            .padding(.horizontal, DS.Space.s).padding(.vertical, DS.Space.xs)
-            .background(DS.Colors.chip, in: RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
         }
         .buttonStyle(.plain)
-        .disabled(resolvedURL == nil)
+        .disabled(resolvedURL == nil && thumbnail == nil)
         .frame(maxWidth: 240, alignment: .leading)
+        .task(id: attachment.id) { await loadThumbnail() }
+    }
+
+    private func open() {
+        if let url = resolvedURL { NSWorkspace.shared.open(url); return }
+        // No post URL but we DO have the media bytes — show them full size.
+        if thumbnail != nil, let fileURL = model.cachedMediaURL(for: attachment) {
+            NSWorkspace.shared.open(fileURL)
+        }
+    }
+
+    private func loadThumbnail() async {
+        guard attachment.remoteRef != nil, !thumbTried else { return }
+        thumbTried = true
+        if let hit = loadFromDisk() { thumbnail = hit; return }
+        model.ensureMediaFetched(attachment, message: message)
+        for _ in 0..<8 {
+            try? await Task.sleep(for: .milliseconds(400))
+            if let hit = loadFromDisk() { thumbnail = hit; return }
+        }
+    }
+
+    private func loadFromDisk() -> NSImage? {
+        guard let url = model.cachedMediaURL(for: attachment),
+              let data = try? Data(contentsOf: url) else { return nil }
+        return NSImage(data: data)
     }
 }

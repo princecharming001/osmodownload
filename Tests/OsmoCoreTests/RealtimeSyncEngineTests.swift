@@ -81,6 +81,91 @@ struct RealtimeSyncEngineTests {
         #expect(try store.messageCount() == 2)
     }
 
+    /// A chat.db with `n` distinct incoming messages in one 1:1 chat — big
+    /// enough (>2000) to force the poll loop's page limit to span multiple
+    /// `pollLocalNow()` calls, the exact shape a first-launch import sees.
+    private func makeLargeChatDB(messageCount n: Int) throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("osmo-bigimport-\(UUID().uuidString).db")
+        let db = try DatabaseQueue(path: url.path)
+        try db.write { db in
+            try db.execute(sql: "CREATE TABLE handle (ROWID INTEGER PRIMARY KEY, id TEXT)")
+            try db.execute(sql: """
+                CREATE TABLE chat (ROWID INTEGER PRIMARY KEY, guid TEXT, chat_identifier TEXT,
+                                   display_name TEXT, style INTEGER)
+                """)
+            try db.execute(sql: """
+                CREATE TABLE message (ROWID INTEGER PRIMARY KEY, guid TEXT, text TEXT,
+                                      handle_id INTEGER, is_from_me INTEGER, date INTEGER,
+                                      date_read INTEGER, attributedBody BLOB,
+                                      associated_message_type INTEGER DEFAULT 0,
+                                      associated_message_guid TEXT,
+                                      associated_message_emoji TEXT,
+                                      thread_originator_guid TEXT)
+                """)
+            try db.execute(sql: "CREATE TABLE chat_message_join (chat_id INTEGER, message_id INTEGER)")
+            try db.execute(sql: "INSERT INTO handle (ROWID, id) VALUES (1, '+15551234567')")
+            try db.execute(sql: """
+                INSERT INTO chat (ROWID, guid, chat_identifier, display_name, style)
+                VALUES (1, 'iMessage;-;+15551234567', '+15551234567', NULL, 45)
+                """)
+            for i in 1...n {
+                try db.execute(sql: """
+                    INSERT INTO message (ROWID, guid, text, handle_id, is_from_me, date, date_read)
+                    VALUES (?, ?, ?, 1, 0, ?, 0)
+                    """, arguments: [i, "M\(i)", "message \(i)", self.appleNanos(1_800_000_000 + Double(i))])
+                try db.execute(sql: "INSERT INTO chat_message_join (chat_id, message_id) VALUES (1, ?)",
+                              arguments: [i])
+            }
+        }
+        return url
+    }
+
+    @Test("A first-launch import spanning multiple pages reports CUMULATIVE progress, never resets, and lands every row")
+    func largeImportProgressIsCumulativeAcrossPages() async throws {
+        // 4500 rows over a 2000-row page limit forces 3 poll ticks — the exact
+        // shape that used to flip onImportProgress to 1.0 after EVERY page
+        // (each capped page looked like "the whole import" to the old code).
+        let total = 4_500
+        let url = try makeLargeChatDB(messageCount: total)
+        defer { try? FileManager.default.removeItem(at: url) }
+        let store = try OsmoStore.inMemory()
+        let engine = RealtimeSyncEngine(store: store, client: makeClient(pullBodies: []),
+                                        cursorStore: MemoryCursorStore(), iMessageDBPath: url)
+        final class Fractions: @unchecked Sendable {
+            private let lock = NSLock()
+            private var values: [Double] = []
+            func append(_ v: Double) { lock.lock(); defer { lock.unlock() }; values.append(v) }
+            func snapshot() -> [Double] { lock.lock(); defer { lock.unlock() }; return values }
+        }
+        let fractionsBox = Fractions()
+        await engine.setOnImportProgress { platform, fraction in
+            guard platform == .imessage else { return }
+            fractionsBox.append(fraction)
+        }
+
+        // Enough ticks to drain all pages (3 full pages + 1 short/empty tick).
+        for _ in 0..<6 { await engine.pollLocalNow() }
+
+        let fractions = fractionsBox.snapshot()
+        #expect(try store.messageCount() == total)   // every row eventually lands
+        // Progress must be monotonically non-decreasing until the final 1.0 —
+        // the bug reset it to ~1.0 after page 1, then jumped back down on page 2.
+        var sawFinal = false
+        for f in fractions {
+            if sawFinal { break }
+            if f >= 0.999 { sawFinal = true }
+        }
+        let preFinal = fractions.prefix(while: { $0 < 0.999 })
+        for (a, b) in zip(preFinal, preFinal.dropFirst()) {
+            #expect(b >= a, "progress must not regress mid-import: \(preFinal)")
+        }
+        #expect(fractions.last == 1.0)                // the run ends at true completion
+        // At least one interior sample must land strictly between pages —
+        // proof it's tracking cumulative rows, not resetting per page.
+        #expect(fractions.contains { $0 > 0.1 && $0 < 0.9 })
+    }
+
     private static let batchJSON = #"{"contacts":[{"platform":"linkedin","handle":"urn:li:member:5","displayName":"Ada","isMe":false}],"threads":[{"platform":"linkedin","platformThreadID":"chat-9","title":"Ada","isGroup":false,"lastMessageAt":"2026-07-04T10:00:00Z"}],"messages":[{"platform":"linkedin","platformMessageID":"m-1","platformThreadID":"chat-9","senderHandle":"urn:li:member:5","isFromMe":false,"text":"hello","sentAt":"__SENT_AT__","readAt":null}],"cursor":"3","hasMore":false}"#
     private static let emptyJSON = #"{"contacts":[],"threads":[],"messages":[],"cursor":"3","hasMore":false}"#
 

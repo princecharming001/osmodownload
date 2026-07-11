@@ -1645,6 +1645,12 @@ final class AppModel: ObservableObject {
         // PersonRow ids can be threadIDs for unresolved people — the FK insert
         // would fail, and there's no identity to enrich yet.
         guard (try? store.person(id: personID)) != nil else { return }
+        // Never enrich an identity that only exists through GROUP threads —
+        // there is no individual to search, and the "name" is a group title
+        // (web-searching "Tejas and Maddi" returned facts about the Tejas
+        // fighter jet). Members enrich through their own 1:1 identities.
+        let personThreads = threads(forPerson: personID)
+        if !personThreads.isEmpty && personThreads.allSatisfy({ $0.isGroup }) { return }
         if let existing = enrichmentByPerson[personID], !existing.isStale, !force { return }
         guard !enrichmentInFlight.contains(personID) else { return }
         if enrichmentEmptyThisSession.contains(personID) && !force { return }

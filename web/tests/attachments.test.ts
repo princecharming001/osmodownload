@@ -43,13 +43,13 @@ describe("readAttachments — Unipile message attachment variants", () => {
     expect(out?.[0]).toMatchObject({ id: "f1", kind: "video", sizeBytes: 500 });
   });
 
-  it("a shared-post/reel maps to kind link with url + title, no remoteRef", () => {
+  it("a shared-post/reel maps to kind link with url + title + fetchable remoteRef", () => {
     const out = readAttachments({
       attachments: [{ id: "p1", type: "post", url: "https://instagram.com/p/xyz", title: "A reel" }],
     });
     expect(out?.[0]).toEqual({
       id: "p1", kind: "link", mimeType: null, filename: null, sizeBytes: null,
-      remoteRef: null, url: "https://instagram.com/p/xyz", title: "A reel",
+      remoteRef: "p1", url: "https://instagram.com/p/xyz", title: "A reel",
     });
   });
 

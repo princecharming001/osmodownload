@@ -59,7 +59,10 @@ export function readAttachments(msg: Record<string, unknown>): WireAttachment[] 
         mimeType: mime ?? null,
         filename: ((a.file_name ?? a.filename) as string | undefined) ?? null,
         sizeBytes: typeof size === "number" ? size : null,
-        remoteRef: kind === "link" ? null : String(id),
+        // Link/share entries keep their attachment id too: the provider often
+        // has REAL media bytes for a share (reel poster, shared image) that
+        // the /api/media proxy can fetch — a thumbnail card beats a bare chip.
+        remoteRef: String(id),
         url: kind === "link" ? firstHTTPURL(a) : null,
         title: shareTitle(a),
       });
@@ -128,9 +131,20 @@ export function chatIndex(
     const id = pick(c, "id", "chat_id", "provider_id") as string | undefined;
     if (!id) continue;
     const title = (pick(c, "name", "subject", "chat_name") as string | undefined) ?? null;
-    // Unipile chat `type`: 0/1 direct, 2 group (varies) — treat a present
-    // attendee count > 2 or an explicit flag as group.
-    const isGroup = Boolean(pick(c, "is_group") ?? (Number(pick(c, "type") ?? 0) >= 2));
+    // Group detection across payload variants. Real payloads have burned us:
+    // `type` can be a STRING ("group"/"GROUP_CHAT") — Number("group") is NaN
+    // and NaN >= 2 is false, so every IG group imported as a 1:1 (single
+    // avatar, person profile pages, web enrichment on the group title…).
+    const typeRaw = pick(c, "type", "chat_type", "conversation_type");
+    const typeStr = String(typeRaw ?? "").toLowerCase();
+    const attendeeCount = Number(
+      pick(c, "attendees_count", "attendee_count", "participants_count", "member_count") ?? 0);
+    const attendees = pick(c, "attendees", "participants", "members");
+    const isGroup = Boolean(pick(c, "is_group", "isGroup"))
+      || typeStr.includes("group")
+      || (Number(typeRaw) >= 2)                       // numeric variant
+      || attendeeCount > 2                            // me + 2 others
+      || (Array.isArray(attendees) && attendees.length > 2);
     const providerId = (c.provider_id as string | undefined) ?? null;
     map.set(id, { title, isGroup, providerId });
   }
