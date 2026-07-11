@@ -138,6 +138,10 @@ final class AppModel: ObservableObject {
     @Published var threads: [OsmoThread] = []
     @Published var searchText: String = ""
     @Published var searchResults: [OsmoMessage] = []
+    /// One-shot signal from the ⌘K command to move keyboard focus into the
+    /// sidebar search field (cross-scene FocusState can't be set from the App
+    /// scene directly). MainWindow observes it, focuses, and resets it.
+    @Published var focusSearchRequested = false
     @Published var syncing = false
     @Published var lastSyncSummary: String?
     @Published var isMockMode = true
@@ -547,8 +551,11 @@ final class AppModel: ObservableObject {
         }
     }
 
+    #if DEBUG
     /// Developer/testing only: activate Pro via a dev license key (exercises the
-    /// real signed-entitlement path). Backend disables this once Stripe is live.
+    /// real signed-entitlement path). Compiled out of Release entirely, and the
+    /// backend also rejects the dev key in production — defense in depth so no
+    /// shipping build can self-serve Pro.
     func activateProLocally() { redeemLicense("OSMO-DEV-PRO") }
     func resetToFree() {
         Task { [weak self] in
@@ -561,6 +568,7 @@ final class AppModel: ObservableObject {
             }
         }
     }
+    #endif
 
     private static func accountURL() -> URL { supportDir().appendingPathComponent("account.json") }
     private static func loadAccount() -> UserAccount {
@@ -1088,7 +1096,9 @@ final class AppModel: ObservableObject {
     /// never counts against a suggestion.
     private func expireDecisionsWithOutcomes(now: Date) {
         for d in (try? store.staleDecisions(now: now)) ?? [] where d.kind != "nothing" {
-            let outcome: OutcomeKind = d.status == .surfaced ? .ignoredSeen : .expiredUnseen
+            // A hold-back that aged out after being seen is NOT an ignored
+            // suggestion — waiting was the whole point. Keep it neutral.
+            let outcome: OutcomeKind = (d.status == .surfaced && d.kind != "holdBack") ? .ignoredSeen : .expiredUnseen
             try? store.recordOutcome(SuggestionOutcome(
                 decisionID: d.id, threadID: d.threadID, personID: d.personID,
                 decisionKind: d.kind, gestureKind: d.gestureKind, family: d.family, outcome: outcome))
@@ -1238,8 +1248,13 @@ final class AppModel: ObservableObject {
             brainFeed.removeAll { $0.id == id }
             return
         }
+        // A hold-back card ("give them space") has no "act" affordance — its only
+        // control is the close button, and closing it is COMPLIANCE, not a
+        // rejection. Recording that as a negative would punish the very advice the
+        // user followed, poisoning the family prior. So hold-back dismissals write
+        // no outcome; only reach-out/gesture dismissals are real negatives.
         let outcome: OutcomeKind? = action == .acted ? .acted
-            : action == .dismissed ? .dismissedSeen : nil
+            : (action == .dismissed && d.kind != "holdBack") ? .dismissedSeen : nil
         if let outcome {
             try? store.recordOutcome(SuggestionOutcome(
                 decisionID: d.id, threadID: d.threadID, personID: d.personID,

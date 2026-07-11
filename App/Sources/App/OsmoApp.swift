@@ -2,8 +2,8 @@ import SwiftUI
 import AppKit
 import OsmoShell
 
-/// Osmo — the consumer Mac app. A main window (Today / Inbox / People / Projects
-/// / Connections), a menu-bar presence, the liquid-glass pill, and a full
+/// Osmo — the consumer Mac app. A main window (Today / Inbox / People / You /
+/// Connections), a menu-bar presence, the liquid-glass pill, and a full
 /// onboarding takeover on first launch. Runs keyless; real connections inject
 /// via the hosted-auth wizard.
 @main
@@ -52,11 +52,13 @@ struct OsmoApp: App {
                 }
             }
             CommandGroup(replacing: .newItem) {
-                Button("New Goal") { model.section = .people }
+                // Goals are added per-person, so "new goal" means "go pick the
+                // person" — labelled honestly rather than implying a blank composer.
+                Button("Go to People") { model.section = .people }
                     .keyboardShortcut("n", modifiers: .command)
             }
             CommandGroup(after: .toolbar) {
-                Button("Search") { model.section = .today }
+                Button("Search") { model.focusSearchRequested = true }
                     .keyboardShortcut("k", modifiers: .command)
                 Button("Summon Osmo") { PillController.shared.handleHotkey() }
                     .keyboardShortcut(.space, modifiers: .option)

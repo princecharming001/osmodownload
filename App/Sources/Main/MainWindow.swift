@@ -1,12 +1,13 @@
 import SwiftUI
 import OsmoCore
 
-/// The main window: orchid sidebar (Today / Inbox / People / Projects /
+/// The main window: orchid sidebar (Today / Inbox / People / You /
 /// Connections) + a detail pane. Global search replaces the detail while active.
 struct MainWindow: View {
     @EnvironmentObject var model: AppModel
 
     @AppStorage("acceptedLegalV1") private var acceptedLegal = false
+    @FocusState private var searchFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -28,6 +29,16 @@ struct MainWindow: View {
         .onAppear {
             model.reload()
             if !acceptedLegal { model.present(.consent) }
+        }
+        // Selecting a section (sidebar click or ⌘1–5) must escape an active
+        // search — otherwise the detail stays pinned to SearchResultsView and
+        // navigation looks broken (the section changes with no visible effect).
+        .onChange(of: model.section) { _, _ in
+            if !model.searchText.isEmpty { model.searchText = ""; model.runSearch() }
+        }
+        // ⌘K asks (via the model) to focus the sidebar search field.
+        .onChange(of: model.focusSearchRequested) { _, requested in
+            if requested { searchFocused = true; model.focusSearchRequested = false }
         }
     }
 
@@ -84,7 +95,9 @@ struct MainWindow: View {
                 Spacer()
             }
             .foregroundStyle(.white)
-            .padding(.horizontal, DS.Space.l).padding(.vertical, 6)
+            // Leading inset clears the traffic-light controls (this banner is the
+            // top-most element in a .hiddenTitleBar window, so the lights float over it).
+            .padding(.leading, 76).padding(.trailing, DS.Space.l).padding(.vertical, DS.Space.s)
             .background(DS.Colors.amber)
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Service notice: \(message)")
@@ -98,13 +111,15 @@ struct MainWindow: View {
                     .font(DS.Typography.displaySmall).foregroundStyle(DS.Colors.ink)
                 Spacer(minLength: 0)
             }
-            .padding(.horizontal, DS.Space.l).padding(.top, DS.Space.l).padding(.bottom, DS.Space.m)
+            // Top inset clears the traffic-light controls floating over content in
+            // a .hiddenTitleBar window (28pt ≈ the light band), so "Osmo" sits below them.
+            .padding(.horizontal, DS.Space.l).padding(.top, 28).padding(.bottom, DS.Space.m)
             // The whole header row is a real drag handle — SwiftUI content
             // blocks isMovableByWindowBackground, so this strip was the one
             // dead zone where the window refused to drag (probe: 0px of 220).
             .background(WindowDragHandle())
 
-            SearchField(text: $model.searchText, onChange: { model.runSearch() })
+            SearchField(text: $model.searchText, focused: $searchFocused, onChange: { model.runSearch() })
                 .padding(.horizontal, DS.Space.m)
                 .padding(.bottom, DS.Space.s)
 
@@ -214,17 +229,21 @@ struct MainWindow: View {
 /// An orchid search field.
 struct SearchField: View {
     @Binding var text: String
+    var focused: FocusState<Bool>.Binding
     var onChange: () -> Void
     var body: some View {
         HStack(spacing: DS.Space.s) {
             Image(systemName: "magnifyingglass").font(.system(size: 12)).foregroundStyle(DS.Colors.muted)
             TextField("Search or ask anything…", text: $text)
                 .textFieldStyle(.plain).font(DS.Typography.body)
+                .focused(focused)
                 .onChange(of: text) { _, _ in onChange() }
+                .accessibilityIdentifier("sidebar.search")
             if !text.isEmpty {
                 Button { text = ""; onChange() } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 12))
                 }.buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
+                    .accessibilityLabel("Clear search")
             }
         }
         .padding(.horizontal, DS.Space.m).padding(.vertical, DS.Space.s)
@@ -245,8 +264,11 @@ extension View {
                     .shadow(color: DS.Colors.shadow, radius: 12, y: 4)
                     .padding(.bottom, DS.Space.xl)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { dismiss() }
+                    // Keyed to the message so a replacing toast restarts its own
+                    // timer (and cancels the prior) instead of riding a stale one.
+                    .task(id: message) {
+                        try? await Task.sleep(nanoseconds: 2_500_000_000)
+                        if !Task.isCancelled { dismiss() }
                     }
             }
         }

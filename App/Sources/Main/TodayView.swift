@@ -17,21 +17,30 @@ struct TodayView: View {
                 SetupChecklistCard()
                 KeyPeopleCard()
                 winBackCard
+                // Due follow-ups are asks YOU armed — they must show even when the
+                // reply queue is empty (otherwise "You're clear" contradicts the
+                // header's "N follow-ups came due"). Renders nothing when none.
+                followupLane
                 if model.queue.isEmpty {
-                    if model.isMockMode {
-                        EmptyStateView(
-                            icon: "sparkles",
-                            title: "Try Osmo now",
-                            message: "You're in demo mode. Open Connections to link a platform, or press ⌥Space anywhere to summon the pill.",
-                            cta: ("Open Connections", { model.section = .connections }))
-                    } else {
-                        EmptyStateView(icon: "checkmark.circle",
-                                       title: "You're clear",
-                                       message: "No one's waiting on you right now.")
+                    if model.syncing && model.dueFollowups.isEmpty {
+                        EmptyStateView(icon: "arrow.triangle.2.circlepath",
+                                       title: "Catching up…",
+                                       message: "Osmo is syncing your conversations.")
+                    } else if model.dueFollowups.isEmpty {
+                        if model.isMockMode {
+                            EmptyStateView(
+                                icon: "sparkles",
+                                title: "Try Osmo now",
+                                message: "You're in demo mode. Open Connections to link a platform, or press ⌥Space anywhere to summon the pill.",
+                                cta: ("Open Connections", { model.section = .connections }))
+                        } else {
+                            EmptyStateView(icon: "checkmark.circle",
+                                           title: "You're clear",
+                                           message: "No one's waiting on you right now.")
+                        }
                     }
                 } else {
                     notificationNudge
-                    followupLane
                     ForEach(groups, id: \.title) { group in
                         section(group.title, kind: group.kind, cards: group.cards)
                     }
@@ -58,7 +67,9 @@ struct TodayView: View {
                     PillButton("See plans") { model.present(.account) }
                     Button { winBackDismissed = true } label: {
                         Image(systemName: "xmark").font(.system(size: 10, weight: .medium))
+                            .frame(width: 24, height: 24).contentShape(Rectangle())
                     }.buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
+                        .accessibilityLabel("Dismiss")
                 }
             }
         }
@@ -250,6 +261,7 @@ struct QueueCardRow: View {
     private var header: some View {
         HStack(spacing: DS.Space.s) {
             Text(card.personName).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
+                .lineLimit(1).layoutPriority(1)
             PlatformLogo(card.platform, size: 14)
             if showsVerdict { verdictChip }
             urgencyChip
@@ -341,19 +353,29 @@ struct QueueCardRow: View {
         if let due = model.suggestedFollowUpBy(forThread: card.threadID),
            !model.pendingFollowups.contains(where: { $0.threadID == card.threadID }),
            !model.dueFollowups.contains(where: { $0.threadID == card.threadID }) {
-            Button {
-                model.armFollowup(thread: card.threadID, after: due.timeIntervalSinceNow)
-            } label: {
-                Label("Follow up by \(Self.weekdayFormatter.string(from: due))", systemImage: "bell")
-                    .font(DS.Typography.eyebrow)
-            }
-            .buttonStyle(.plain).foregroundStyle(DS.Colors.accent)
+            // A high-priority tap so arming the reminder reliably wins over the
+            // enclosing row Button (nested plain Buttons have ambiguous hit-testing;
+            // the row's action is "open thread", this one is "arm follow-up").
+            Label("Follow up by \(Self.followUpLabel(due))", systemImage: "bell")
+                .font(DS.Typography.eyebrow)
+                .foregroundStyle(DS.Colors.accent)
+                .contentShape(Rectangle())
+                .highPriorityGesture(TapGesture().onEnded {
+                    model.armFollowup(thread: card.threadID, after: due.timeIntervalSinceNow)
+                })
+                .accessibilityAddTraits(.isButton)
+                .accessibilityLabel("Arm a follow-up reminder")
         }
     }
 
-    static let weekdayFormatter: DateFormatter = {
-        let f = DateFormatter(); f.dateFormat = "EEE"; return f
-    }()
+    /// Weekday within the week ("Wed"); month + day once it's further out, so a
+    /// far date isn't ambiguous about which week.
+    static func followUpLabel(_ due: Date) -> String {
+        let days = due.timeIntervalSinceNow / 86_400
+        let f = DateFormatter()
+        f.dateFormat = days > 6 ? "MMM d" : "EEE"
+        return f.string(from: due)
+    }
 
     /// The explicit timing call, right on the card — nudge or lay back.
     private var verdict: ReachOutVerdict { model.reachOutVerdict(forThread: card.threadID) }
@@ -669,13 +691,15 @@ struct SetupChecklistCard: View {
                         Text("\(done)/\(items.count)").font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
                         Button { dismissed = true } label: {
                             Image(systemName: "xmark").font(.system(size: 10, weight: .medium))
+                                .frame(width: 24, height: 24).contentShape(Rectangle())
                         }.buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
+                            .accessibilityLabel("Dismiss checklist")
                     }
                     ForEach(Array(items.enumerated()), id: \.offset) { _, item in
                         Button(action: item.act) {
                             HStack(spacing: DS.Space.s) {
                                 Image(systemName: item.done ? "checkmark.circle.fill" : "circle")
-                                    .foregroundStyle(item.done ? DS.Colors.green : DS.Colors.hairline)
+                                    .foregroundStyle(item.done ? DS.Colors.green : DS.Colors.muted)
                                 Text(item.label).font(DS.Typography.body)
                                     .foregroundStyle(item.done ? DS.Colors.muted : DS.Colors.ink)
                                     .strikethrough(item.done)
@@ -699,7 +723,9 @@ struct SetupChecklistCard: View {
 struct KeyPeopleCard: View {
     @EnvironmentObject var model: AppModel
     @AppStorage("keyPeopleAsked") private var asked = false
-    @State private var selected: Set<String> = []
+    // Keyed by stable person id, not display name — two synced contacts can share
+    // a name and would otherwise toggle/collapse as one.
+    @State private var selected: Set<UUID> = []
 
     var body: some View {
         let candidates = Array(model.people.prefix(12))
@@ -711,9 +737,9 @@ struct KeyPeopleCard: View {
                         .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 6)], alignment: .leading, spacing: 6) {
                         ForEach(candidates) { p in
-                            let on = selected.contains(p.name)
+                            let on = selected.contains(p.id)
                             Button {
-                                if on { selected.remove(p.name) } else { selected.insert(p.name) }
+                                if on { selected.remove(p.id) } else { selected.insert(p.id) }
                             } label: {
                                 HStack(spacing: 5) {
                                     AvatarView(name: p.name, data: p.avatar, size: 18)
@@ -733,7 +759,7 @@ struct KeyPeopleCard: View {
                             .buttonStyle(.plain).font(DS.Typography.captionEm).foregroundStyle(DS.Colors.muted)
                         Spacer()
                         PillButton(selected.isEmpty ? "Save" : "Save \(selected.count)", kind: .quiet) {
-                            model.onboardingProfile.keyPeople = Array(selected)
+                            model.onboardingProfile.keyPeople = candidates.filter { selected.contains($0.id) }.map(\.name)
                             asked = true
                         }.disabled(selected.isEmpty)
                     }

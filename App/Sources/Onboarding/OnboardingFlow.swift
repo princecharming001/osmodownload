@@ -143,7 +143,7 @@ struct OnboardingFlow: View {
                     .signInWithAppleButtonStyle(.black)
                     .frame(height: 44).frame(maxWidth: 320)
                     .clipShape(RoundedRectangle(cornerRadius: DS.Radius.l, style: .continuous))
-                providerButton("Continue with Google", icon: "g.circle") { openWebLogin() }
+                providerButton("Continue with Google", icon: "g.circle") { openWebLogin(provider: "google") }
                 providerButton("Continue with email", icon: "envelope") { openWebLogin() }
                 Text("Email & Google finish in your browser, then come back.")
                     .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
@@ -173,8 +173,10 @@ struct OnboardingFlow: View {
                                       fullName: name.isEmpty ? nil : name)
     }
 
-    private func openWebLogin() {
-        if let url = URL(string: "https://app.leftonread.in/login") { NSWorkspace.shared.open(url) }
+    private func openWebLogin(provider: String? = nil) {
+        var s = "https://app.leftonread.in/login"
+        if let provider { s += "?provider=\(provider)" }   // lets the web page start the right flow
+        if let url = URL(string: s) { NSWorkspace.shared.open(url) }
     }
 
     // MARK: - Hotkey + permission
@@ -216,7 +218,9 @@ struct OnboardingFlow: View {
             Text("Connect a platform and Osmo pulls your history + keeps it live. iMessage stays on your Mac; the rest connect in one click.")
                 .font(DS.Typography.body).foregroundStyle(DS.Colors.muted).multilineTextAlignment(.center)
             if model.account.isSignedIn {
-                PillButton("Connect a platform", kind: .quiet) {
+                // The step's purpose → the visually-dominant (filled) action, so the
+                // footer "Continue" reads as the secondary "I'll connect later" path.
+                PillButton("Connect a platform") {
                     hasOnboarded = true; model.section = .connections
                 }
             } else {
@@ -284,7 +288,7 @@ struct OnboardingFlow: View {
         Button(action: tap) {
             HStack(spacing: DS.Space.s) {
                 Image(systemName: selected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 16)).foregroundStyle(selected ? DS.Colors.accent : DS.Colors.hairline)
+                    .font(.system(size: 16)).foregroundStyle(selected ? DS.Colors.accent : DS.Colors.muted)
                 Text(label).font(DS.Typography.body).foregroundStyle(DS.Colors.ink)
                 Spacer(minLength: 0)
             }

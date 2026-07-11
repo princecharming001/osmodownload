@@ -29,7 +29,10 @@ final class HUDController: NSObject, ObservableObject, NSWindowDelegate {
             .receive(on: RunLoop.main)
             .sink { [weak self] feed, queue in
                 guard let self else { return }
-                let owed = feed.count + queue.filter { $0.kind == .reply }.count
+                // Hold-backs say "do nothing / wait" — they must NOT inflate a
+                // count whose whole meaning is "things that need you."
+                let owed = feed.filter { $0.kind != .holdBack }.count
+                    + queue.filter { $0.kind == .reply }.count
                 if self.state.owedCount != owed { self.state.owedCount = owed }
                 if self.panel?.isVisible == true {
                     self.resize()

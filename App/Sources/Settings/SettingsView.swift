@@ -39,7 +39,9 @@ struct PlanSettings: View {
 
 struct GeneralSettings: View {
     @EnvironmentObject var model: AppModel
-    @AppStorage("hasOnboarded") private var hasOnboarded = true
+    // Default MUST match the other declarations (OsmoApp / OnboardingFlow use
+    // false) so this key has one consistent unset value everywhere.
+    @AppStorage("hasOnboarded") private var hasOnboarded = false
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -51,7 +53,7 @@ struct GeneralSettings: View {
             Section {
                 Toggle("Demo mode", isOn: $model.demoMode)
                 Text("Shows only the 5 most recent conversations per platform from the last 15 days. A view filter — nothing is deleted, and turning it off restores everything.")
-                    .font(.caption).foregroundStyle(.secondary)
+                    .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
             }
             Section {
                 Button("Replay welcome…") { hasOnboarded = false }

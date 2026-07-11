@@ -45,7 +45,7 @@ struct PaywallView: View {
                     PillButton("Get Osmo Pro — \(Entitlements.proMonthlyPrice)", icon: "arrow.up.circle.fill") {
                         model.subscribe(to: BillingCatalog.proMonthly)
                     }
-                    .accessibilityIdentifier("paywall.trial")
+                    .accessibilityIdentifier("paywall.subscribe")
                     Text("Checkout opens in your browser.")
                         .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
                 }

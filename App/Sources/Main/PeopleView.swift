@@ -141,6 +141,7 @@ struct MergeSuggestionRow: View {
             contactIDsA: suggestion.contactIDsA, contactIDsB: suggestion.contactIDsB)
         model.forceGraphRebuild = true       // drop the rejected pair from the list
         model.reload()
+        model.toast = "Kept them separate."   // confirm the action (merge toasts too)
     }
 }
 
@@ -159,7 +160,7 @@ struct StatusPill: View {
         case .needsReply: return "Reply"
         case .leftOnRead: return "On read"
         case .waiting: return "Waiting"
-        case .ghosted: return "Quiet"
+        case .ghosted: return "Gone quiet"
         case .quiet: return "Quiet"
         case .sayHi: return "Say hi"
         }
@@ -178,6 +179,14 @@ struct PersonDetailView: View {
     @State private var profile: PartnerProfile?
     @State private var verdict: ReachOutVerdict?
     @State private var trajectory: Trajectory?
+    /// The attachment-flavored read (space vs reassurance) + Gottman bid pattern —
+    /// the psychology layer made visible on the person, not just fed to the brain.
+    @State private var style: RelationalStyle?
+    @State private var bids: BidRead?
+    /// The person's threads + last-message snippets, resolved once per load (not
+    /// re-queried from the store on every redraw of the detail).
+    @State private var personThreads: [OsmoThread] = []
+    @State private var timelineSnippets: [UUID: String] = [:]
 
     var body: some View {
         ScrollView {
@@ -197,15 +206,20 @@ struct PersonDetailView: View {
         .onAppear {
             note = (try? model.store.memory(forPerson: person.id))?.note ?? ""
             goalText = existingProject?.goalText ?? ""
+            loadTimeline()
             let turns = combinedTurns()
             let now = Date()
-            profile = PartnerProfile.read(turns)
+            let read = PartnerProfile.read(turns)
+            profile = read
             verdict = ReachOutVerdict.decide(read: ThreadRead.read(turns, now: now),
-                                             partner: profile ?? PartnerProfile.read(turns), now: now)
+                                             partner: read, now: now)
             trajectory = Trajectory.read(turns, now: now)
+            style = RelationalStyle.read(turns, now: now)
+            bids = BidDetector.read(turns, now: now)
             model.ensureEnrichment(forPerson: person.id, name: person.name)
             model.ensureDossier(forPerson: person.id, name: person.name)
         }
+        .onChange(of: model.dataVersion) { _, _ in loadTimeline() }
     }
 
     // MARK: Public profile — who they are before how you talk
@@ -231,9 +245,11 @@ struct PersonDetailView: View {
                         model.ensureEnrichment(forPerson: person.id, name: person.name, force: true)
                     } label: {
                         Image(systemName: "arrow.clockwise").font(.system(size: 10))
+                            .frame(width: 22, height: 22).contentShape(Rectangle())
                     }
                     .buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
                     .help("Refresh from LinkedIn + the web")
+                    .accessibilityLabel("Refresh profile")
                 }
                 Card {
                     VStack(alignment: .leading, spacing: DS.Space.m) {
@@ -364,6 +380,19 @@ struct PersonDetailView: View {
 
     // MARK: The Read — the pitch's "it reads people" made visible
 
+    /// A one-line Gottman turn-toward read — only when there's a real signal (a
+    /// low turn-toward pattern with enough samples, or an unanswered last reach).
+    private var bidInsight: String? {
+        guard let bids else { return nil }
+        if let rate = bids.turnTowardRate, rate < 0.5 {
+            return "You've been turning toward about \(Int(rate * 100))% of their bids lately — worth leaning in."
+        }
+        if bids.lastBidMissed {
+            return "Their last message was a reach for connection that hasn't been met yet."
+        }
+        return nil
+    }
+
     @ViewBuilder private var readCard: some View {
         if let profile, !profile.isEmpty {
             VStack(alignment: .leading, spacing: DS.Space.s) {
@@ -395,6 +424,31 @@ struct PersonDetailView: View {
                         if let driver = trajectory?.driver {
                             Text(driver.prefix(1).capitalized + driver.dropFirst() + ".")
                                 .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                        }
+                        // How you two relate — the attachment-flavored read: does
+                        // this person need space or reassurance? The single most
+                        // decision-relevant line, and something no keyboard app sees.
+                        if let note = style?.note {
+                            HStack(alignment: .top, spacing: DS.Space.xs) {
+                                Image(systemName: "person.line.dotted.person")
+                                    .font(.system(size: 10)).foregroundStyle(DS.Colors.accent)
+                                VStack(alignment: .leading, spacing: 1) {
+                                    Text("How you two relate").font(DS.Typography.eyebrow)
+                                        .tracking(0.6).foregroundStyle(DS.Colors.accent)
+                                    Text(note.prefix(1).capitalized + note.dropFirst() + ".")
+                                        .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                        // Gottman turn-toward: are their bids for connection being met?
+                        if let bidLine = bidInsight {
+                            HStack(alignment: .top, spacing: DS.Space.xs) {
+                                Image(systemName: "hand.wave")
+                                    .font(.system(size: 10)).foregroundStyle(DS.Colors.amber)
+                                Text(bidLine).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
                         }
                         // Trait chips: how they communicate.
                         FlowChips(items: profile.chips)
@@ -475,7 +529,7 @@ struct PersonDetailView: View {
     /// Recent turns across this person's threads, chronological — the profile
     /// sample. Bounded so the page stays instant.
     private func combinedTurns() -> [ThreadTurn] {
-        threads.prefix(4).flatMap { thread in
+        personThreads.prefix(4).flatMap { thread in
             let senderNames = groupSenderNames(store: model.store, threadID: thread.id)
             return ((try? model.store.recentMessages(inThread: thread.id, limit: 80)) ?? [])
                 .reversed()
@@ -515,33 +569,44 @@ struct PersonDetailView: View {
     private var timeline: some View {
         VStack(alignment: .leading, spacing: DS.Space.s) {
             Eyebrow("Across every platform")
-            ForEach(threads) { thread in
-                Button {
-                    model.selectedThreadID = thread.id
-                    model.section = .inbox
-                } label: {
-                    Card {
-                        HStack {
-                            Image(systemName: thread.platform.symbolName)
-                                .font(.system(size: 12)).foregroundStyle(thread.platform.tint)
-                            Text((try? model.store.lastMessage(inThread: thread.id))?.text ?? "")
-                                .font(DS.Typography.body).foregroundStyle(DS.Colors.ink).lineLimit(1)
-                            Spacer()
+            if personThreads.isEmpty {
+                Text("No conversations synced yet.")
+                    .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+            } else {
+                ForEach(personThreads) { thread in
+                    Button {
+                        model.selectedThreadID = thread.id
+                        model.section = .inbox
+                    } label: {
+                        Card {
+                            HStack {
+                                Image(systemName: thread.platform.symbolName)
+                                    .font(.system(size: 12)).foregroundStyle(thread.platform.tint)
+                                Text(timelineSnippets[thread.id] ?? "")
+                                    .font(DS.Typography.body).foregroundStyle(DS.Colors.ink).lineLimit(1)
+                                Spacer()
+                            }
                         }
                     }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             }
         }
     }
 
-    private var threads: [OsmoThread] {
+    /// Resolve this person's threads + last-message snippets once (onAppear and on
+    /// dataVersion), so the timeline never hits the store during a plain redraw.
+    private func loadTimeline() {
         let contacts = (try? model.store.contacts(forPerson: person.id)) ?? []
         let contactIDs = Set(contacts.map(\.id))
-        return model.threads.filter { thread in
+        let ts = model.threads.filter { thread in
             let threadContacts = (try? model.store.contacts(inThread: thread.id)) ?? []
-            return threadContacts.contains { contactIDs.contains($0.id) } || thread.id == person.id
+            return threadContacts.contains { contactIDs.contains($0.id) }
         }
+        personThreads = ts
+        timelineSnippets = Dictionary(uniqueKeysWithValues: ts.map {
+            ($0.id, (try? model.store.lastMessage(inThread: $0.id))?.text ?? "")
+        })
     }
 
     private func saveNote(_ text: String) {

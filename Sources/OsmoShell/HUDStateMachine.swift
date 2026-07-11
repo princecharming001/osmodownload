@@ -19,7 +19,9 @@ public struct HUDState: Equatable, Sendable {
 
 public enum HUDStateMachine {
     public static let width: CGFloat = 380
-    public static let barHeight: CGFloat = 56
+    /// Bar content is 56pt tall inside an 8pt glass inset on each side (see
+    /// HUDRootView) — the panel must be 56 + 16 so the glass + shadow aren't clipped.
+    public static let barHeight: CGFloat = 72
     public static let openMaxHeight: CGFloat = 620
 
     public static func toggled(_ mode: HUDState.Mode) -> HUDState.Mode {
@@ -28,8 +30,11 @@ public enum HUDStateMachine {
 
     /// Panel size for a state. The bar is fixed; the open panel grows with its
     /// content up to a cap, so a near-empty feed doesn't leave a tall void.
+    // Measured against the real HUD content (header ~40pt + glass inset + scroll
+    // padding ≈ 68; a row is ~52pt of content + 6pt spacing ≈ 58) so the open
+    // panel hugs its feed instead of leaving a tall glass void beneath it.
     public static func size(for state: HUDState, rowCount: Int,
-                            rowHeight: CGFloat = 72, headerHeight: CGFloat = 96) -> CGSize {
+                            rowHeight: CGFloat = 58, headerHeight: CGFloat = 68) -> CGSize {
         switch state.mode {
         case .bar:
             return CGSize(width: width, height: barHeight)

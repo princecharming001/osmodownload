@@ -26,6 +26,7 @@ struct SuggestionStrip: View {
     @State private var loading = true
     @State private var error: String?
     @State private var sentSlant: SuggestionTake.Slant?
+    @State private var sendingSlant: SuggestionTake.Slant?
     @State private var isMock = false
     @State private var tone: String?
 
@@ -91,8 +92,14 @@ struct SuggestionStrip: View {
                 if sentSlant == take.slant {
                     Label("Sent", systemImage: "checkmark")
                         .font(DS.Typography.captionEm).foregroundStyle(DS.Colors.accent)
+                } else if sendingSlant == take.slant {
+                    HStack(spacing: DS.Space.xs) {
+                        ProgressView().controlSize(.small)
+                        Text("Sending…").font(DS.Typography.captionEm)
+                    }.foregroundStyle(DS.Colors.muted)
                 } else if canSend {
                     PillButton("Send", icon: "paperplane.fill") { send(take) }
+                        .disabled(sendingSlant != nil)
                 } else {
                     PillButton("Insert", icon: "text.insert", kind: .quiet) { insert(take.text) }
                 }
@@ -100,7 +107,7 @@ struct SuggestionStrip: View {
                     Button("Edit") { onPick(take.text) }
                         .font(DS.Typography.captionEm).buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
                 }
-                Button("Copy") { copy(take.text) }
+                Button("Copy") { copy(take.text); model.toast = "Copied." }
                     .font(DS.Typography.captionEm).buttonStyle(.plain).foregroundStyle(DS.Colors.muted)
             }
             .padding(.top, 2)
@@ -158,15 +165,22 @@ struct SuggestionStrip: View {
     }
 
     private func send(_ take: SuggestionTake) {
+        guard sendingSlant == nil else { return }   // one in-flight send at a time — no double-fire
         if platform == .x, take.text.count > 1_000 {
             model.toast = "That draft is over X's 1,000-character DM limit — copy and trim it instead."
             copy(take.text)
             return
         }
+        sendingSlant = take.slant
         Task {
             let ok = await model.send(take.text, platform: platform, target: sendTarget, isGroup: isGroup)
             await MainActor.run {
-                if ok { sentSlant = take.slant; onSent?() } else { copy(take.text) }
+                sendingSlant = nil
+                if ok { sentSlant = take.slant; onSent?() }
+                else {
+                    copy(take.text)
+                    model.toast = "Couldn't send — copied it so you can paste into \(platform.displayName)."
+                }
             }
         }
     }

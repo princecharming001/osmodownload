@@ -22,7 +22,9 @@ struct PlanBillingView: View {
             freeCard
             accountActions
             growthSection
-            testingSection
+            #if DEBUG
+            testingSection   // dev-only self-serve Pro toggle — NEVER ships in Release
+            #endif
             Text("Prices in USD. Subscriptions renew automatically until cancelled; manage or cancel anytime. Checkout and management open in your browser.")
                 .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -233,6 +235,7 @@ struct PlanBillingView: View {
 
     // MARK: Testing (pre-launch)
 
+    #if DEBUG
     private var testingSection: some View {
         HStack(spacing: DS.Space.s) {
             Image(systemName: "hammer").font(.system(size: 10)).foregroundStyle(DS.Colors.muted)
@@ -246,4 +249,5 @@ struct PlanBillingView: View {
         .padding(.horizontal, DS.Space.s).padding(.vertical, 6)
         .background(DS.Colors.chip.opacity(0.5), in: RoundedRectangle(cornerRadius: DS.Radius.m, style: .continuous))
     }
+    #endif
 }

@@ -36,7 +36,10 @@ struct InboxView: View {
                                    title: "Just people here",
                                    message: platformFilter != nil
                                        ? "No \(platformFilter!.displayName) conversations."
-                                       : "Only automated messages left — use Show all to see them.")
+                                       : "Only automated messages left — use Show all to see them.",
+                                   cta: platformFilter != nil
+                                       ? ("Show all platforms", { model.inboxPlatformFilter = nil })
+                                       : nil)
                 } else {
                     List(selection: $model.selectedThreadID) {
                         ForEach(visibleThreads) { thread in
@@ -457,6 +460,7 @@ struct ThreadDetailView: View {
     @State private var messagesByID: [UUID: OsmoMessage] = [:]
     @State private var attachmentsByMessage: [UUID: [OsmoAttachment]] = [:]
     @State private var hoveringName = false
+    @FocusState private var composeFocused: Bool
 
     var body: some View {
         VStack(spacing: 0) {
@@ -467,6 +471,9 @@ struct ThreadDetailView: View {
         }
         .background(DS.Colors.paper)
         .onAppear { load(); model.focusedThreadID = threadID }
+        // Land the caret in the compose box when a thread opens (and on switch,
+        // whether the view is reused or rebuilt) — the reply is the point.
+        .onChange(of: threadID, initial: true) { _, _ in composeFocused = true }
         // Re-read the transcript whenever the store changes — a pill send, an
         // incoming message, or a background poll — not just this view's own send.
         // load() preserves an in-progress draft (it only restores when empty).
@@ -507,6 +514,9 @@ struct ThreadDetailView: View {
                         }
                     } label: { Image(systemName: "clock") }
                         .menuStyle(.borderlessButton).fixedSize()
+                        .foregroundStyle(DS.Colors.muted)
+                        .help("Remind me / snooze")
+                        .accessibilityLabel("Reminders and snooze")
                 }
                 .padding(.bottom, DS.Space.s)
 
@@ -806,11 +816,25 @@ struct ThreadDetailView: View {
 
             TextEditor(text: $draft)
                 .font(DS.Typography.body)
+                .focused($composeFocused)
                 .scrollContentBackground(.hidden)
                 .frame(minHeight: 32, maxHeight: 120)
                 .padding(.horizontal, DS.Space.s).padding(.vertical, DS.Space.xs)
                 .background(DS.Colors.card, in: RoundedRectangle(cornerRadius: DS.Radius.l))
+                .overlay(alignment: .topLeading) {
+                    // TextEditor has no prompt — without this the empty box is a
+                    // blank rectangle with no hint of what it's for.
+                    if draft.isEmpty {
+                        Text("Write a reply…")
+                            .font(DS.Typography.body).foregroundStyle(DS.Colors.muted)
+                            .padding(.horizontal, DS.Space.s + 4).padding(.vertical, DS.Space.xs + 2)
+                            .allowsHitTesting(false)
+                    }
+                }
                 .overlay(RoundedRectangle(cornerRadius: DS.Radius.l).stroke(DS.Colors.hairline, lineWidth: 1))
+                // The check is only valid for the exact draft it ran on — any edit
+                // invalidates the "how this lands" verdict shown above.
+                .onChange(of: draft) { _, _ in if toneCheck != nil { toneCheck = nil } }
 
             let canSend = model.connections.canDirectSend(thread?.platform ?? .imessage)
             if sending {
@@ -829,6 +853,8 @@ struct ThreadDetailView: View {
                     sendOrCopy()
                 }
                 .disabled(draft.trimmingCharacters(in: .whitespaces).isEmpty)
+                .keyboardShortcut(.return, modifiers: .command)   // ⌘↩ sends
+                .help(canSend ? "Send (⌘↩)" : "Copy (⌘↩)")
             }
         }
     }

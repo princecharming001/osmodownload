@@ -51,6 +51,7 @@ struct ConnectionRow: View {
     @EnvironmentObject var model: AppModel
     @ObservedObject var connections: ConnectionsManager
     let platform: Platform
+    @State private var confirmDisconnect = false
 
     init(platform: Platform, connections: ConnectionsManager) {
         self.platform = platform
@@ -173,11 +174,30 @@ struct ConnectionRow: View {
                     }
                 }
                 Button("Pause") { Task { await model.connections.pause(platform, paused: true) } }
-                Button("Disconnect", role: .destructive) { Task { await model.connections.disconnect(platform) } }
-            } label: { Text("Connected").font(DS.Typography.captionEm).foregroundStyle(DS.Colors.muted) }
+                Button("Disconnect", role: .destructive) { confirmDisconnect = true }
+            } label: {
+                // A chevron so this reads as a manageable control, not static status text.
+                HStack(spacing: 3) {
+                    Text("Connected").font(DS.Typography.captionEm)
+                    Image(systemName: "chevron.down").font(.system(size: 8, weight: .semibold))
+                }.foregroundStyle(DS.Colors.muted)
+            }
                 .menuStyle(.borderlessButton).fixedSize()
+                .accessibilityLabel("Manage \(platform.displayName) connection")
+                .accessibilityIdentifier("connections.manage.\(platform.rawValue)")
+                .confirmationDialog("Disconnect \(platform.displayName)?",
+                                    isPresented: $confirmDisconnect, titleVisibility: .visible) {
+                    Button("Disconnect", role: .destructive) {
+                        Task { await model.connections.disconnect(platform) }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                } message: {
+                    Text("You'll stop syncing new messages. Already-imported messages stay, and you can reconnect anytime.")
+                }
         case .degraded:
-            PillButton("Reconnect", kind: .destructive) { model.connect(platform) }
+            // Reconnecting is recovery, not a destructive act — primary, matching
+            // the strictly-worse .disconnected state (no red-alarm inversion).
+            PillButton("Reconnect") { model.connect(platform) }
         case .paused:
             PillButton("Resume", kind: .quiet) { Task { await model.connections.pause(platform, paused: false) } }
         case .disconnected:

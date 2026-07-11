@@ -65,6 +65,9 @@ public struct PillButton: View {
     var icon: String?
     var kind: Kind
     var action: () -> Void
+    // So a `.disabled()` PillButton reads as inactive instead of a fully-lit,
+    // clickable-looking capsule that silently does nothing.
+    @Environment(\.isEnabled) private var isEnabled
 
     public init(_ title: String, icon: String? = nil, kind: Kind = .primary, action: @escaping () -> Void) {
         self.title = title; self.icon = icon; self.kind = kind; self.action = action
@@ -81,6 +84,7 @@ public struct PillButton: View {
             .foregroundStyle(fg)
             .background(bg, in: Capsule())
             .overlay(kind == .quiet ? Capsule().stroke(DS.Colors.hairline, lineWidth: 1) : nil)
+            .opacity(isEnabled ? 1 : 0.4)
         }
         .buttonStyle(.plain)
     }
@@ -137,7 +141,7 @@ public struct ProTag: View {
     public init() {}
     public var body: some View {
         Text("PRO")
-            .font(.system(size: 9, weight: .bold))
+            .font(.system(size: 9, weight: .semibold))
             .tracking(0.5)
             .padding(.horizontal, 5).padding(.vertical, 2)
             .foregroundStyle(.white)
@@ -208,7 +212,7 @@ public struct AvatarView: View {
             if let data, let image = NSImage(data: data) {
                 Image(nsImage: image).resizable().scaledToFill()
             } else {
-                Text(name.prefix(1).uppercased())
+                Text(monogram)
                     .font(.system(size: size * 0.4, weight: .medium))
                     .foregroundStyle(DS.Colors.ink)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -217,7 +221,15 @@ public struct AvatarView: View {
         }
         .frame(width: size, height: size)
         .clipShape(Circle())
-        .overlay(Circle().stroke(DS.Colors.hairline, lineWidth: 0.5))
+        .overlay(Circle().stroke(DS.Colors.hairline, lineWidth: 1))
+    }
+
+    /// First letter, or "?" when the name is empty/non-alphabetic — never a
+    /// blank chip circle.
+    private var monogram: String {
+        let letter = name.trimmingCharacters(in: .whitespacesAndNewlines)
+            .first { $0.isLetter || $0.isNumber }
+        return letter.map { String($0).uppercased() } ?? "?"
     }
 }
 
