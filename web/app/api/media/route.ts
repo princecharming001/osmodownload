@@ -15,6 +15,19 @@ import type { Platform } from "@/lib/connections/types";
 import { getUnipile, isLiveUnipile } from "@/lib/unipile/client";
 
 const MAX_BYTES = 25_000_000;
+const MAX_AVATAR_BYTES = 5_000_000;
+// SSRF allowlist for the avatar proxy — only known profile-image CDNs. The
+// client can't fetch these directly: LinkedIn/Instagram signed URLs 403 an
+// unauthenticated GET, so avatars never loaded for non-connections. Fetching
+// them server-side (a plain GET, but from a trusted origin) fixes that.
+const AVATAR_HOSTS = [
+  "licdn.com", "cdninstagram.com", "fbcdn.net", "pbs.twimg.com", "twimg.com",
+  "googleusercontent.com",
+];
+
+function avatarHostAllowed(hostname: string): boolean {
+  return AVATAR_HOSTS.some((h) => hostname === h || hostname.endsWith("." + h));
+}
 
 // A tiny valid 1x1 transparent PNG — mock mode / no-live-connection fallback.
 const PLACEHOLDER_PNG = Buffer.from(
@@ -42,6 +55,30 @@ export async function GET(req: Request): Promise<Response> {
   try {
     const device = await requireDevice(req);
     const url = new URL(req.url);
+
+    // Avatar proxy: fetch a profile-image CDN URL server-side (device-authed,
+    // SSRF-guarded) so the app doesn't have to make an unauthenticated CDN GET
+    // that 403s. Independent of the attachment params below.
+    if (url.searchParams.get("mode") === "avatar") {
+      const avatarUrl = url.searchParams.get("url");
+      if (!avatarUrl) return Response.json({ error: "missing url" }, { status: 400 });
+      let target: URL;
+      try { target = new URL(avatarUrl); } catch { return Response.json({ error: "bad url" }, { status: 400 }); }
+      if (target.protocol !== "https:" || !avatarHostAllowed(target.hostname)) {
+        return Response.json({ error: "untrusted host" }, { status: 400 });
+      }
+      const res = await fetch(target.toString());
+      if (!res.ok) return placeholder();
+      const buf = Buffer.from(await res.arrayBuffer());
+      if (buf.byteLength > MAX_AVATAR_BYTES) return Response.json({ error: "too large" }, { status: 413 });
+      return new Response(buf, {
+        headers: {
+          "content-type": res.headers.get("content-type") || "image/jpeg",
+          "cache-control": "private, max-age=604800",   // a week — avatars rarely change
+        },
+      });
+    }
+
     const platform = url.searchParams.get("platform") as Platform | null;
     const messageRef = url.searchParams.get("messageRef");
     const attachmentRef = url.searchParams.get("attachmentRef");

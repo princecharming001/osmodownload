@@ -342,10 +342,10 @@ public actor RealtimeSyncEngine {
         for i in out.indices where out[i].avatarData == nil {
             guard let url = urlByKey["\(out[i].platform.rawValue):\(out[i].handle)"] else { continue }
             if let cached = avatarCache[url] { out[i].avatarData = cached; continue }
-            guard let u = URL(string: url) else { continue }
-            var req = URLRequest(url: u); req.timeoutInterval = 8
-            if let (data, resp) = try? await URLSession.shared.data(for: req),
-               (resp as? HTTPURLResponse)?.statusCode == 200, data.count < 2_000_000 {
+            // Route through the AUTHENTICATED media proxy: LinkedIn/Instagram
+            // signed CDN URLs 403 a bare GET, so a direct fetch left every
+            // non-connection a monogram. The proxy fetches server-side.
+            if let data = await client.fetchAvatar(url: url), data.count < 2_000_000 {
                 avatarCache[url] = data
                 out[i].avatarData = data
             }

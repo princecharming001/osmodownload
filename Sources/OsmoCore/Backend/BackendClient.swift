@@ -282,6 +282,20 @@ public actor BackendClient {
         throw BackendError.notRegistered
     }
 
+    /// A profile-avatar's bytes through the authenticated media proxy. The app
+    /// can't GET LinkedIn/Instagram signed CDN URLs directly (they 403 an
+    /// unauthenticated request), so avatars for non-connections never loaded;
+    /// the proxy fetches them server-side. Returns nil (not throw) on any miss —
+    /// a missing avatar just falls back to a monogram, never an error.
+    public func fetchAvatar(url: String) async -> Data? {
+        guard let creds = try? await registerIfNeeded() else { return nil }
+        let req = request("GET", "/api/media", query: [("mode", "avatar"), ("url", url)],
+                          token: creds.deviceToken)
+        guard let (data, response) = try? await transport(req),
+              (200..<300).contains(response.statusCode) else { return nil }
+        return data
+    }
+
     // MARK: - SSE events
 
     /// Long-lived doorbell stream with automatic reconnect. Never finishes

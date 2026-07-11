@@ -64,7 +64,10 @@ export async function backfillConnection(opts: {
     const selfIds = new Set<string>();
     const otherNameByChat = new Map<string, { name: string | null; avatar: string | null }>();
     const attendeesFetched = new Set<string>();
-    const MAX_ATTENDEE_FETCHES = 60;
+    // Raised from 60 → 200 (env-tunable): the cap was silently leaving
+    // non-connections nameless past the first ~60 chats. Names are cheap; this
+    // is the main lever for "why is this person just a raw id / monogram".
+    const MAX_ATTENDEE_FETCHES = envInt("OSMO_MAX_ATTENDEE_FETCHES", 200);
     async function indexAttendees(chatId: string): Promise<void> {
       if (attendeesFetched.has(chatId) || attendeesFetched.size >= MAX_ATTENDEE_FETCHES) return;
       attendeesFetched.add(chatId);

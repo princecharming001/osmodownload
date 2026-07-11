@@ -12,7 +12,7 @@ const PAGE_SIZE = 100;
 const MAX_EVENTS_DEFAULT = 1000;   // absolute ceiling (OSMO_X_MAX_EVENTS)
 const API = "https://api.x.com/2";
 
-interface XUser { id: string; name?: string; username?: string }
+interface XUser { id: string; name?: string; username?: string; profile_image_url?: string }
 interface XDMEvent {
   id: string;
   event_type?: string;
@@ -48,7 +48,7 @@ export async function backfillX(deviceId: string, connectionId: string, accessTo
       const q = new URLSearchParams({
         "dm_event.fields": "id,text,event_type,created_at,sender_id,dm_conversation_id",
         "expansions": "sender_id",
-        "user.fields": "name,username",
+        "user.fields": "name,username,profile_image_url",
         "max_results": String(PAGE_SIZE),
       });
       if (paginationToken) q.set("pagination_token", paginationToken);
@@ -74,7 +74,10 @@ export async function backfillX(deviceId: string, connectionId: string, accessTo
         const name = user?.name ?? handle;
 
         if (!isFromMe && senderId) {
-          contacts.set(handle, { platform: "x", handle, displayName: name, isMe: false });
+          // X returns a 48x48 "_normal" avatar; "_400x400" is a crisper crop the
+          // proxy can cache. Non-connections get a photo just like connections.
+          const avatarUrl = user?.profile_image_url?.replace("_normal.", "_400x400.") ?? null;
+          contacts.set(handle, { platform: "x", handle, displayName: name, avatarUrl, isMe: false });
           // Title the thread after the other participant.
           threads.set(convId, {
             platform: "x", platformThreadID: convId, providerThreadID: convId,
