@@ -118,6 +118,73 @@ struct BrainStoreTests {
         #expect(upcoming.map(\.id) == ["a"])
     }
 
+    // MARK: Relationship decisions (v16)
+
+    func decision(_ threadID: UUID, hash: String, status: StoredDecisionStatus = .fresh,
+                  expiresAt: Date) -> StoredDecision {
+        StoredDecision(id: StoredDecision.makeID(threadID: threadID, inputHash: hash),
+                       threadID: threadID, kind: "reachOut", move: "say hi", confidence: 0.7,
+                       evidence: ["they're overdue"], inputHash: hash, isSensitive: false,
+                       status: status, expiresAt: expiresAt)
+    }
+
+    @Test("v16 creates the relationship_decision table and indexes")
+    func v16Migration() throws {
+        var config = Configuration(); config.foreignKeysEnabled = true
+        let queue = try DatabaseQueue(configuration: config)
+        try OsmoDatabase.migrator.migrate(queue)
+        let names = try queue.read { db in
+            Set(try String.fetchAll(db, sql: "SELECT name FROM sqlite_master"))
+        }
+        #expect(names.contains("relationship_decision"))
+        #expect(names.contains("idx_decision_status"))
+    }
+
+    @Test("Decisions upsert, round-trip evidence as JSON, and filter by status")
+    func decisionRoundTrip() throws {
+        let store = try newStore()
+        let tid = UUID()
+        try store.upsertDecision(decision(tid, hash: "h1", expiresAt: at(day: 20)))
+        let all = try store.decisions()
+        #expect(all.count == 1)
+        #expect(all.first?.evidence == ["they're overdue"])
+        #expect(try store.decisions(status: .surfaced).isEmpty)
+        #expect(try store.decision(forThread: tid)?.inputHash == "h1")
+    }
+
+    @Test("Status transitions persist")
+    func decisionStatus() throws {
+        let store = try newStore()
+        let tid = UUID()
+        let d = decision(tid, hash: "h1", expiresAt: at(day: 20))
+        try store.upsertDecision(d)
+        try store.setDecisionStatus(id: d.id, .acted)
+        #expect(try store.decision(forThread: tid)?.status == .acted)
+    }
+
+    @Test("expireDecisions flips only past-TTL fresh/surfaced rows to expired")
+    func expireDecisionsTest() throws {
+        let store = try newStore()
+        let t1 = UUID(), t2 = UUID(), t3 = UUID()
+        try store.upsertDecision(decision(t1, hash: "a", status: .fresh, expiresAt: at(day: 5)))
+        try store.upsertDecision(decision(t2, hash: "b", status: .surfaced, expiresAt: at(day: 30)))
+        try store.upsertDecision(decision(t3, hash: "c", status: .acted, expiresAt: at(day: 1)))
+        let n = try store.expireDecisions(now: at(day: 10))
+        #expect(n == 1)
+        #expect(try store.decision(forThread: t1)?.status == .expired)
+        #expect(try store.decision(forThread: t2)?.status == .surfaced)
+        #expect(try store.decision(forThread: t3)?.status == .acted)
+    }
+
+    @Test("activeDecisionInputHashes returns only fresh/surfaced hashes")
+    func activeHashes() throws {
+        let store = try newStore()
+        try store.upsertDecision(decision(UUID(), hash: "fresh1", status: .fresh, expiresAt: at(day: 20)))
+        try store.upsertDecision(decision(UUID(), hash: "surf1", status: .surfaced, expiresAt: at(day: 20)))
+        try store.upsertDecision(decision(UUID(), hash: "acted1", status: .acted, expiresAt: at(day: 20)))
+        #expect(try store.activeDecisionInputHashes() == ["fresh1", "surf1"])
+    }
+
     @Test("nextOccurrence rolls a passed recurring date to next year")
     func nextOccurrenceRolls() throws {
         let jan1 = ImportantDate(id: "x", threadID: UUID(), kind: .birthday, label: "y",

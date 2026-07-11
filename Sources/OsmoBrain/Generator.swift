@@ -5,6 +5,17 @@ import Foundation
 /// `ClaudeProxyGenerator` calls the thin server proxy once credentials are in.
 public protocol Generator: Sendable {
     func generate(systemCore: String, userTurn: String, count: Int) async throws -> String
+    /// Purpose-tagged variant — the proxy maps `purpose` to a max_tokens budget
+    /// and a SEPARATE server-side quota dimension, so background work (relationship
+    /// decisions) never consumes a user's manual-draft allowance. The default
+    /// forwards to the untagged call, so MockGenerator/tests need no change.
+    func generate(systemCore: String, userTurn: String, count: Int, purpose: String?) async throws -> String
+}
+
+public extension Generator {
+    func generate(systemCore: String, userTurn: String, count: Int, purpose: String?) async throws -> String {
+        try await generate(systemCore: systemCore, userTurn: userTurn, count: count)
+    }
 }
 
 public enum GenerationError: Error, Equatable, Sendable {

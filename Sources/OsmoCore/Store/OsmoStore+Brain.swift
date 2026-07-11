@@ -79,6 +79,63 @@ public extension OsmoStore {
             return false
         }
     }
+
+    // MARK: Relationship decisions (shadow-mode persistence)
+
+    /// Insert or replace a decision (keyed by its deterministic id). One live
+    /// decision per (thread, input state).
+    func upsertDecision(_ decision: StoredDecision) throws {
+        try dbQueue.write { db in try decision.save(db) }
+    }
+
+    func decisions(status: StoredDecisionStatus? = nil) throws -> [StoredDecision] {
+        try dbQueue.read { db in
+            var q = StoredDecision.all()
+            if let status { q = q.filter(Column("status") == status.rawValue) }
+            return try q.order(Column("createdAt").desc).fetchAll(db)
+        }
+    }
+
+    func decision(forThread threadID: UUID) throws -> StoredDecision? {
+        try dbQueue.read { db in
+            try StoredDecision.filter(Column("threadID") == threadID)
+                .order(Column("createdAt").desc).fetchOne(db)
+        }
+    }
+
+    func setDecisionStatus(id: String, _ status: StoredDecisionStatus) throws {
+        try dbQueue.write { db in
+            if var d = try StoredDecision.fetchOne(db, key: id) {
+                d.status = status
+                try d.update(db)
+            }
+        }
+    }
+
+    /// Flip still-fresh/surfaced decisions to `.expired` once their TTL passes.
+    /// Expiry is NEUTRAL — the feedback loop must never read it as a rejection.
+    @discardableResult
+    func expireDecisions(now: Date = Date()) throws -> Int {
+        try dbQueue.write { db in
+            let stale = try StoredDecision
+                .filter(["fresh", "surfaced"].contains(Column("status")))
+                .filter(Column("expiresAt") < now)
+                .fetchAll(db)
+            for var d in stale { d.status = .expired; try d.update(db) }
+            return stale.count
+        }
+    }
+
+    /// inputHashes of decisions still "live" (fresh or surfaced) — the gate's
+    /// dedup set, so an unchanged state is never re-billed to the LLM.
+    func activeDecisionInputHashes() throws -> Set<String> {
+        try dbQueue.read { db in
+            let rows = try StoredDecision
+                .filter(["fresh", "surfaced"].contains(Column("status")))
+                .fetchAll(db)
+            return Set(rows.map(\.inputHash))
+        }
+    }
 }
 
 public extension ImportantDate {

@@ -351,6 +351,34 @@ public enum OsmoDatabase {
                           on: "important_date", columns: ["threadID"])
         }
 
+        // Relationship-brain decisions (W3 P4). Its own migration — higher-risk
+        // than the P1 context tables. Device-local; written in shadow mode,
+        // surfaced later. One live decision per (thread, input state).
+        migrator.registerMigration("v16-relationship-decision") { db in
+            try db.create(table: "relationship_decision") { t in
+                t.primaryKey("id", .text)
+                t.column("threadID", .text).notNull()
+                t.column("personID", .text)
+                t.column("kind", .text).notNull()
+                t.column("move", .text)
+                t.column("gestureKind", .text)
+                t.column("occasion", .text)
+                t.column("untilDays", .integer)
+                t.column("why", .text)
+                t.column("confidence", .double).notNull()
+                t.column("evidence", .jsonText).notNull().defaults(to: "[]")
+                t.column("inputHash", .text).notNull()
+                t.column("isSensitive", .boolean).notNull().defaults(to: false)
+                t.column("status", .text).notNull().defaults(to: "fresh")
+                t.column("createdAt", .datetime).notNull()
+                t.column("expiresAt", .datetime).notNull()
+            }
+            try db.create(index: "idx_decision_status",
+                          on: "relationship_decision", columns: ["status"])
+            try db.create(index: "idx_decision_thread",
+                          on: "relationship_decision", columns: ["threadID"])
+        }
+
         return migrator
     }
 }

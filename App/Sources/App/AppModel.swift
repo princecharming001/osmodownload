@@ -1055,6 +1055,91 @@ final class AppModel: ObservableObject {
         }
     }
 
+    // MARK: Relationship Brain — SHADOW MODE (computes + persists, surfaces nothing)
+
+    private var lastDecisionRunAt: Date?
+    private var decisionRunInFlight = false
+
+    /// Fire the decision brain if it's due. Gated hard: the server flag (default
+    /// off), Pro, live (never mock), and throttled to once per 30 min. Nothing it
+    /// produces is shown to the user in this phase — decisions are written to
+    /// `relationship_decision` for inspection only, so real generated output can
+    /// be spot-checked on real accounts before a single one reaches a user.
+    private func maybeRunDecisionBrain() {
+        guard flag("relationshipBrain", default: false), isPro, !isMockMode, !decisionRunInFlight else { return }
+        let now = Date()
+        if let last = lastDecisionRunAt, now.timeIntervalSince(last) < 30 * 60 { return }
+        lastDecisionRunAt = now
+        decisionRunInFlight = true
+        Task { [weak self] in
+            await self?.runDecisionBrainShadow()
+            await MainActor.run { self?.decisionRunInFlight = false }
+        }
+    }
+
+    private func runDecisionBrainShadow() async {
+        let now = Date()
+        _ = try? store.expireDecisions(now: now)
+
+        // Build models for eligible threads: human, 1:1, active in the last 45d.
+        let horizon = now.addingTimeInterval(-45 * 86_400)
+        let eligible = threads
+            .filter { !$0.isGroup && (humanByThread[$0.id] ?? true) }
+            .filter { ($0.lastMessageAt ?? .distantPast) >= horizon }
+            .sorted { ($0.lastMessageAt ?? .distantPast) > ($1.lastMessageAt ?? .distantPast) }
+            .prefix(40)
+
+        var models: [RelationshipModel] = []
+        for t in eligible {
+            let ts = turns(forThread: t.id)
+            guard !ts.isEmpty else { continue }
+            let contacts = (try? store.contacts(inThread: t.id)) ?? []
+            let personID = contacts.first?.personID
+            let memory = personID.flatMap { try? store.memory(forPerson: $0) }
+            models.append(RelationshipModel.assemble(
+                threadID: t.id,
+                displayName: t.title ?? contacts.first?.displayName ?? "Them",
+                isGroup: false, personID: personID, turns: ts,
+                vibeSamples: (try? store.vibeSamples(forThread: t.id)) ?? [],
+                importantDates: (try? store.importantDates(forThread: t.id)) ?? [],
+                memory: (memory?.isEmpty ?? true) ? nil : memory,
+                intel: intelByThread[t.id], now: now))
+        }
+
+        let suppressors = DecisionGate.Suppressors(
+            activeInputHashes: (try? store.activeDecisionInputHashes()) ?? [])
+        let candidates = DecisionGate.evaluate(models, now: now, suppressors: suppressors)
+        for c in candidates {
+            guard let decision = try? await service.decide(c, now: now) else { continue }
+            await MainActor.run { self.persistShadowDecision(decision, candidate: c, now: now) }
+        }
+    }
+
+    /// Flatten a typed decision into the store record. `.nothing` IS persisted
+    /// (so its inputHash suppresses re-billing the same state) but the feed will
+    /// ignore that kind.
+    private func persistShadowDecision(_ d: RelationshipDecision, candidate c: DecisionCandidate, now: Date) {
+        let kind: String, move: String?, gestureKind: String?, occasion: String?, until: Int?, why: String?
+        switch d.action {
+        case .nothing:
+            kind = "nothing"; move = nil; gestureKind = nil; occasion = nil; until = nil; why = nil
+        case .reachOut(let m):
+            kind = "reachOut"; move = m; gestureKind = nil; occasion = nil; until = nil; why = nil
+        case .holdBack(let u, let w):
+            kind = "holdBack"; move = nil; gestureKind = nil; occasion = nil; until = u; why = w
+        case .gesture(let g, let occ, let framing):
+            kind = "gesture"; move = framing; gestureKind = g.rawValue; occasion = occ; until = nil; why = nil
+        }
+        let rec = StoredDecision(
+            id: StoredDecision.makeID(threadID: c.threadID, inputHash: c.inputHash),
+            threadID: c.threadID, personID: c.personID, kind: kind, move: move,
+            gestureKind: gestureKind, occasion: occasion, untilDays: until, why: why,
+            confidence: d.confidence, evidence: d.evidence, inputHash: c.inputHash,
+            isSensitive: d.isSensitive, status: .fresh, createdAt: now,
+            expiresAt: now.addingTimeInterval(24 * 3600))
+        try? store.upsertDecision(rec)
+    }
+
     func reload() {
         lastReloadAt = Date()
         let snoozed = (try? store.snoozedThreadIDs()) ?? []
@@ -1119,6 +1204,7 @@ final class AppModel: ObservableObject {
         rebuildQueueRowMeta()
         people = buildPeople(snapshots: snapshots)
         captureDeterministicVibes()   // flag-gated no-op until the brain is on
+        maybeRunDecisionBrain()       // flag-gated shadow-mode brain; surfaces nothing
 
         // Today-header pulse.
         newInbound24h = (try? store.inboundMessageCount(since: Date().addingTimeInterval(-86_400))) ?? 0

@@ -59,15 +59,22 @@ public struct ClaudeProxyGenerator: Generator {
     }
 
     public func generate(systemCore: String, userTurn: String, count: Int) async throws -> String {
+        try await generate(systemCore: systemCore, userTurn: userTurn, count: count, purpose: nil)
+    }
+
+    public func generate(systemCore: String, userTurn: String, count: Int,
+                         purpose: String?) async throws -> String {
         guard var token = await resolveToken() else { throw GenerationError.notConfigured }
         // The proxy caches `systemCore` (marks it cache_control ephemeral) and
-        // enforces the anti-manipulation policy server-side too.
-        let body: [String: Any] = [
+        // enforces the anti-manipulation policy server-side too. `purpose` (when
+        // set) selects the max_tokens budget + a non-draft quota lane.
+        var body: [String: Any] = [
             "model": config.model,
             "systemCore": systemCore,
             "userTurn": userTurn,
             "count": count
         ]
+        if let purpose { body["purpose"] = purpose }
         let bodyData = try JSONSerialization.data(withJSONObject: body)
 
         // 401 retry-once: the device token may be stale (backend restart / rotated

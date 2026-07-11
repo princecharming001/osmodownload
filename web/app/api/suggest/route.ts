@@ -23,9 +23,21 @@ type Body = {
   userTurn?: string;
   count?: number;
   model?: string;
+  /** What this call is for. "draft" (default) is a user-facing draft and draws
+      from the free-tier weekly draft quota. "decision"/"mine" are BACKGROUND
+      relationship-brain calls — they use a separate max_tokens budget and do NOT
+      consume the user's manual-draft quota (the brain fires autonomously; it
+      must never silently exhaust a user's own drafts). "decision" additionally
+      requires the relationshipBrain server flag. */
+  purpose?: string;
 };
 
 const ANTHROPIC_URL = "https://api.anthropic.com/v1/messages";
+
+// max_tokens per purpose. Decisions need room for evidence lines; a draft is short.
+const MAX_TOKENS_BY_PURPOSE: Record<string, number> = { draft: 700, decision: 1200, mine: 900 };
+// Purposes that are background brain work — NOT billed to the draft quota.
+const BACKGROUND_PURPOSES = new Set(["decision", "mine"]);
 
 // Prompt size caps — systemCore/userTurn are CLIENT-SUPPLIED, and every char
 // is billed against the server-side key. A multi-megabyte body must die here
@@ -68,8 +80,17 @@ export async function POST(req: NextRequest) {
   const systemCore = typeof body.systemCore === "string" ? body.systemCore : "";
   const userTurn = typeof body.userTurn === "string" ? body.userTurn : "";
   const model = typeof body.model === "string" ? body.model : DEFAULT_MODEL;
+  const purpose = typeof body.purpose === "string" ? body.purpose : "draft";
+  const isBackground = BACKGROUND_PURPOSES.has(purpose);
+  const maxTokens = MAX_TOKENS_BY_PURPOSE[purpose] ?? MAX_TOKENS_BY_PURPOSE.draft;
   if (!systemCore || !userTurn) {
     return NextResponse.json({ error: "missing prompt" }, { status: 400 });
+  }
+  // The relationship-brain decision lane has its OWN server kill-switch, default
+  // OFF, independent of the aiDrafting master switch — so the brain stays dark in
+  // production until deliberately turned on, even where drafting is live.
+  if (purpose === "decision" && !flag("relationshipBrain")) {
+    return NextResponse.json({ error: "brain_disabled" }, { status: 503 });
   }
   if (systemCore.length > SYSTEM_CORE_MAX_CHARS || userTurn.length > USER_TURN_MAX_CHARS) {
     return NextResponse.json({ error: "prompt_too_large" }, { status: 413 });
@@ -117,8 +138,11 @@ export async function POST(req: NextRequest) {
   }
 
   // Atomically reserve one free-tier draft (429 if over the weekly cap).
+  // Background brain calls (decision/mine) draw from a SEPARATE lane and skip
+  // this entirely — the autonomous brain must never spend a user's own manual
+  // drafts. The aggregate spend breaker above still bounds total cost.
   let remaining: number | null = null;
-  if (device) {
+  if (device && !isBackground) {
     const reserved = await reserveQuotaDurable(getAccounts(), device.id, Date.now(), unlimited);
     if (!reserved.allowed) {
       metric("draft.quota_exceeded");
@@ -130,12 +154,12 @@ export async function POST(req: NextRequest) {
     remaining = reserved.remaining;
   }
   const refund = async (): Promise<void> => {
-    if (device && !unlimited) await refundQuotaDurable(getAccounts(), device.id, Date.now());
+    if (device && !unlimited && !isBackground) await refundQuotaDurable(getAccounts(), device.id, Date.now());
   };
 
   const anthropicBody = {
     model,
-    max_tokens: 700,
+    max_tokens: maxTokens,
     system: [
       // cache_control marks the (stable, large) psychology core as prompt-cached.
       { type: "text", text: systemCore, cache_control: { type: "ephemeral" } },

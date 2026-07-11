@@ -4,11 +4,14 @@
 // registry under Phase 2 (D14d); the shape stays the same.
 
 const DEFAULTS: Record<string, boolean> = {
-  aiDrafting: true,   // master kill-switch for all model calls
-  autodraft: true,    // autodraft-on-arrival
-  enrichment: true,   // public-profile lookups
-  media: true,        // attachment media pipeline
-  webhooks: true,     // realtime webhooks
+  aiDrafting: true,        // master kill-switch for all model calls
+  autodraft: true,         // autodraft-on-arrival
+  enrichment: true,        // public-profile lookups
+  media: true,             // attachment media pipeline
+  webhooks: true,          // realtime webhooks
+  relationshipBrain: false, // W3 proactive brain — OFF until deliberately enabled
+                            // (flag() fails OPEN for unknown keys, so this MUST be
+                            // listed explicitly to stay off)
 };
 
 export function getFlags(): Record<string, boolean> {
