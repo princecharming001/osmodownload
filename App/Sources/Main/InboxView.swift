@@ -176,21 +176,21 @@ struct InboxView: View {
             }
             if !model.presentUrgencies.isEmpty {
                 HairlineDivider()
-                Text("URGENCY").font(DS.Typography.eyebrow).tracking(0.6).foregroundStyle(DS.Colors.muted)
+                Eyebrow("Urgency")
                 FlowLayout(spacing: 6) {
                     ForEach(model.presentUrgencies, id: \.self) { urgencyOption($0) }
                 }
             }
             if !model.presentActions.isEmpty {
                 HairlineDivider()
-                Text("ACTION").font(DS.Typography.eyebrow).tracking(0.6).foregroundStyle(DS.Colors.muted)
+                Eyebrow("Action")
                 FlowLayout(spacing: 6) {
                     ForEach(model.presentActions, id: \.self) { actionOption($0) }
                 }
             }
             if !model.presentTopics.isEmpty {
                 HairlineDivider()
-                Text("TOPIC").font(DS.Typography.eyebrow).tracking(0.6).foregroundStyle(DS.Colors.muted)
+                Eyebrow("Topic")
                 FlowLayout(spacing: 6) {
                     ForEach(model.presentTopics, id: \.self) { topicOption($0) }
                 }
@@ -1019,8 +1019,8 @@ struct MessageBubble: View {
                     }
                 }
                 if let timeText {
-                    Text(timeText).font(.system(size: 9))
-                        .foregroundStyle(DS.Colors.muted.opacity(0.8))
+                    Text(timeText).font(DS.Typography.eyebrow)
+                        .foregroundStyle(DS.Colors.muted)
                         .padding(.horizontal, DS.Space.xs)
                 }
             }

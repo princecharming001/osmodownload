@@ -17,16 +17,19 @@ struct TodayView: View {
                 SetupChecklistCard()
                 KeyPeopleCard()
                 winBackCard
+                // The proactive brain's suggestions lead the day (reach out / hold
+                // back / a gesture). Self-hides when the brain is off or quiet.
+                BrainSuggestionsSection()
                 // Due follow-ups are asks YOU armed — they must show even when the
                 // reply queue is empty (otherwise "You're clear" contradicts the
                 // header's "N follow-ups came due"). Renders nothing when none.
                 followupLane
                 if model.queue.isEmpty {
-                    if model.syncing && model.dueFollowups.isEmpty {
+                    if model.syncing && model.dueFollowups.isEmpty && model.brainFeed.isEmpty {
                         EmptyStateView(icon: "arrow.triangle.2.circlepath",
                                        title: "Catching up…",
                                        message: "Osmo is syncing your conversations.")
-                    } else if model.dueFollowups.isEmpty {
+                    } else if model.dueFollowups.isEmpty && model.brainFeed.isEmpty {
                         if model.isMockMode {
                             EmptyStateView(
                                 icon: "sparkles",
@@ -114,7 +117,8 @@ struct TodayView: View {
     @ViewBuilder private var notificationNudge: some View {
         if !model.notifier.authorized {
             Card {
-                HStack {
+                HStack(spacing: DS.Space.m) {
+                    Image(systemName: "bell.badge").font(.system(size: 16)).foregroundStyle(DS.Colors.accent)
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Want a morning nudge?").font(DS.Typography.bodyEm)
                         Text("Osmo can remind you who's waiting.").font(DS.Typography.caption)

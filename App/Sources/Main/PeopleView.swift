@@ -267,8 +267,7 @@ struct PersonDetailView: View {
                         }
                         if !e.positions.isEmpty {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("EXPERIENCE").font(DS.Typography.eyebrow).tracking(0.6)
-                                    .foregroundStyle(DS.Colors.muted)
+                                Eyebrow("Experience")
                                 ForEach(e.positions.prefix(3), id: \.title) { p in
                                     Text("\(p.title) — \(p.company)\(p.period.map { " (\($0))" } ?? "")")
                                         .font(DS.Typography.caption).foregroundStyle(DS.Colors.ink)
@@ -277,8 +276,7 @@ struct PersonDetailView: View {
                         }
                         if !e.education.isEmpty {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("EDUCATION").font(DS.Typography.eyebrow).tracking(0.6)
-                                    .foregroundStyle(DS.Colors.muted)
+                                Eyebrow("Education")
                                 ForEach(e.education.prefix(2), id: \.school) { ed in
                                     Text(ed.school + (ed.degree.map { " — \($0)" } ?? ""))
                                         .font(DS.Typography.caption).foregroundStyle(DS.Colors.ink)
@@ -287,8 +285,7 @@ struct PersonDetailView: View {
                         }
                         if !e.webFacts.isEmpty {
                             VStack(alignment: .leading, spacing: 4) {
-                                Text("FROM THE WEB").font(DS.Typography.eyebrow).tracking(0.6)
-                                    .foregroundStyle(DS.Colors.muted)
+                                Eyebrow("From the web")
                                 ForEach(e.webFacts.prefix(4), id: \.text) { fact in
                                     HStack(alignment: .top, spacing: DS.Space.xs) {
                                         Circle().fill(DS.Colors.accent.opacity(0.5))
@@ -356,8 +353,7 @@ struct PersonDetailView: View {
                     }
                     if !result.remember.isEmpty {
                         VStack(alignment: .leading, spacing: 3) {
-                            Text("Worth remembering").font(DS.Typography.eyebrow)
-                                .tracking(0.6).foregroundStyle(DS.Colors.accent)
+                            Eyebrow("Worth remembering", accent: true)
                             ForEach(result.remember, id: \.self) { line in
                                 HStack(alignment: .top, spacing: DS.Space.xs) {
                                     Circle().fill(DS.Colors.accent.opacity(0.5))
@@ -393,13 +389,30 @@ struct PersonDetailView: View {
         return nil
     }
 
+    /// Verdict detail + trajectory driver folded into one supporting line (so the
+    /// card isn't a stack of same-weight grey sentences).
+    private var verdictContext: String? {
+        var parts: [String] = []
+        if let d = verdict?.detail, !d.isEmpty { parts.append(sentence(d)) }
+        if let dr = trajectory?.driver, !dr.isEmpty { parts.append(sentence(dr)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " ")
+    }
+
+    /// Capitalize + end-punctuate a fragment so reads render as clean sentences.
+    private func sentence(_ s: String) -> String {
+        let t = s.trimmingCharacters(in: .whitespaces)
+        guard let f = t.first else { return t }
+        let body = String(f).uppercased() + t.dropFirst()
+        return "!?.".contains(body.last!) ? body : body + "."
+    }
+
     @ViewBuilder private var readCard: some View {
         if let profile, !profile.isEmpty {
             VStack(alignment: .leading, spacing: DS.Space.s) {
                 Eyebrow("The read")
                 Card {
                     VStack(alignment: .leading, spacing: DS.Space.m) {
-                        // The two calls that matter, first: reach out or not, and
+                        // TIER 1 — the two calls that matter: reach out or not, and
                         // which way the relationship is moving.
                         HStack(spacing: DS.Space.s) {
                             if let verdict {
@@ -418,44 +431,39 @@ struct PersonDetailView: View {
                                     .background(DS.Colors.chip, in: Capsule())
                             }
                         }
-                        if let detail = verdict?.detail {
-                            Text(detail).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                        if let ctx = verdictContext {
+                            Text(ctx).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        if let driver = trajectory?.driver {
-                            Text(driver.prefix(1).capitalized + driver.dropFirst() + ".")
-                                .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
-                        }
-                        // How you two relate — the attachment-flavored read: does
-                        // this person need space or reassurance? The single most
-                        // decision-relevant line, and something no keyboard app sees.
-                        if let note = style?.note {
-                            HStack(alignment: .top, spacing: DS.Space.xs) {
-                                Image(systemName: "person.line.dotted.person")
-                                    .font(.system(size: 10)).foregroundStyle(DS.Colors.accent)
-                                VStack(alignment: .leading, spacing: 1) {
-                                    Text("How you two relate").font(DS.Typography.eyebrow)
-                                        .tracking(0.6).foregroundStyle(DS.Colors.accent)
-                                    Text(note.prefix(1).capitalized + note.dropFirst() + ".")
-                                        .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
-                                        .fixedSize(horizontal: false, vertical: true)
+
+                        // TIER 2 — the dynamic read: how you two relate (space vs
+                        // reassurance) + whether their bids are being met. The
+                        // differentiator, so it gets an editorial pull-quote
+                        // treatment (accent rule + italic), not another grey line.
+                        if style?.note != nil || bidInsight != nil {
+                            HairlineDivider()
+                            HStack(alignment: .top, spacing: DS.Space.m) {
+                                Rectangle().fill(DS.Colors.accent.opacity(0.4)).frame(width: 2)
+                                VStack(alignment: .leading, spacing: DS.Space.xs) {
+                                    Eyebrow("How you two relate", accent: true)
+                                    if let note = style?.note {
+                                        Text(sentence(note)).font(DS.Typography.body).italic()
+                                            .foregroundStyle(DS.Colors.ink)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+                                    if let bidLine = bidInsight {
+                                        Text(bidLine).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
                                 }
                             }
                         }
-                        // Gottman turn-toward: are their bids for connection being met?
-                        if let bidLine = bidInsight {
-                            HStack(alignment: .top, spacing: DS.Space.xs) {
-                                Image(systemName: "hand.wave")
-                                    .font(.system(size: 10)).foregroundStyle(DS.Colors.amber)
-                                Text(bidLine).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                        }
-                        // Trait chips: how they communicate.
+
+                        // TIER 3 — how they communicate + the directive.
                         FlowChips(items: profile.chips)
                         if let tonality = profile.tonality {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("Tonality to strike").font(DS.Typography.eyebrow)
-                                    .tracking(0.6).foregroundStyle(DS.Colors.accent)
+                            VStack(alignment: .leading, spacing: DS.Space.xs) {
+                                Eyebrow("Tonality to strike", accent: true)
                                 Text(tonality).font(DS.Typography.bodyEm).foregroundStyle(DS.Colors.ink)
                                 if let why = profile.why {
                                     Text(why).font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
@@ -463,11 +471,13 @@ struct PersonDetailView: View {
                                 }
                             }
                         }
+
+                        // Footnote — reply rhythm.
                         if let m = profile.medianReplySeconds {
                             HStack(spacing: DS.Space.xs) {
                                 Image(systemName: "clock").font(.system(size: 10)).foregroundStyle(DS.Colors.muted)
                                 Text("Typically replies in \(PartnerProfile.humanGap(m))\(profile.activeBlock.map { " · most active \($0)" } ?? "")")
-                                    .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
+                                    .font(DS.Typography.eyebrow).foregroundStyle(DS.Colors.muted)
                             }
                         }
                     }
@@ -573,23 +583,35 @@ struct PersonDetailView: View {
                 Text("No conversations synced yet.")
                     .font(DS.Typography.caption).foregroundStyle(DS.Colors.muted)
             } else {
-                ForEach(personThreads) { thread in
-                    Button {
-                        model.selectedThreadID = thread.id
-                        model.section = .inbox
-                    } label: {
-                        Card {
-                            HStack {
+                // Grouped hairline rows in one container — the same list idiom as
+                // Today, not a stack of heavy per-thread cards.
+                VStack(spacing: 0) {
+                    ForEach(Array(personThreads.enumerated()), id: \.element.id) { idx, thread in
+                        Button {
+                            model.selectedThreadID = thread.id
+                            model.section = .inbox
+                        } label: {
+                            HStack(spacing: DS.Space.m) {
                                 Image(systemName: thread.platform.symbolName)
                                     .font(.system(size: 12)).foregroundStyle(thread.platform.tint)
+                                    .frame(width: 18)
                                 Text(timelineSnippets[thread.id] ?? "")
                                     .font(DS.Typography.body).foregroundStyle(DS.Colors.ink).lineLimit(1)
-                                Spacer()
+                                Spacer(minLength: DS.Space.s)
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10)).foregroundStyle(DS.Colors.muted)
                             }
+                            .padding(.vertical, DS.Space.m).padding(.horizontal, DS.Space.l)
+                            .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        if idx < personThreads.count - 1 { HairlineDivider() }
                     }
-                    .buttonStyle(.plain)
                 }
+                .background(DS.Colors.card.opacity(0.5),
+                            in: RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: DS.Radius.xl, style: .continuous)
+                    .stroke(DS.Colors.hairline, lineWidth: 1))
             }
         }
     }

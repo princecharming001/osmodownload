@@ -126,12 +126,16 @@ public struct Chip: View {
 
 public struct Eyebrow: View {
     let text: String
-    public init(_ text: String) { self.text = text }
+    /// Accent-tinted eyebrows are reserved for Osmo's INTERPRETATION (the read,
+    /// its judgments); factual/reference labels stay muted. One tracking value
+    /// (0.8) everywhere so micro-caps read as one system.
+    var accent: Bool
+    public init(_ text: String, accent: Bool = false) { self.text = text; self.accent = accent }
     public var body: some View {
         Text(text.uppercased())
             .font(DS.Typography.eyebrow)
             .tracking(0.8)
-            .foregroundStyle(DS.Colors.muted)
+            .foregroundStyle(accent ? DS.Colors.accent : DS.Colors.muted)
     }
 }
 
