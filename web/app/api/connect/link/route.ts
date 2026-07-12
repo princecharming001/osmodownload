@@ -52,10 +52,22 @@ export async function POST(req: Request): Promise<Response> {
     // hosted-auth link the user is waiting on.
     void ensureUnipileWebhooks();
     const unipile = getUnipile();
-    const out = await unipile.createHostedAuthLink({
-      linkId: link.linkId, platform, deviceId, origin,
-    });
-    url = out.url;
+    try {
+      const out = await unipile.createHostedAuthLink({
+        linkId: link.linkId, platform, deviceId, origin,
+      });
+      url = out.url;
+    } catch (e) {
+      // The provider refusing (e.g. Unipile "no_client_session" when the
+      // instance's session/subscription lapses) is an OUTAGE, not a caller
+      // error and not an unhandled 500 — return a typed 503 the app can
+      // explain honestly.
+      console.error(`[connect/link] ${platform} hosted-auth failed:`, e instanceof Error ? e.message : e);
+      return Response.json(
+        { error: "provider_unavailable",
+          detail: `The ${platform} connector's provider is temporarily unavailable.` },
+        { status: 503 });
+    }
     mode = unipile.mode === "live" ? "unipile" : "mock";
   }
   const res: ConnectLinkResponse = { url, linkId: link.linkId, mode };

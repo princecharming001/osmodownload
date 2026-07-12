@@ -476,6 +476,9 @@ struct AskOsmoBox: View {
         .animation(DS.Motion.standard, value: model.askExchanges.count)
         .animation(DS.Motion.standard, value: pending)
         .onChange(of: model.askBusy) { _, busy in if !busy { pending = nil } }
+        // Belt-and-braces for the coalesced-transition case above: the answer
+        // landing is just as authoritative a "done" signal as askBusy flipping.
+        .onChange(of: model.askExchanges.count) { _, _ in pending = nil }
     }
 
     // MARK: Empty state
@@ -522,7 +525,13 @@ struct AskOsmoBox: View {
                 answerRow(ex.a, isError: ex.isError)
                 if !ex.actions.isEmpty { actionChips(ex.actions) }
             }
-            if let pending {
+            // Gated on askBusy (the truth), not just the `pending` latch: with an
+            // instant (mock) answer, askBusy flips true→false inside one runloop
+            // turn, SwiftUI coalesces the transition, and the .onChange that
+            // clears `pending` never fires — leaving a PERMANENT thinking row
+            // whose 30fps orb + repeatForever dots relayout the whole window
+            // every frame (measured ~46% of main-thread time, starving AX).
+            if let pending, model.askBusy {
                 userBubble(pending)
                 thinkingRow
             }
@@ -585,7 +594,11 @@ struct AskOsmoBox: View {
 
     private func answerRow(_ text: String, isError: Bool = false) -> some View {
         HStack(alignment: .top, spacing: DS.Space.s) {
-            AskOrb(mode: isError ? .thinking : .idle, size: 20)
+            // ALWAYS the static idle pose. `.thinking` runs a 30fps TimelineView —
+            // on a persisted answer row that's a PERMANENT full-window relayout
+            // storm (measured: ~44% of main-thread time, starving AX/everything).
+            // An error is already signaled by the red copy + tint, not motion.
+            AskOrb(mode: .idle, size: 20)
             Text(text).font(DS.Typography.body)
                 .foregroundStyle(isError ? DS.Colors.red : DS.Colors.ink)
                 .fixedSize(horizontal: false, vertical: true)

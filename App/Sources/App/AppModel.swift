@@ -853,6 +853,10 @@ final class AppModel: ObservableObject {
                 if Date().timeIntervalSince1970 >= suppressUntil {
                     NSWorkspace.shared.open(url)
                 }
+            } catch BackendClient.BackendError.badStatus(503) {
+                // The connector's PROVIDER is down (e.g. the hosted-auth service's
+                // session lapsed) — say so, instead of looking like an Osmo bug.
+                toast = "\(platform.displayName) connects are temporarily unavailable — the connector service is down. Try again later."
             } catch {
                 toast = "Couldn't start the \(platform.displayName) connection."
             }

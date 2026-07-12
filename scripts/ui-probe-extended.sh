@@ -147,10 +147,17 @@ emit() {
 }
 
 echo "→ emitting classifier-probe messages (automated + human)…"
+# HERMETIC: per-run threadKeys. A fixed key re-emits the SAME platform message
+# id into the app's persistent store — idempotent ingest dedupes it, and any
+# thread state left by a previous run (or a human using the debug app: snoozed
+# / replied / read) suppresses the queue card, failing the scenario on residue
+# instead of on code. The AX assertions match the SENDER-NAME slug prefix
+# (queue.card.sam* / queue.card.poker*), so unique keys are invisible to them.
+RUN_KEY=$(date +%s)
 # Automated: noreply@ event-platform sender with event boilerplate.
-emit '{"platform":"gmail","threadKey":"poker","senderName":"Poker Night","senderHandle":"noreply@updates.pokernight.com","text":"You have got a spot at Poker Night Tuesday, July 14 7:00 PM - 11:00 PM PDT Location: The Loft. Unsubscribe here."}'
+emit '{"platform":"gmail","threadKey":"poker-'"$RUN_KEY"'","senderName":"Poker Night","senderHandle":"noreply@updates.pokernight.com","text":"You have got a spot at Poker Night Tuesday, July 14 7:00 PM - 11:00 PM PDT Location: The Loft. Unsubscribe here."}'
 # Human: a real person at a personal domain asking a question.
-emit '{"platform":"gmail","threadKey":"sam","senderName":"Sam Rivera","senderHandle":"sam.rivera@gmail.com","text":"Are you free Thursday to review the deck together?"}'
+emit '{"platform":"gmail","threadKey":"sam-'"$RUN_KEY"'","senderName":"Sam Rivera","senderHandle":"sam.rivera@gmail.com","text":"Are you free Thursday to review the deck together?"}'
 sleep 1
 
 run_scenario "queue-human-filter"
